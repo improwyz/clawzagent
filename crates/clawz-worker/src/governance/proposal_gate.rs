@@ -25,6 +25,16 @@ use clawz_core::error::ClawzError;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Parse an approval ID string to Uuid, propagating errors as ClawzError.
+fn parse_approval_id(id: &str) -> Result<Uuid, ClawzError> {
+    Uuid::parse_str(id).map_err(|_| {
+        ClawzError::Internal(format!(
+            "ApprovalWorkflow returned malformed UUID: {}",
+            id
+        ))
+    })
+}
+
 // ── Config ─────────────────────────────────────────────────────────────────────
 
 /// Gate configuration that controls routing behavior.
@@ -62,6 +72,25 @@ pub struct ProposalGatekeeper {
     approval_workflow: Arc<ApprovalWorkflow>,
     audit_logger: Arc<AuditLogger>,
     council: Option<Arc<Council>>,
+    audit_scheduler: Option<Arc<dyn AuditScheduler>>,
+}
+
+/// Schedules periodic governance audits (monthly, quarterly).
+/// The scheduler is called after a proposal clears the approval gate
+/// in Micro and Elastic modes.
+pub trait AuditScheduler: Send + Sync {
+    /// Schedule a follow-up audit at the given cron expression.
+    fn schedule_audit(&self, cadence: &str, proposal_id: Uuid) -> Result<(), ClawzError>;
+}
+
+/// Simple in-memory audit scheduler (for testing / standalone mode).
+pub struct DefaultAuditScheduler;
+
+impl AuditScheduler for DefaultAuditScheduler {
+    fn schedule_audit(&self, cadence: &str, proposal_id: Uuid) -> Result<(), ClawzError> {
+        tracing::info!(cadence = %cadence, proposal_id = %proposal_id, "audit scheduled");
+        Ok(())
+    }
 }
 
 impl ProposalGatekeeper {
@@ -106,19 +135,19 @@ impl ProposalGatekeeper {
                         self.config.required_approvals,
                     )
                     .await;
-                Ok(GateDecision::Pending(Uuid::parse_str(&approval_id).unwrap_or_default()))
-            }
-            DeploymentMode::Micro => {
-                let approval_id = self
-                    .approval_workflow
-                    .request(
-                        "system",
-                        "improvement:apply",
-                        context,
-                        self.config.required_approvals,
-                    )
-                    .await;
-                Ok(GateDecision::Pending(Uuid::parse_str(&approval_id).unwrap_or_default()))
+                Ok(GateDecision::Pending(parse_approval_id(&approval_id)?))
+        }
+        DeploymentMode::Micro => {
+            let approval_id = self
+                .approval_workflow
+                .request(
+                    "system",
+                    "improvement:apply",
+                    context,
+                    self.config.required_approvals,
+                )
+                .await;
+            Ok(GateDecision::Pending(parse_approval_id(&approval_id)?))
             }
             DeploymentMode::Elastic => {
                 if let Some(council) = &self.council {
