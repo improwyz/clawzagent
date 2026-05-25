@@ -358,6 +358,98 @@ impl AgentRuntime {
         ctx.agent_state.set_status(AgentStatus::Idle);
         Ok(ctx.messages)
     }
+
+    /// Read-only accessor for the underlying [`AgentConfig`].
+    ///
+    /// Provided so callers (e.g. the gateway autonomous endpoint) can inspect
+    /// the static configuration of the agent — name, model, system_prompt —
+    /// without taking ownership of the runtime.
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
+    }
+
+    /// Start a long-running autonomous session for this agent.
+    ///
+    /// Constructs an [`AutonomousSession`] that records the per-session budgets
+    /// (max turns and cumulative cost) and the current execution status. The
+    /// session is created in the `Running` state; further turns and cost
+    /// accumulation are recorded by the caller as the multi-turn loop advances.
+    ///
+    /// # Arguments
+    /// - `agent_id` — the ID of the agent this session belongs to.
+    /// - `max_turns` — optional override for the runtime's default max-turn
+    ///   limit. When `None`, the runtime default is used.
+    /// - `cost_budget_usd` — optional override for the per-session USD budget.
+    ///   When `None`, the runtime default is used.
+    ///
+    /// # Errors
+    /// Returns [`ClawzError::Validation`] when the provided `agent_id` does not
+    /// match the runtime's configured agent.
+    pub async fn start_autonomous_session(
+        &self,
+        agent_id: &str,
+        max_turns: Option<usize>,
+        cost_budget_usd: Option<f64>,
+    ) -> Result<AutonomousSession> {
+        if agent_id != self.config.id.to_string() {
+            return Err(ClawzError::Validation(format!(
+                "agent_id {} does not match runtime agent {}",
+                agent_id, self.config.id
+            )));
+        }
+        Ok(AutonomousSession {
+            id: uuid::Uuid::new_v4().to_string(),
+            agent_id: agent_id.to_string(),
+            max_turns: max_turns.unwrap_or(self.max_turns),
+            cost_budget_usd: cost_budget_usd.unwrap_or(self.cost_budget_usd),
+            turns_executed: 0,
+            cost_accumulated_usd: 0.0,
+            status: AutonomousSessionStatus::Running,
+        })
+    }
+}
+
+/// Lifecycle states for an [`AutonomousSession`].
+///
+/// Sessions begin as [`AutonomousSessionStatus::Running`] and progress to one
+/// of the terminal states as the multi-turn loop unfolds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutonomousSessionStatus {
+    /// Session is actively executing turns.
+    Running,
+    /// Session reached its `max_turns` ceiling.
+    MaxTurnsReached,
+    /// Session reached its `cost_budget_usd` ceiling.
+    BudgetExhausted,
+    /// Session completed normally (model emitted a stop signal).
+    Completed,
+    /// Session was cancelled by a caller (e.g. via a stop endpoint).
+    Cancelled,
+}
+
+/// A long-running, multi-turn agent execution context.
+///
+/// Returned by [`AgentRuntime::start_autonomous_session`]. The struct tracks
+/// per-session budgets and current progress; consumers stream activity events
+/// over the WebSocket `/ws/agents/{id}/stream` channel and read terminal state
+/// here when the loop ends.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AutonomousSession {
+    /// Stable session identifier (UUID-v4).
+    pub id: String,
+    /// Owning agent ID — matches [`AgentConfig::id`].
+    pub agent_id: String,
+    /// Hard upper bound on conversation turns for this session.
+    pub max_turns: usize,
+    /// Hard upper bound on accumulated USD spend for this session.
+    pub cost_budget_usd: f64,
+    /// Number of turns executed so far.
+    pub turns_executed: usize,
+    /// Cumulative USD spent across all turns.
+    pub cost_accumulated_usd: f64,
+    /// Current lifecycle status.
+    pub status: AutonomousSessionStatus,
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────────
@@ -428,5 +520,63 @@ mod tests {
         };
         let rt = AgentRuntime::new(config, deps);
         assert_eq!(rt.max_turns, DEFAULT_MAX_TURNS);
+    }
+
+    /// Verifies that [`AgentRuntime::start_autonomous_session`] creates a
+    /// session with the requested per-session budgets and `Running` status.
+    #[tokio::test]
+    async fn test_start_autonomous_session() {
+        let config = AgentConfig::new("autonomous-agent", "gpt-4");
+        let agent_id = config.id.to_string();
+        let deps = RuntimeDependencies {
+            provider_router: Arc::new(
+                ProviderRouter::new(crate::providers::ProviderRouterConfig::default())
+                    .await
+                    .unwrap(),
+            ),
+            memory: Arc::new(StubMemory),
+            governance: Arc::new(StubGovernance),
+            cost_tracker: Arc::new(CostTracker::new()),
+            approval_workflow: None,
+            council: None,
+            audit_logger: None,
+            trust_scorer: None,
+            proposal_gatekeeper: None,
+            skill_repository: None,
+            spawner: None,
+            elasticity: None,
+        };
+        let rt = AgentRuntime::new(config, deps);
+
+        // Explicit overrides — both should be respected.
+        let session = rt
+            .start_autonomous_session(&agent_id, Some(7), Some(0.25))
+            .await
+            .expect("session must start");
+        assert_eq!(session.agent_id, agent_id);
+        assert_eq!(session.max_turns, 7);
+        assert!((session.cost_budget_usd - 0.25).abs() < 1e-9);
+        assert_eq!(session.turns_executed, 0);
+        assert!(session.cost_accumulated_usd.abs() < 1e-9);
+        assert_eq!(session.status, AutonomousSessionStatus::Running);
+        assert!(!session.id.is_empty());
+
+        // None overrides — should fall back to the runtime defaults.
+        let defaulted = rt
+            .start_autonomous_session(&agent_id, None, None)
+            .await
+            .unwrap();
+        assert_eq!(defaulted.max_turns, DEFAULT_MAX_TURNS);
+        assert!((defaulted.cost_budget_usd - DEFAULT_COST_BUDGET_USD).abs() < 1e-9);
+
+        // Mismatched agent_id — validation error.
+        let err = rt
+            .start_autonomous_session("wrong-agent", None, None)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ClawzError::Validation(_)));
+
+        // config() accessor — must return the same agent id.
+        assert_eq!(rt.config().id.to_string(), agent_id);
     }
 }

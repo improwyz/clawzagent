@@ -114,6 +114,9 @@ pub mod orchestration;
 /// downstream spans appear in the same trace as the parent agent request.
 pub mod observability;
 
+/// Deployment mode management and elastic scaling.
+pub mod deployment;
+
 // ── Intelligence infrastructure ───────────────────────────────────────────────
 // Providers, tools, and memory are the three pillars that let an agent reason
 // (providers), act (tools), and remember (memory).

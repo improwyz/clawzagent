@@ -227,6 +227,68 @@ async fn test_websocket_endpoints_reject_http() {
     }
 }
 
+/// Verifies that `POST /api/v1/agents/{id}/autonomous` starts a multi-turn
+/// session and returns a session_id.
+///
+/// The endpoint accepts `maxTurns`, `costBudgetUsd`, and optional
+/// `systemPrompt` overrides. It creates an `AutonomousSessionRecord` in
+/// `AppState.autonomous_sessions` and returns the freshly generated session ID
+/// so callers can subscribe to the WebSocket activity stream.
+#[tokio::test]
+async fn autonomous_endpoint_starts_multi_turn_session() {
+    let server = make_server();
+    // Create an agent first so the autonomous endpoint has a valid target.
+    let create_body = serde_json::json!({
+        "name": "auto-agent",
+        "model": "gpt-4",
+        "system_prompt": "you are a helpful assistant"
+    });
+    let created = server
+        .app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/agents")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_string(&create_body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let bytes = axum::body::to_bytes(created.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let agent_id = v["id"].as_str().unwrap().to_string();
+
+    // Now invoke the autonomous endpoint.
+    let response = server
+        .app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/api/v1/agents/{}/autonomous", agent_id))
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    r#"{ "maxTurns": 10, "costBudgetUsd": 0.50 }"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = axum::body::to_bytes(response.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert!(v["session_id"].is_string(), "expected session_id, got {v:?}");
+    assert_eq!(v["status"], "running");
+}
+
 /// Smoke test: the autonomous-activity WebSocket route is registered.
 ///
 /// We do not perform a full WebSocket handshake here (Axum requires the upgrade
@@ -261,3 +323,6 @@ async fn ws_autonomous_stream_endpoint_exists() {
             || response.status() == StatusCode::UPGRADE_REQUIRED
             || response.status() == StatusCode::METHOD_NOT_ALLOWED,
         "/ws/agents/{{id}}/stream should reject plain HTTP, got {}",
+        response.status()
+    );
+}

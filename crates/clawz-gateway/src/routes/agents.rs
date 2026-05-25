@@ -29,7 +29,10 @@ use uuid::Uuid;
 
 // Dependency: AgentRecord, AgentStatus, AppState, GatewayError are defined in the crate root.
 // Dependency: ConversationRecord, MessageRecord are defined in the crate root (shared with conversations module).
-use crate::{AgentRecord, AgentStatus, AppState, ConversationRecord, GatewayError, MessageRecord};
+use crate::{
+    AgentRecord, AgentStatus, AppState, AutonomousSessionRecord, AutonomousSessionStatus,
+    ConversationRecord, GatewayError, MessageRecord,
+};
 
 /// Assemble the agent sub-router and mount all handlers.
 ///
@@ -40,6 +43,7 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}", get(get_agent).put(update_agent).delete(delete_agent))
         .route("/{id}/run", post(run_agent))
         .route("/{id}/stop", post(stop_agent))
+        .route("/{id}/autonomous", post(run_autonomous))
         .route("/{id}/history", get(agent_history))
         // Legacy / extra routes kept for backward compatibility with older SDK versions.
         .route("/{id}/start", post(start_agent))
@@ -96,6 +100,22 @@ pub struct UpdateAgentBody {
 pub struct RunAgentBody {
     /// User message to send to the agent. Defaults to "Hello" when omitted.
     pub message: Option<String>,
+}
+
+/// Request body for `POST /agents/{id}/autonomous` — start a long-running,
+/// multi-turn autonomous session for the agent.
+///
+/// All fields are optional. When omitted, the worker runtime falls back to
+/// its configured defaults (`DEFAULT_MAX_TURNS` and `DEFAULT_COST_BUDGET_USD`).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutonomousBody {
+    /// Hard cap on the number of turns this session may execute.
+    pub max_turns: Option<usize>,
+    /// Hard cap on accumulated USD spend for this session.
+    pub cost_budget_usd: Option<f64>,
+    /// Optional per-session system prompt override.
+    pub system_prompt: Option<String>,
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -343,6 +363,73 @@ async fn stop_agent(
     record.status = AgentStatus::Stopped;
     record.updated_at = Utc::now();
     Ok(Json(json!({ "id": id, "status": "stopped" })))
+}
+
+/// `POST /agents/{id}/autonomous` — start a long-running, multi-turn
+/// autonomous session for the agent.
+///
+/// The handler:
+/// 1. Validates the agent exists.
+/// 2. Builds an [`AutonomousSessionRecord`] honouring optional `max_turns`,
+///    `cost_budget_usd`, and `system_prompt` overrides supplied in the body.
+/// 3. Persists the session into `AppState.autonomous_sessions`.
+/// 4. Transitions the agent's status to `Running`.
+///
+/// Mirrors `clawz_worker::runtime::agent::AgentRuntime::start_autonomous_session`
+/// at the API layer; the worker side owns the actual multi-turn loop.
+async fn run_autonomous(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<AutonomousBody>,
+) -> Result<Json<Value>, GatewayError> {
+    // Verify the agent exists before creating a session.
+    {
+        let agents = state.agents.read().await;
+        agents
+            .iter()
+            .find(|a| a.id == id)
+            .ok_or_else(|| GatewayError::not_found("Agent", &id))?;
+    }
+
+    // Default budgets mirror `clawz_worker::runtime::agent`'s constants.
+    // The worker is the source of truth at runtime; these values are the
+    // session-creation defaults exposed to API clients.
+    const DEFAULT_MAX_TURNS: usize = 20;
+    const DEFAULT_COST_BUDGET_USD: f64 = 1.0;
+
+    let now = Utc::now();
+    let session = AutonomousSessionRecord {
+        id: Uuid::new_v4().to_string(),
+        agent_id: id.clone(),
+        max_turns: body.max_turns.unwrap_or(DEFAULT_MAX_TURNS),
+        cost_budget_usd: body.cost_budget_usd.unwrap_or(DEFAULT_COST_BUDGET_USD),
+        turns_executed: 0,
+        cost_accumulated_usd: 0.0,
+        status: AutonomousSessionStatus::Running,
+        system_prompt: body.system_prompt,
+        created_at: now,
+        updated_at: now,
+    };
+    let session_id = session.id.clone();
+
+    {
+        let mut sessions = state.autonomous_sessions.write().await;
+        sessions.push(session);
+    }
+
+    // Reflect the session start on the agent record itself.
+    {
+        let mut agents = state.agents.write().await;
+        if let Some(a) = agents.iter_mut().find(|a| a.id == id) {
+            a.status = AgentStatus::Running;
+            a.updated_at = now;
+        }
+    }
+
+    Ok(Json(json!({
+        "session_id": session_id,
+        "status": "running",
+    })))
 }
 
 /// `GET /agents/{id}/history` — return every message across all conversations

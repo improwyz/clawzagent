@@ -332,6 +332,54 @@ pub struct UserRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Lifecycle states for an [`AutonomousSessionRecord`].
+///
+/// Mirrors `clawz_worker::runtime::agent::AutonomousSessionStatus` but lives
+/// here to keep the gateway free of a worker crate dependency.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AutonomousSessionStatus {
+    /// Session is actively executing turns.
+    Running,
+    /// Session reached its `max_turns` ceiling.
+    MaxTurnsReached,
+    /// Session reached its `cost_budget_usd` ceiling.
+    BudgetExhausted,
+    /// Session completed normally (model emitted a stop signal).
+    Completed,
+    /// Session was cancelled by a caller.
+    Cancelled,
+}
+
+/// Tracking record for a long-running autonomous multi-turn session.
+///
+/// Created by the `POST /agents/{id}/autonomous` endpoint. The gateway stores
+/// the bounded budgets and current progress so consumers can read terminal
+/// state and the WebSocket layer can publish per-turn activity events.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AutonomousSessionRecord {
+    /// Stable session identifier (UUID-v4).
+    pub id: String,
+    /// Owning agent ID.
+    pub agent_id: String,
+    /// Hard upper bound on conversation turns for this session.
+    pub max_turns: usize,
+    /// Hard upper bound on accumulated USD spend for this session.
+    pub cost_budget_usd: f64,
+    /// Number of turns executed so far.
+    pub turns_executed: usize,
+    /// Cumulative USD spent across all turns.
+    pub cost_accumulated_usd: f64,
+    /// Current lifecycle status.
+    pub status: AutonomousSessionStatus,
+    /// Optional system-prompt override for this session.
+    pub system_prompt: Option<String>,
+    /// Timestamp when the session was created.
+    pub created_at: DateTime<Utc>,
+    /// Timestamp of the most recent state change.
+    pub updated_at: DateTime<Utc>,
+}
+
 // ─── AppState ─────────────────────────────────────────────────────────────────
 
 /// Shared application state accessible to all Axum request handlers.
@@ -361,6 +409,8 @@ pub struct AppState {
     pub fleet_nodes: Arc<RwLock<Vec<FleetNodeRecord>>>,
     /// In-memory registry of active agent deployments.
     pub deployments: Arc<RwLock<Vec<DeploymentRecord>>>,
+    /// In-memory registry of active autonomous multi-turn sessions.
+    pub autonomous_sessions: Arc<RwLock<Vec<AutonomousSessionRecord>>>,
     /// Append-only audit log.
     pub audit_log: Arc<RwLock<Vec<AuditEntry>>>,
     /// Registry of hashed API keys for programmatic access.
@@ -395,6 +445,7 @@ impl AppState {
             policies: Arc::new(RwLock::new(Vec::new())),
             fleet_nodes: Arc::new(RwLock::new(Vec::new())),
             deployments: Arc::new(RwLock::new(Vec::new())),
+            autonomous_sessions: Arc::new(RwLock::new(Vec::new())),
             audit_log: Arc::new(RwLock::new(Vec::new())),
             api_keys: Arc::new(RwLock::new(Vec::new())),
             users: Arc::new(RwLock::new(Vec::new())),
