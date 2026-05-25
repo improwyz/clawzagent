@@ -13,6 +13,8 @@
 //! | Integrity | Factual grounding | Response lacks citations or source markers |
 //! | Safety | Harmful content | Violence, self-harm, or illegal instructions detected |
 //! | Monitoring | Audit trail completeness | Too few audit entries per hour |
+//! | Alignment | Goal consistency | Action contradicts active GoalObject |
+//! | Oversight | Required oversight level | Action exceeds permitted oversight autonomy |
 //!
 //! ## Graduated Control Pillars
 //!
@@ -254,6 +256,20 @@ pub struct GovernanceGuardrails {
     /// threshold and returns [`ComplianceLevel::Warning`] if the count is
     /// too low.
     min_audit_rate_per_hour: u64,
+
+    // ── PRISM-G G-dimension extension ────────────────────────────────────────
+
+    /// Configured oversight level for this guardrail instance.
+    /// Used by the oversight check to determine if pre-approval is required.
+    configured_oversight: clawz_core::types::OversightLevel,
+
+    /// The active GoalObject if one is set.
+    /// Used by the alignment check to detect actions that contradict the goal.
+    active_goal: Option<clawz_core::types::purpose::GoalObject>,
+
+    /// The risk level of the current action.
+    /// Used with configured_oversight to determine effective oversight.
+    action_risk_level: Option<clawz_core::types::tool_risk::RiskLevel>,
 }
 
 // ── PII regex patterns ─────────────────────────────────────────────────────────
@@ -353,17 +369,50 @@ const ILLEGAL_KEYWORDS: &[&str] = &[
     "illegal weapon modification",
 ];
 
+// ── Alignment detection patterns ─────────────────────────────────────────────
+
+/// Keywords that, if present in an action, may contradict a Maintain-type goal
+/// (e.g., "maintain audit trail", "maintain uptime").
+const DESTRUCTIVE_KEYWORDS: &[&str] = &[
+    "delete",
+    "destroy",
+    "drop",
+    "remove",
+    "truncate",
+    "eliminate",
+    "purge",
+    "wipe",
+    "clear",
+    "erase",
+];
+
+/// Keywords indicating data modification that could conflict with integrity goals.
+const MODIFYING_KEYWORDS: &[&str] = &[
+    "overwrite",
+    "replace",
+    "modify",
+    "alter",
+    "update",
+    "change",
+];
+
 impl GovernanceGuardrails {
     /// Create a new `GovernanceGuardrails` instance with default thresholds.
     ///
     /// Defaults:
     /// - `reliability_threshold` = `0.90`
     /// - `min_audit_rate_per_hour` = `0` (disabled)
+    /// - `configured_oversight` = [`OversightLevel::Autonomous`]
+    /// - `active_goal` = `None`
+    /// - `action_risk_level` = `None`
     pub fn new() -> Self {
         Self {
             reliability_threshold: 0.90,
             reliability_tracker: ReliabilityTracker::default(),
             min_audit_rate_per_hour: 0,
+            configured_oversight: clawz_core::types::OversightLevel::Autonomous,
+            active_goal: None,
+            action_risk_level: None,
         }
     }
 
@@ -379,6 +428,24 @@ impl GovernanceGuardrails {
     /// ```
     pub fn with_reliability_threshold(mut self, threshold: f64) -> Self {
         self.reliability_threshold = threshold;
+        self
+    }
+
+    /// Set the configured oversight level.
+    pub fn with_oversight_level(mut self, level: clawz_core::types::OversightLevel) -> Self {
+        self.configured_oversight = level;
+        self
+    }
+
+    /// Set the active GoalObject for alignment checking.
+    pub fn with_active_goal(mut self, goal: clawz_core::types::purpose::GoalObject) -> Self {
+        self.active_goal = Some(goal);
+        self
+    }
+
+    /// Set the risk level of the current action.
+    pub fn with_risk_level(mut self, risk: clawz_core::types::tool_risk::RiskLevel) -> Self {
+        self.action_risk_level = Some(risk);
         self
     }
 
@@ -579,7 +646,178 @@ impl GovernanceGuardrails {
         }
     }
 
-    // ── Run all checks ────────────────────────────────────────────────────────
+    // ── Alignment check (PRISM-G G-dimension) ────────────────────────────────
+
+    /// Check whether an action contradicts the active GoalObject.
+    ///
+    /// Compares the action description against:
+    /// - `GoalObject.description` — the overall goal text
+    /// - `GoalObject.goal_type` — the type of goal (Maintain, Optimize, etc.)
+    /// - `GoalObject.constraints` — explicit constraints on the goal
+    ///
+    /// Returns `true` (pass) if the action is consistent with the goal,
+    /// `false` (fail) if the action contradicts the goal.
+    ///
+    /// ## Contradiction Detection
+    /// - If the goal type is `Maintain` and the action contains destructive keywords
+    ///   (delete, destroy, drop, etc.), the check fails.
+    /// - If the goal description mentions "audit trail" or "logs" and the action
+    ///   contains "delete" or "clear", the check fails.
+    /// - If the goal has a constraint that would be violated by the action,
+    ///   the check fails.
+    ///
+    /// Returns `true` (alignment pass) if no contradictions are detected.
+    /// Returns `false` with a descriptive blocker if a contradiction is found.
+    pub fn check_alignment(&self, action: &str) -> (bool, Option<String>) {
+        let Some(ref goal) = self.active_goal else {
+            // No active goal — alignment check is not applicable, pass by default
+            return (true, None);
+        };
+
+        let action_lower = action.to_lowercase();
+
+        // Check goal-type-based contradictions
+        match goal.goal_type {
+            clawz_core::types::purpose::GoalType::Maintain => {
+                // For Maintain goals, destructive actions are contradictions
+                for kw in DESTRUCTIVE_KEYWORDS {
+                    if action_lower.contains(kw) {
+                        return (
+                            false,
+                            Some(format!(
+                                "action contains destructive keyword '{kw}' which contradicts goal type 'maintain'"
+                            )),
+                        );
+                    }
+                }
+            }
+            clawz_core::types::purpose::GoalType::Satisfy => {
+                // For Satisfy goals, check if action violates constraints
+                for constraint in &goal.constraints {
+                    let constraint_text = constraint.description.to_lowercase();
+                    // Check for obvious violations
+                    if constraint.kind == clawz_core::types::purpose::ConstraintKind::Compliance {
+                        // Compliance constraints — check if action undermines them
+                        if action_lower.contains("ignore")
+                            || action_lower.contains("bypass")
+                            || action_lower.contains("disable")
+                        {
+                            return (
+                                false,
+                                Some(format!(
+                                    "action may violate compliance constraint: {}",
+                                    constraint.description
+                                )),
+                            );
+                        }
+                    }
+                }
+            }
+            _ => {
+                // For Optimize and Explore, we are more permissive
+                // Only block clearly destructive actions
+                for kw in DESTRUCTIVE_KEYWORDS {
+                    if action_lower.contains(kw) && action_lower.contains("all") {
+                        return (
+                            false,
+                            Some(format!(
+                                "action appears to delete/destroy everything, contradicting goal: {}",
+                                goal.description
+                            )),
+                        );
+                    }
+                }
+            }
+        }
+
+        // Check explicit constraint violations
+        for constraint in &goal.constraints {
+            let constraint_text = constraint.description.to_lowercase();
+            // If constraint mentions something we should preserve, check for destructive action
+            if constraint_text.contains("audit")
+                || constraint_text.contains("log")
+                || constraint_text.contains("trail")
+                || constraint_text.contains("record")
+            {
+                if action_lower.contains("delete")
+                    || action_lower.contains("clear")
+                    || action_lower.contains("wipe")
+                    || action_lower.contains("erase")
+                    || action_lower.contains("purge")
+                {
+                    return (
+                        false,
+                        Some(format!(
+                            "action may destroy audit/log data required by constraint: {}",
+                            constraint.description
+                        )),
+                    );
+                }
+            }
+
+            // If constraint mentions uptime or availability
+            if constraint_text.contains("uptime")
+                || constraint_text.contains("availability")
+                || constraint_text.contains("running")
+                    || constraint_text.contains("available")
+            {
+                if action_lower.contains("stop")
+                    || action_lower.contains("terminate")
+                    || action_lower.contains("kill")
+                    || action_lower.contains("shutdown")
+                {
+                    return (
+                        false,
+                        Some(format!(
+                            "action may violate availability constraint: {}",
+                            constraint.description
+                        )),
+                    );
+                }
+            }
+        }
+
+        // Passed all alignment checks
+        (true, None)
+    }
+
+    // ── Oversight check (PRISM-G G-dimension) ─────────────────────────────────
+
+    /// Check whether the action's oversight level meets requirements.
+    ///
+    /// Uses the configured oversight level and the action's risk level
+    /// to determine the effective oversight required, then compares against
+    /// the configured oversight to see if pre-approval is needed.
+    ///
+    /// Returns `true` (pass) if the action meets oversight requirements.
+    /// Returns `false` with a descriptive blocker if pre-approval is required.
+    pub fn check_oversight(&self) -> (bool, Option<String>) {
+        let risk = match &self.action_risk_level {
+            Some(r) => r.clone(),
+            None => {
+                // No risk level set — oversight check is not applicable, pass by default
+                return (true, None);
+            }
+        };
+
+        use crate::governance::oversight::{effective_oversight, requires_pre_approval};
+
+        let effective = effective_oversight(risk.clone(), self.configured_oversight, self.active_goal.is_some());
+
+        if requires_pre_approval(effective) {
+            (
+                false,
+                Some(format!(
+                    "action requires {:?} oversight but configured level is {:?} (effective: {:?})",
+                    effective, self.configured_oversight, effective
+                )),
+            )
+        } else {
+            (true, None)
+        }
+    }
+
+    // ── Run all checks ───────────────────────────────────────────────────────
 
     /// Run all guardrail checks against the provided inputs.
     ///
@@ -634,6 +872,7 @@ impl Default for GovernanceGuardrails {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clawz_core::types::purpose::{GoalObject, GoalType, Constraint, ConstraintKind};
 
     #[test]
     fn test_privacy_detects_email() {
@@ -720,8 +959,110 @@ mod tests {
         assert_eq!(result.integrity.level, ComplianceLevel::Pass);
         assert!(result.all_passed());
     }
-}
 
-// ── Import regex crate ─────────────────────────────────────────────────────────
-// Note: regex must be added to Cargo.toml — if not available we use simple str ops.
-// We use a conditional compilation guard to be safe.
+    // ── Alignment check tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_alignment_detects_contradictory_action() {
+        // Goal: maintain audit trail, Action: delete all logs
+        let goal = GoalObject::builder()
+            .description("maintain audit trail")
+            .goal_type(GoalType::Maintain)
+            .constraints(vec![Constraint::new(
+                ConstraintKind::Compliance,
+                "audit trail must be preserved",
+                serde_json::json!(true),
+            )])
+            .build();
+
+        let guardrails = GovernanceGuardrails::new().with_active_goal(goal);
+        let (passed, blocker) = guardrails.check_alignment("delete all logs");
+
+        assert!(!passed, "delete all logs should contradict maintain goal");
+        assert!(blocker.is_some());
+        let b = blocker.as_ref().unwrap();
+        assert!(b.contains("delete") || b.contains("audit"));
+    }
+
+    #[test]
+    fn test_alignment_passes_when_action_aligns() {
+        // Goal: maintain audit trail, Action: read logs
+        let goal = GoalObject::builder()
+            .description("maintain audit trail")
+            .goal_type(GoalType::Maintain)
+            .build();
+
+        let guardrails = GovernanceGuardrails::new().with_active_goal(goal);
+        let (passed, blocker) = guardrails.check_alignment("read the logs");
+
+        assert!(passed, "read logs should not contradict maintain goal");
+        assert!(blocker.is_none());
+    }
+
+    #[test]
+    fn test_alignment_no_goal_passes() {
+        // No goal set — alignment check should pass
+        let guardrails = GovernanceGuardrails::new();
+        let (passed, blocker) = guardrails.check_alignment("delete everything");
+
+        assert!(passed, "no active goal means alignment check passes");
+        assert!(blocker.is_none());
+    }
+
+    #[test]
+    fn test_alignment_preserves_uptime() {
+        // Goal: maintain uptime, Action: shutdown server
+        let goal = GoalObject::builder()
+            .description("maintain 99.9% uptime")
+            .goal_type(GoalType::Maintain)
+            .constraints(vec![Constraint::new(
+                ConstraintKind::Quality,
+                "system must remain available",
+                serde_json::json!(true),
+            )])
+            .build();
+
+        let guardrails = GovernanceGuardrails::new().with_active_goal(goal);
+        let (passed, blocker) = guardrails.check_alignment("shutdown production server");
+
+        assert!(!passed, "shutdown should contradict uptime maintenance goal");
+        assert!(blocker.is_some());
+    }
+
+    // ── Oversight check tests ────────────────────────────────────────────────
+
+    #[test]
+    fn test_oversight_low_risk_autonomous_passes() {
+        let guardrails = GovernanceGuardrails::new()
+            .with_oversight_level(clawz_core::types::OversightLevel::Autonomous)
+            .with_risk_level(clawz_core::types::tool_risk::RiskLevel::Low);
+
+        let (passed, blocker) = guardrails.check_oversight();
+
+        assert!(passed, "Low risk with Autonomous oversight should pass");
+        assert!(blocker.is_none());
+    }
+
+    #[test]
+    fn test_oversight_high_risk_requires_pre_approval() {
+        let guardrails = GovernanceGuardrails::new()
+            .with_oversight_level(clawz_core::types::OversightLevel::Autonomous)
+            .with_risk_level(clawz_core::types::tool_risk::RiskLevel::High);
+
+        let (passed, blocker) = guardrails.check_oversight();
+
+        assert!(!passed, "High risk with only Autonomous oversight should fail");
+        assert!(blocker.is_some());
+    }
+
+    #[test]
+    fn test_oversight_no_risk_level_passes() {
+        let guardrails = GovernanceGuardrails::new()
+            .with_oversight_level(clawz_core::types::OversightLevel::Autonomous);
+
+        let (passed, blocker) = guardrails.check_oversight();
+
+        assert!(passed, "No risk level set means oversight check passes");
+        assert!(blocker.is_none());
+    }
+}
