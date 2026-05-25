@@ -176,4 +176,50 @@ mod tests {
 
         assert!(scaler.evaluate(&cold).await.is_some()); // Should trigger a scale down
     }
+
+    #[tokio::test]
+    async fn elastic_scaler_stays_stable_in_mid_range() {
+        let policy = ScalingPolicy {
+            load_threshold_up: 0.75,
+            load_threshold_down: 0.25,
+            cooldown_seconds: 300,
+            org_size_trigger: 5,
+        };
+        let scaler = DeploymentElasticity::new(policy);
+
+        // First transition from Standalone -> Micro (load > up threshold)
+        let hot = SystemMetrics { load_avg: 0.8, agent_count: 6, subagent_count: 0, idle_containers: 0 };
+        let first = scaler.evaluate(&hot).await;
+        assert!(first.is_some());
+
+        // Now load sits mid-range: 0.3 (between 0.25 and 0.75)
+        // Should stay in Micro — no transition
+        let mid = SystemMetrics { load_avg: 0.3, agent_count: 6, subagent_count: 0, idle_containers: 0 };
+        let second = scaler.evaluate(&mid).await;
+        assert!(second.is_none(), "mid-range load should not trigger transition");
+
+        // And again — still mid-range, still stable
+        let third = scaler.evaluate(&mid).await;
+        assert!(third.is_none(), "repeated mid-range evaluation stays stable");
+    }
+
+    #[tokio::test]
+    async fn elastic_scaler_respects_cooldown_blocking_same_direction() {
+        let policy = ScalingPolicy {
+            load_threshold_up: 0.75,
+            load_threshold_down: 0.25,
+            cooldown_seconds: 300,
+            org_size_trigger: 5,
+        };
+        let scaler = DeploymentElasticity::new(policy);
+
+        // Trigger Standalone -> Micro
+        let metrics = SystemMetrics { load_avg: 0.8, agent_count: 6, subagent_count: 0, idle_containers: 0 };
+        let first = scaler.evaluate(&metrics).await;
+        assert!(first.is_some());
+
+        // Immediate re-evaluation while still hot should be blocked by cooldown
+        let second = scaler.evaluate(&metrics).await;
+        assert!(second.is_none(), "cooldown should block same-direction re-transition");
+    }
 }
