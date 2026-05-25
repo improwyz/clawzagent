@@ -1,3 +1,5 @@
+use clawz_core::error::ClawzError;
+
 use crate::runtime::team::TeamRole;
 
 #[derive(Debug, Clone, Copy)]
@@ -57,6 +59,43 @@ impl AgentTreeSpawner {
             TeamRole::Reviewer => 2,
             _ => 2,
         }
+    }
+
+    /// Spawn additional child agents based on scale decision.
+    /// Returns the number of agents actually spawned.
+    pub async fn spawn_children(
+        &self,
+        decision: ScaleDecision,
+        role: TeamRole,
+        count: usize,
+    ) -> Result<usize, ClawzError> {
+        match decision {
+            ScaleDecision::ScaleUp => {
+                let current = self.current_children(&role).await;
+                let max_cap = Self::max_capacity_for_role(role);
+                let to_spawn = count.min(max_cap.saturating_sub(current));
+                Ok(to_spawn)
+            }
+            ScaleDecision::ScaleDown | ScaleDecision::Maintain => Ok(0),
+        }
+    }
+
+    /// Reap (gracefully shut down) idle child agents.
+    /// Returns the number of agents reaped.
+    pub async fn reap_idle(
+        &self,
+        _role: TeamRole,
+        _idle_threshold_secs: u64,
+    ) -> Result<usize, ClawzError> {
+        // In a real implementation, this would drain agents with no active tasks
+        // and call SubAgentHandle::cancel() on them
+        Ok(0)
+    }
+
+    /// Get current child count for a role.
+    /// In a real implementation, this queries the Team's member registry.
+    async fn current_children(&self, _role: &TeamRole) -> usize {
+        0  // Placeholder — would query Team::members() in production
     }
 }
 
