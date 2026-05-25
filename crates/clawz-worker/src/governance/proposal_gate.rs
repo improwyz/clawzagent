@@ -88,7 +88,9 @@ pub struct DefaultAuditScheduler;
 
 impl AuditScheduler for DefaultAuditScheduler {
     fn schedule_audit(&self, cadence: &str, proposal_id: Uuid) -> Result<(), ClawzError> {
-        tracing::info!(cadence = %cadence, proposal_id = %proposal_id, "audit scheduled");
+        // In production this would write to a cron scheduler or queue.
+        // The audit_logger is used for production audit trails.
+        let _ = (cadence, proposal_id);
         Ok(())
     }
 }
@@ -99,18 +101,26 @@ impl ProposalGatekeeper {
         config: GateConfig,
         approval_workflow: Arc<ApprovalWorkflow>,
         audit_logger: Arc<AuditLogger>,
+        audit_scheduler: Option<Arc<dyn AuditScheduler>>,
     ) -> Self {
         Self {
             config,
             approval_workflow,
             audit_logger,
             council: None,
+            audit_scheduler,
         }
     }
 
     /// Attach a [`Council`] for Elastic-mode deliberation.
     pub fn with_council(mut self, council: Arc<Council>) -> Self {
         self.council = Some(council);
+        self
+    }
+
+    /// Attach an [`AuditScheduler`] for Micro/Elastic mode periodic audits.
+    pub fn with_audit_scheduler(mut self, scheduler: Arc<dyn AuditScheduler>) -> Self {
+        self.audit_scheduler = Some(scheduler);
         self
     }
 
@@ -147,6 +157,12 @@ impl ProposalGatekeeper {
                     self.config.required_approvals,
                 )
                 .await;
+
+            // Schedule monthly audit for this proposal
+            if let Some(scheduler) = &self.audit_scheduler {
+                scheduler.schedule_audit("monthly", proposal.proposal_id)?;
+            }
+
             Ok(GateDecision::Pending(parse_approval_id(&approval_id)?))
             }
             DeploymentMode::Elastic => {
@@ -222,6 +238,7 @@ mod tests {
             },
             Arc::new(ApprovalWorkflow::new()),
             Arc::new(AuditLogger::new()),
+            None,
         );
 
         let proposal = make_proposal();
@@ -238,6 +255,7 @@ mod tests {
             },
             Arc::new(ApprovalWorkflow::new()),
             Arc::new(AuditLogger::new()),
+            None,
         );
 
         let proposal = make_proposal();
@@ -254,6 +272,7 @@ mod tests {
             },
             Arc::new(ApprovalWorkflow::new()),
             Arc::new(AuditLogger::new()),
+            None,
         );
 
         let proposal = make_proposal();
@@ -278,6 +297,7 @@ mod tests {
             },
             Arc::new(ApprovalWorkflow::new()),
             Arc::new(AuditLogger::new()),
+            None,
         )
         .with_council(council.clone());
 
