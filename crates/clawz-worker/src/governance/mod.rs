@@ -16,6 +16,7 @@
 //! | [`approval`] | [`ApprovalWorkflow`] — request/approve/reject/escalate lifecycle for human-in-the-loop actions. |
 //! | [`audit`] | [`AuditLogger`] — SHA-256 hash-chained audit log for tamper evidence. |
 //! | [`guardrails`] | [`GovernanceGuardrails`] — G-dimension runtime safety/compliance enforcement (PRISM-G Vol 9). |
+//! | [`oversight`] | Oversight level enforcement — maps `RiskLevel` to `OversightLevel`, determines effective oversight, checks pre-approval requirements. |
 //! | [`council`] | [`Council`] — multi-agent deliberation with configurable voting rules (unanimous, majority, supermajority). |
 //! | [`compliance`] | [`ComplianceExporter`] — maps audit evidence to external frameworks (SOC2, GDPR, EU AI Act). |
 //!
@@ -31,7 +32,8 @@
 //!   [`clawz_core::types::governance::TrustTier`],
 //!   [`clawz_core::types::governance::ApprovalStatus`],
 //!   [`clawz_core::types::governance::PolicyRule`],
-//!   [`clawz_core::types::governance::PolicyEffect`].
+//!   [`clawz_core::types::governance::PolicyEffect`],
+//!   [`clawz_core::types::governance::OversightLevel`].
 //! - **`clawz_core::error::{ClawzError, Result}`** — uniform error handling across
 //!   the worker and core crates.
 //!
@@ -51,6 +53,8 @@ pub mod council;
 pub mod engine;
 /// Governance-dimension runtime guardrails (Vol 9).
 pub mod guardrails;
+/// Oversight level enforcement for the G dimension (PRISM-G Vol 9).
+pub mod oversight;
 /// Policy engine — pattern matching and condition evaluation.
 pub mod policy;
 /// Trust scoring with decay, history, and tier mapping.
@@ -73,6 +77,8 @@ pub use approval::ApprovalWorkflow;
 pub use audit::AuditLogger;
 /// G-dimension runtime guardrails — safety/compliance enforcement for the G dimension (PRISM-G Vol 9).
 pub use guardrails::GovernanceGuardrails;
+/// G-dimension oversight level enforcement — maps RiskLevel to OversightLevel and checks pre-approval requirements.
+pub use oversight::{effective_oversight, minimum_oversight_for_risk, requires_pre_approval};
 /// Multi-agent deliberation body with configurable voting rules and tie-breaking.
 pub use council::Council;
 /// Exports audit evidence mapped to external compliance frameworks (SOC2, GDPR, EU AI Act).
