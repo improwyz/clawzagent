@@ -28,7 +28,7 @@
 
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
-use clawz_core::types::{ToolResult, ToolSchema};
+use clawz_core::types::{ActionPrimitive, RiskLevel, ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 
 #[async_trait]
@@ -41,6 +41,16 @@ pub trait Tool: Send + Sync {
         ctx: &ToolContext,
         args: serde_json::Value,
     ) -> Result<ToolResult, ClawzError>;
+
+    /// The fundamental action primitive this tool performs.
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Execute
+    }
+
+    /// The risk level of this tool's actions.
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::Medium
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,5 +178,17 @@ mod tests {
         assert_eq!(de.agent_id, "a");
         assert_eq!(de.conversation_id, "c");
         assert_eq!(de.user_id, Some("u".into()));
+    }
+
+    #[test]
+    fn test_default_primitive_is_execute() {
+        let tool = MockTool;
+        assert_eq!(tool.primitive(), ActionPrimitive::Execute);
+    }
+
+    #[test]
+    fn test_default_risk_is_medium() {
+        let tool = MockTool;
+        assert_eq!(tool.risk(), RiskLevel::Medium);
     }
 }
