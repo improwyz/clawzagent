@@ -21,6 +21,9 @@ pub mod blackboard;
 pub mod conversation;
 pub mod embedding;
 pub mod rag;
+pub mod archive;
+pub mod cache;
+pub mod improvement;
 pub mod store;
 
 // Re-export the most commonly used types at the module level.
