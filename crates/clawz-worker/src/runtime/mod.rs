@@ -33,6 +33,8 @@
 pub mod agent;
 pub mod complexity;
 pub mod fan_out;
+pub mod identity;
+pub mod idempotency;
 pub mod orchestration;
 pub mod pipeline;
 pub mod spawner;
