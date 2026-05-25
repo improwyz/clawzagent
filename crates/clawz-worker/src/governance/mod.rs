@@ -57,6 +57,8 @@ pub mod guardrails;
 pub mod oversight;
 /// Policy engine — pattern matching and condition evaluation.
 pub mod policy;
+/// Routing bridge between the improvement pipeline and mode-appropriate governance.
+pub mod proposal_gate;
 /// Trust scoring with decay, history, and tier mapping.
 pub mod trust;
 
@@ -83,3 +85,5 @@ pub use oversight::{effective_oversight, minimum_oversight_for_risk, requires_pr
 pub use council::Council;
 /// Exports audit evidence mapped to external compliance frameworks (SOC2, GDPR, EU AI Act).
 pub use compliance::ComplianceExporter;
+/// Routing bridge between the improvement pipeline and mode-appropriate governance.
+pub use proposal_gate::{ProposalGatekeeper, GateConfig, GateDecision};
