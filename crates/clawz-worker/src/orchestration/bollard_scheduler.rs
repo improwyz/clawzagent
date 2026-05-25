@@ -130,12 +130,15 @@ impl BollardScheduler {
     ///
     /// Labels are used for filtering and attribution in external tooling
     /// (e.g. `docker ps --filter label=managed-by=clawz`).
-    fn build_labels(&self, tenant_id: &str, agent_id: &str) -> HashMap<String, String> {
+    fn build_labels(&self, tenant_id: &str, agent_id: &str, parent_id: Option<&String>) -> HashMap<String, String> {
         let mut labels = HashMap::new();
         labels.insert("managed-by".to_string(), "clawz".to_string());
         labels.insert("clawz-scheduler".to_string(), "bollard".to_string());
         labels.insert("tenant-id".to_string(), tenant_id.to_string());
         labels.insert("agent-id".to_string(), agent_id.to_string());
+        if let Some(p) = parent_id {
+            labels.insert("parent-id".to_string(), p.to_string());
+        }
         labels
     }
 
@@ -244,7 +247,7 @@ impl AgentScheduler for BollardScheduler {
         self.ensure_image(&spec.image).await?;
 
         let name = self.container_name(ctx.tenant_id.as_str(), &agent_id);
-        let labels = self.build_labels(ctx.tenant_id.as_str(), &agent_id);
+        let labels = self.build_labels(ctx.tenant_id.as_str(), &agent_id, spec.parent_id.as_ref());
 
         // Pass runtime configuration into the container as env vars so the
         // agent process can self-identify and connect to the mesh.

@@ -26,6 +26,12 @@ pub enum ContainerState {
     Failed,
 }
 
+impl ContainerState {
+    pub fn is_idle(&self) -> bool {
+        matches!(self, ContainerState::Ready | ContainerState::Draining)
+    }
+}
+
 impl fmt::Display for ContainerState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -160,6 +166,7 @@ impl ToolHandle {
 /// // Dependency: passed to traits::AgentScheduler::spawn_agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSpec {
+    pub parent_id: Option<String>, // ID of parent agent that spawned this
     pub memory_mb: u64,
     pub cpu_millicores: u64,
     pub image: String,
@@ -171,6 +178,7 @@ pub struct AgentSpec {
 impl Default for AgentSpec {
     fn default() -> Self {
         Self {
+            parent_id: None,
             memory_mb: 256,
             cpu_millicores: 500,
             image: "clawz/agent:latest".to_string(),

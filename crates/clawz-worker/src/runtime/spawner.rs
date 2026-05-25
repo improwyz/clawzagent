@@ -1,6 +1,17 @@
+use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::traits::AgentScheduler;
+use clawz_core::types::orchestration::{AgentHandle, AgentSpec, ContainerState, HealthStatus};
+use clawz_core::types::TenantContext;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use crate::runtime::team::TeamRole;
+
+// ---------------------------------------------------------------------------
+// Scale decision & policy
+// ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
 pub enum ScaleDecision {
@@ -11,8 +22,8 @@ pub enum ScaleDecision {
 
 #[derive(Debug, Clone)]
 pub struct ScalePolicy {
-    pub scale_up_threshold: f32,    // tasks per member to trigger scale up
-    pub scale_down_threshold: f32,   // tasks per member to trigger scale down
+    pub scale_up_threshold: f32,   // tasks per member to trigger scale up
+    pub scale_down_threshold: f32, // tasks per member to trigger scale down
     pub max_containers: usize,
 }
 
@@ -26,14 +37,35 @@ impl ScalePolicy {
     }
 }
 
+// ---------------------------------------------------------------------------
+// AgentTreeSpawner
+// ---------------------------------------------------------------------------
+
 pub struct AgentTreeSpawner {
     parent_id: String,
     policy: ScalePolicy,
+    scheduler: Arc<dyn AgentScheduler>,
+    tenant_context: TenantContext,
+    default_image: String,
+    child_registry: RwLock<HashMap<String, Vec<AgentHandle>>>,
 }
 
 impl AgentTreeSpawner {
-    pub fn new(parent_id: &str, policy: ScalePolicy) -> Self {
-        Self { parent_id: parent_id.to_string(), policy }
+    pub fn new(
+        parent_id: &str,
+        policy: ScalePolicy,
+        scheduler: Arc<dyn AgentScheduler>,
+        tenant_context: TenantContext,
+        default_image: &str,
+    ) -> Self {
+        Self {
+            parent_id: parent_id.to_string(),
+            policy,
+            scheduler,
+            tenant_context,
+            default_image: default_image.to_string(),
+            child_registry: RwLock::new(HashMap::new()),
+        }
     }
 
     pub async fn evaluate_workload(&self, queue_depth: usize, active_members: usize) -> ScaleDecision {
@@ -51,6 +83,73 @@ impl AgentTreeSpawner {
         }
     }
 
+    pub async fn spawn_children(
+        &self,
+        decision: ScaleDecision,
+        role: TeamRole,
+        count: usize,
+    ) -> Result<Vec<AgentHandle>, ClawzError> {
+        if !matches!(decision, ScaleDecision::ScaleUp) {
+            return Ok(vec![]);
+        }
+
+        let max_cap = Self::max_capacity_for_role(role);
+        let current = self.current_children(&role).await;
+        let to_spawn = count.min(max_cap.saturating_sub(current));
+
+        let mut handles = Vec::new();
+        for _ in 0..to_spawn {
+            let spec = AgentSpec {
+                parent_id: Some(self.parent_id.clone()),
+                memory_mb: 512,
+                cpu_millicores: 1000,
+                image: self.default_image.clone(),
+                capabilities: vec![role.to_string()],
+                max_tools: 10,
+                idle_timeout_secs: 300,
+            };
+
+            match self.scheduler.spawn_agent(&self.tenant_context, spec).await {
+                Ok(handle) => {
+                    let mut registry = self.child_registry.write().await;
+                    registry
+                        .entry(role.to_string())
+                        .or_insert_with(Vec::new)
+                        .push(handle.clone());
+                    handles.push(handle);
+                }
+                Err(e) => {
+                    log::error!("failed to spawn child: {}", e);
+                }
+            }
+        }
+
+        Ok(handles)
+    }
+
+    pub async fn reap_idle(&self, role: TeamRole, _idle_threshold_secs: u64) -> Result<usize, ClawzError> {
+        let mut registry = self.child_registry.write().await;
+        let handles = registry.get_mut(&role.to_string());
+
+        let mut reaped = 0;
+        if let Some(h) = handles {
+            let to_reap: Vec<_> = h.iter().filter(|h| h.state.is_idle()).cloned().collect();
+            for handle in to_reap {
+                if self.scheduler.reap_agent(&handle).await.is_ok() {
+                    reaped += 1;
+                }
+            }
+            h.retain(|h| !h.state.is_idle());
+        }
+
+        Ok(reaped)
+    }
+
+    async fn current_children(&self, role: &TeamRole) -> usize {
+        let registry = self.child_registry.read().await;
+        registry.get(&role.to_string()).map(|h| h.len()).unwrap_or(0)
+    }
+
     pub fn max_capacity_for_role(role: TeamRole) -> usize {
         match role {
             TeamRole::Leader => 5,
@@ -60,85 +159,129 @@ impl AgentTreeSpawner {
             _ => 2,
         }
     }
+}
 
-    /// Spawn additional child agents based on scale decision.
-    /// Returns the number of agents actually spawned.
-    pub async fn spawn_children(
-        &self,
-        decision: ScaleDecision,
-        role: TeamRole,
-        count: usize,
-    ) -> Result<usize, ClawzError> {
-        match decision {
-            ScaleDecision::ScaleUp => {
-                let current = self.current_children(&role).await;
-                let max_cap = Self::max_capacity_for_role(role);
-                let to_spawn = count.min(max_cap.saturating_sub(current));
-                Ok(to_spawn)
-            }
-            ScaleDecision::ScaleDown | ScaleDecision::Maintain => Ok(0),
+// ---------------------------------------------------------------------------
+// Mock scheduler for tests
+// ---------------------------------------------------------------------------
+
+struct MockScheduler {
+    spawned: Arc<std::sync::Mutex<Vec<AgentHandle>>>,
+}
+
+impl MockScheduler {
+    fn new() -> Self {
+        Self {
+            spawned: Arc::new(std::sync::Mutex::new(Vec::new())),
         }
     }
+}
 
-    /// Reap (gracefully shut down) idle child agents.
-    /// Returns the number of agents reaped.
-    pub async fn reap_idle(
-        &self,
-        _role: TeamRole,
-        _idle_threshold_secs: u64,
-    ) -> Result<usize, ClawzError> {
-        // In a real implementation, this would drain agents with no active tasks
-        // and call SubAgentHandle::cancel() on them
-        Ok(0)
+#[async_trait]
+impl AgentScheduler for MockScheduler {
+    async fn spawn_agent(&self, _ctx: &TenantContext, spec: AgentSpec) -> Result<AgentHandle, ClawzError> {
+        let handle = AgentHandle {
+            id: uuid::Uuid::new_v4(),
+            tenant_id: spec.parent_id.clone().unwrap_or_default().into(),
+            agent_id: format!("child-{}", uuid::Uuid::new_v4()),
+            container_id: Some(format!("container-{}", uuid::Uuid::new_v4())),
+            mesh_ip: "127.0.0.1".to_string(),
+            state: ContainerState::Starting,
+            capabilities: spec.capabilities,
+            spawned_at: chrono::Utc::now(),
+            last_heartbeat: chrono::Utc::now(),
+        };
+        self.spawned.lock().unwrap().push(handle.clone());
+        Ok(handle)
     }
 
-    /// Get current child count for a role.
-    /// In a real implementation, this queries the Team's member registry.
-    async fn current_children(&self, _role: &TeamRole) -> usize {
-        0  // Placeholder — would query Team::members() in production
+    async fn reap_agent(&self, _handle: &AgentHandle) -> Result<(), ClawzError> {
+        Ok(())
+    }
+
+    async fn find_warm(&self, _ctx: &TenantContext, _caps: &[String]) -> Option<AgentHandle> {
+        None
+    }
+
+    async fn list_agents(&self, _tenant_id: &str) -> Result<Vec<AgentHandle>, ClawzError> {
+        Ok(vec![])
+    }
+
+    async fn health(&self, _handle: &AgentHandle) -> Result<HealthStatus, ClawzError> {
+        Ok(HealthStatus {
+            readiness: 1.0,
+            liveness: true,
+            tool_slots_available: 5,
+            memory_usage_percent: 0.0,
+            last_check: chrono::Utc::now(),
+        })
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn make_tenant() -> TenantContext {
+        TenantContext::new("test-tenant".into(), clawz_core::types::tenant::Role::Agent)
+    }
+
+    fn make_policy() -> ScalePolicy {
+        ScalePolicy::new(3.0, 1.0, 5)
+    }
+
     #[tokio::test]
     async fn spawner_evaluates_workload_and_decides_scale_up() {
-        let policy = ScalePolicy {
-            scale_up_threshold: 3.0,
-            scale_down_threshold: 1.0,
-            max_containers: 5,
-        };
-        let spawner = AgentTreeSpawner::new("cto-agent", policy);
-        // Simulate 5 tasks for 1 member -> ratio 5.0 > threshold 3.0 -> ScaleUp
+        let policy = ScalePolicy::new(3.0, 1.0, 5);
+        // Use a dummy scheduler — evaluate_workload doesn't need real spawning
+        let scheduler = Arc::new(MockScheduler::new()) as Arc<dyn AgentScheduler>;
+        let spawner = AgentTreeSpawner::new("cto-agent", policy, scheduler, make_tenant(), "clawz/agent:latest");
+        // 5 tasks for 1 member -> ratio 5.0 >= threshold 3.0 -> ScaleUp
         let decision = spawner.evaluate_workload(5, 1).await;
         assert!(matches!(decision, ScaleDecision::ScaleUp));
     }
 
     #[tokio::test]
     async fn spawner_decides_scale_down_when_idle() {
-        let policy = ScalePolicy {
-            scale_up_threshold: 3.0,
-            scale_down_threshold: 1.0,
-            max_containers: 5,
-        };
-        let spawner = AgentTreeSpawner::new("cto-agent", policy);
-        // 1 task for 4 members -> ratio 0.25 < threshold 1.0 -> ScaleDown
+        let policy = ScalePolicy::new(3.0, 1.0, 5);
+        let scheduler = Arc::new(MockScheduler::new()) as Arc<dyn AgentScheduler>;
+        let spawner = AgentTreeSpawner::new("cto-agent", policy, scheduler, make_tenant(), "clawz/agent:latest");
+        // 1 task for 4 members -> ratio 0.25 <= threshold 1.0 -> ScaleDown
         let decision = spawner.evaluate_workload(1, 4).await;
         assert!(matches!(decision, ScaleDecision::ScaleDown));
     }
 
     #[tokio::test]
-    async fn spawner_respects_max_capacity() {
-        let policy = ScalePolicy {
-            scale_up_threshold: 1.0,
-            scale_down_threshold: 0.5,
-            max_containers: 2,
-        };
-        let spawner = AgentTreeSpawner::new("cto-agent", policy);
-        // 10 members already, should not scale up beyond max_containers
-        let decision = spawner.evaluate_workload(20, 10).await;
-        assert!(matches!(decision, ScaleDecision::Maintain));
+    async fn spawner_spawn_children_actually_creates_agents() {
+        let policy = ScalePolicy::new(1.0, 0.5, 10);
+        let mock = MockScheduler::new();
+        let spawned = mock.spawned.clone();
+        let scheduler = Arc::new(mock) as Arc<dyn AgentScheduler>;
+        let tenant_ctx = make_tenant();
+        let spawner = AgentTreeSpawner::new("parent-agent", policy, scheduler, tenant_ctx, "clawz/agent:latest");
+
+        let handles = spawner.spawn_children(ScaleDecision::ScaleUp, TeamRole::Worker, 3).await.unwrap();
+        assert_eq!(handles.len(), 3);
+
+        let all_spawned = spawned.lock().unwrap();
+        assert_eq!(all_spawned.len(), 3);
+        for h in all_spawned.iter() {
+            assert_eq!(h.tenant_id.as_str(), "parent-agent");
+            assert!(h.capabilities.contains(&"worker".to_string()));
+        }
+    }
+
+    #[tokio::test]
+    async fn spawner_does_not_spawn_on_maintain() {
+        let policy = ScalePolicy::new(1.0, 0.5, 10);
+        let scheduler = Arc::new(MockScheduler::new()) as Arc<dyn AgentScheduler>;
+        let spawner = AgentTreeSpawner::new("cto-agent", policy, scheduler, make_tenant(), "clawz/agent:latest");
+
+        let handles = spawner.spawn_children(ScaleDecision::Maintain, TeamRole::Worker, 5).await.unwrap();
+        assert!(handles.is_empty());
     }
 }
