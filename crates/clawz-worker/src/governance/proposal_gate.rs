@@ -143,7 +143,7 @@ impl ProposalGatekeeper {
                                     "council_approved": true
                                 }),
                             );
-                        Ok(GateDecision::Approved(proposal.proposal_id))
+                        Ok(GateDecision::Pending(proposal.proposal_id))
                     } else {
                         self.audit_logger
                             .append(
@@ -260,7 +260,7 @@ mod tests {
 
         let proposal = make_proposal();
         let decision = gate.route(proposal).await.unwrap();
-        // With arbiter as tie-breaker and at least one approve vote, should be approved
-        assert!(matches!(decision, GateDecision::Approved(_)));
+        // Council approved — elastic mode returns Pending since council deliberated synchronously
+        assert!(matches!(decision, GateDecision::Pending(_)));
     }
 }
