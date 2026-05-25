@@ -32,6 +32,7 @@ pub struct DeploymentTransition {
     pub direction: String,
 }
 
+#[derive(Debug)]
 pub struct DeploymentElasticity {
     policy: ScalingPolicy,
     mode: RwLock<DeploymentMode>,
@@ -44,7 +45,7 @@ impl DeploymentElasticity {
         Self {
             policy,
             mode: RwLock::new(DeploymentMode::Standalone),
-            last_transition: RwLock::new(DateTime::from_timestamp(0, 0).unwrap()),
+            last_transition: RwLock::new(Utc::now()),
             last_direction: RwLock::new(None),
         }
     }
@@ -88,6 +89,8 @@ impl DeploymentElasticity {
                 }
             }
             DeploymentMode::Micro => {
+                // 1.5 multiplier: elastic mode requires significantly higher load before engaging
+                // subagent_count > 10: must have meaningful parallel workload before elastic scaling
                 if metrics.load_avg > self.policy.load_threshold_up * 1.5
                     || metrics.subagent_count > 10 {
                     Some((DeploymentMode::Elastic, "scale_up".into()))
