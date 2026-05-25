@@ -73,6 +73,8 @@ pub use engine::{ClawzGovernanceEngine, GovernanceEngineConfig};
 pub use policy::PolicyEngine;
 /// Tracks agent trust scores (0–1000) with decay, tier mapping, and historical events.
 pub use trust::TrustScorer;
+/// Skill repository — skill.md / soul.md / agents.md lifecycle management.
+mod skill_repository;
 /// Manages the request/approve/reject/escalate lifecycle for human-in-the-loop actions.
 pub use approval::ApprovalWorkflow;
 /// SHA-256 hash-chained audit logger for tamper-evident records.
