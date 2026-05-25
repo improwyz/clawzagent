@@ -29,13 +29,13 @@ ClawZ development is organized into priority tiers. Each tier builds on the prev
 
 **Goal:** Implement PRISM-G compliance framework and policy engine.
 
-- **PRISM-G 6-Dimension Framework:**
-  - Provenance: agent lineage, tool ancestry, data origin tracking
-  - Responsibility: agent identities, explicit authorization, decision attribution
-  - Interpretability: decision tracing, policy matching, confidence scoring
-  - Security: encryption at rest/transit, secret management, permission boundaries
-  - Monitoring: compliance metrics, policy violation alerts, audit events
-  - Governance: council consensus, policy templates, approval workflows
+- **Governance dimension (G):**
+  - **P**urpose: goal decomposition, intent alignment
+  - **R**eality: environment discovery, factual grounding
+  - **I**nfrastructure: tool/container scheduling, resource bounds
+  - **S**warm: multi-agent coordination, team protocols
+  - **M**emory & Metrics: conversation history, observability
+  - **G**overnance: policy engine, guardrails, audit chain, council consensus, approval workflows
 
 - Trust scoring: 5-tier system (Red → Yellow → Green → Blue → Platinum) based on compliance history
 - Council consensus: multi-signature approval for high-risk actions

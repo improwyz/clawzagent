@@ -1,6 +1,6 @@
 # ClawZ
 
-> Rust-based Agent Orchestration Platform for scalable, compliant, multi-tenant AI agent systems.
+> A governed swarm of containerized AI agents — the reference implementation of the PRISM-G framework, in Rust.
 
 [![License](https://img.shields.io/badge/License-ELv2-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
@@ -10,7 +10,7 @@
 
 ## Overview
 
-**ClawZ** is a high-performance, enterprise-grade agent orchestration framework built in **Rust** by [Enterpryz Ventures](https://enterpryz.com). It enables teams to build, deploy, and govern AI agent systems at scale across three flexible deployment topologies — from a single binary on a laptop to a resilient, multi-node mesh in the cloud.
+**ClawZ** is a high-performance, enterprise-grade platform built in **Rust** by [Enterpryz Ventures](https://enterpryz.com) that runs a **governed swarm of containerized AI agents**. A 3-tier cascade — an Orchestrator spawns tenant-scoped Agent containers, and each Agent spawns its own Tool/MCP containers — lets fleets scale elastically while every action is governed. ClawZ is the open reference implementation of **PRISM-G**, Enterpryz Ventures' six-dimension framework for enterprise autonomous AI (Purpose · Reality · Infrastructure · Swarm · Memory & Metrics · Governance).
 
 Designed with compliance and security as first-class concerns, ClawZ embeds the **PRISM-G** governance framework directly into the execution path of every agent action. Whether you are running a single autonomous agent or coordinating hundreds in a distributed fleet, ClawZ provides the runtime, observability, and guardrails required for production AI operations.
 
@@ -21,7 +21,7 @@ Designed with compliance and security as first-class concerns, ClawZ embeds the 
 | Category | Capabilities |
 |----------|-------------|
 | **Agent Execution** | Pipeline-based runtime with reversible steps, subagent spawning, team coordination, and fan-out/fan-in parallelism. |
-| **Governance (PRISM-G)** | 6-dimensional compliance engine evaluating **P**rivacy, **R**eliability, **I**ntegrity, **S**afety, **M**onitoring, and **G**overnance on every action. |
+| **Governance (G dimension)** | Runtime guardrails, trust scoring, SHA-256 audit chain, council consensus, and SOC2/GDPR/EU AI Act export — the enforcement layer of PRISM-G's Governance dimension. |
 | **Mesh Networking** | Multi-node clusters with leader election (quorum-based), heartbeat health scoring, service discovery (static, mDNS, API), and transport failover. |
 | **Memory & RAG** | Conversation threading, embedding storage via `pgvector`, similarity search, and Retrieve-Augment-Generate pipelines. |
 | **Multi-LLM Providers** | Pluggable provider system with native adapters for OpenAI (GPT-4), Anthropic (Claude 3), and local inference (Ollama, Llama.cpp). |
@@ -290,8 +290,8 @@ clawz/
 │       │   ├── subagent.rs     # Spawn child agents
 │       │   └── fan_out.rs      # Parallel execution
 │       ├── governance/
-│       │   ├── engine.rs       # PRISM-G evaluation
-│       │   ├── prism.rs        # 6D compliance checker
+│       │   ├── engine.rs # Governance engine (policy+trust+guardrails+approval)
+│       │   ├── guardrails.rs # Governance-dimension runtime guardrails (Vol 9)
 │       │   ├── policy.rs       # Hot-reloadable policies
 │       │   ├── trust.rs        # 5-tier trust scoring
 │       │   ├── approval.rs     # Approval workflows

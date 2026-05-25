@@ -28,7 +28,7 @@ ClawZ lets teams ship agents faster by handling the unglamorous work: policy enf
 
 **Stability.** Production readiness over feature count. Every API has clear semantics. Error handling covers failure modes. Deployment is deterministic.
 
-**PRISM-G Compliance.** Completing all six dimensions (Provenance, Responsibility, Interpretability, Security, Monitoring, Governance) with verifiable export. Organizations need to prove compliance, not claim it.
+**PRISM-G Compliance.** Completing all six dimensions (Purpose, Reality, Infrastructure, Swarm, Memory & Metrics, Governance) with verifiable export. Organizations need to prove compliance, not claim it.
 
 **Deployment Flexibility.** From standalone binary to elastic Kubernetes to distributed mesh—one platform, multiple topologies. No rearchitecting when deployment needs change.
 

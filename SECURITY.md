@@ -139,7 +139,7 @@ The following issues are confirmed security bugs and should be reported immediat
    - Agent gains access to platform internals (Trusted zone)
 
 4. **Governance Bypass** (PRISM-G Evasion)
-   - Agent action skips Privacy, Reliability, Integrity, Safety, Monitoring, or Governance checks
+   - Agent action skips its Governance guardrails (safety, compliance, oversight)
    - Malicious policy is not rejected by policy evaluator
    - Council consensus is bypassed for approval workflows
    - Approval workflows execute without required signatures
@@ -317,7 +317,7 @@ Tenant A Budget: $100/day
 
 ---
 
-### Layer 3: Governance (PRISM-G Framework)
+### Layer 3: Governance (PRISM-G's G Dimension)
 
 Every agent action is evaluated against **six governance dimensions**:
 

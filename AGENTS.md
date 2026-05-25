@@ -144,7 +144,7 @@ The `DeploymentMode` enum (clawz-core::deployment) controls which subsystems act
   - Input: AgentAction (execute_tool, send_message, access_data)
   - Output: Approve, Reject with reason, RequireApproval with approvers list
   - Caches policies in memory; revalidates on policy change
-- `prism.rs` — PRISM-G compliance checker (6 dimensions)
+- `guardrails.rs` — Governance-dimension runtime guardrails (Vol 9)
   - **P**rivacy: no access to PII without consent, data minimization
   - **R**eliability: error budgets, SLA enforcement
   - **I**ntegrity: audit chain validation, no tamper
@@ -381,13 +381,16 @@ pub struct Budget {
 If spend exceeds limit, `PersistStep` rejects agent action and returns error.
 
 ### PRISM-G Compliance
-6-dimension framework evaluated on every action:
-- **Privacy**: No PII access without explicit consent; anonymize logs
-- **Reliability**: Error budget (e.g., 99.9% SLA); reject if exhausted
-- **Integrity**: Audit hash chain, detect tampering
-- **Safety**: Rate limits per agent, memory bounds, output constraints
-- **Monitoring**: Mandatory metric export, sampled trace collection
-- **Governance**: Approval thresholds scale with trust score
+PRISM-G defines six canonical dimensions. The governance checks in this document implement the **G (Governance) dimension's** runtime guardrails — safety, compliance, and oversight on every agent action:
+
+| Dimension | Focus |
+|---|---|
+| **P**urpose | Goal decomposition, intent alignment |
+| **R**eality | Environment discovery, factual grounding |
+| **I**nfrastructure | Tool/container scheduling, resource bounds |
+| **S**warm | Multi-agent coordination, team protocols |
+| **M**emory & Metrics | Conversation history, observability |
+| **G**overnance | Guardrails, trust scoring, approval workflows, audit chain |
 
 Encoded as policy YAML/JSON, versioned, hot-reloadable.
 
