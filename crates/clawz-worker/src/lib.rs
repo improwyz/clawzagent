@@ -157,6 +157,13 @@ pub mod reality;
 // Dependency: crate::channels — external communication integrations.
 pub mod runtime;
 
+/// Purpose dimension — structuring vague goals into machine-readable objectives.
+///
+/// Implements the **P** dimension of PRISM-G: classifies intent, extracts
+/// constraints and targets, validates structural invariants, and produces
+/// [`GoalObject`](clawz_core::types::GoalObject)s for the agent runtime.
+pub mod purpose;
+
 /// Tool registry and implementations: built-in, Docker, browser, and MCP.
 ///
 /// Built-in tools include shell execution, file operations, web search / fetch,
