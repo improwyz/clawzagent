@@ -24,6 +24,7 @@ pub mod rag;
 pub mod archive;
 pub mod cache;
 pub mod improvement;
+pub mod outcome_tracker;
 pub mod store;
 
 // Re-export the most commonly used types at the module level.
