@@ -69,6 +69,59 @@ pub struct RuntimeDependencies {
     pub governance: Arc<dyn GovernanceEngine>,
     /// Tracks per-request and cumulative spend; feeds into `CostRepo` in `clawz_core::db`.
     pub cost_tracker: Arc<CostTracker>,
+
+    // ---- Optional governance + scaling components (populated per deployment mode) ----
+    /// Human-in-the-loop approval workflow (Tier-2/3 modes).
+    pub approval_workflow: Option<Arc<crate::governance::approval::ApprovalWorkflow>>,
+    /// Multi-agent deliberation council for high-risk proposals.
+    pub council: Option<Arc<crate::governance::council::Council>>,
+    /// Tamper-evident SHA-256 hash-chained audit logger.
+    pub audit_logger: Option<Arc<crate::governance::audit::AuditLogger>>,
+    /// Trust scorer for agents and skills.
+    pub trust_scorer: Option<Arc<crate::governance::trust::TrustScorer>>,
+    /// Routing bridge between the improvement pipeline and mode-appropriate governance.
+    pub proposal_gatekeeper: Option<Arc<crate::governance::proposal_gate::ProposalGatekeeper>>,
+    /// Skill repository for skill.md / soul.md / agents.md lifecycle management.
+    pub skill_repository: Option<Arc<dyn crate::governance::skill_repository::SkillRepository>>,
+    /// Cascading agent-tree spawner with auto-scale.
+    pub spawner: Option<Arc<crate::runtime::spawner::AgentTreeSpawner>>,
+    /// FSM-based deployment mode transitions and elastic scaling.
+    pub elasticity: Option<Arc<crate::deployment::elasticity::DeploymentElasticity>>,
+}
+
+impl RuntimeDependencies {
+    /// Builder-style method to set approval_workflow
+    pub fn with_approval_workflow(mut self, w: Arc<crate::governance::approval::ApprovalWorkflow>) -> Self {
+        self.approval_workflow = Some(w); self
+    }
+    /// Builder-style method to set council
+    pub fn with_council(mut self, c: Arc<crate::governance::council::Council>) -> Self {
+        self.council = Some(c); self
+    }
+    /// Builder-style method to set audit_logger
+    pub fn with_audit_logger(mut self, a: Arc<crate::governance::audit::AuditLogger>) -> Self {
+        self.audit_logger = Some(a); self
+    }
+    /// Builder-style method to set trust_scorer
+    pub fn with_trust_scorer(mut self, t: Arc<crate::governance::trust::TrustScorer>) -> Self {
+        self.trust_scorer = Some(t); self
+    }
+    /// Builder-style method to set proposal_gatekeeper
+    pub fn with_proposal_gatekeeper(mut self, p: Arc<crate::governance::proposal_gate::ProposalGatekeeper>) -> Self {
+        self.proposal_gatekeeper = Some(p); self
+    }
+    /// Builder-style method to set skill_repository
+    pub fn with_skill_repository(mut self, r: Arc<dyn crate::governance::skill_repository::SkillRepository>) -> Self {
+        self.skill_repository = Some(r); self
+    }
+    /// Builder-style method to set spawner
+    pub fn with_spawner(mut self, s: Arc<crate::runtime::spawner::AgentTreeSpawner>) -> Self {
+        self.spawner = Some(s); self
+    }
+    /// Builder-style method to set elasticity
+    pub fn with_elasticity(mut self, e: Arc<crate::deployment::elasticity::DeploymentElasticity>) -> Self {
+        self.elasticity = Some(e); self
+    }
 }
 
 /// Main agent execution engine.
@@ -364,6 +417,14 @@ mod tests {
             memory: Arc::new(StubMemory),
             governance: Arc::new(StubGovernance),
             cost_tracker: Arc::new(CostTracker::new()),
+            approval_workflow: None,
+            council: None,
+            audit_logger: None,
+            trust_scorer: None,
+            proposal_gatekeeper: None,
+            skill_repository: None,
+            spawner: None,
+            elasticity: None,
         };
         let rt = AgentRuntime::new(config, deps);
         assert_eq!(rt.max_turns, DEFAULT_MAX_TURNS);
