@@ -9,11 +9,14 @@
 //! | [`discovery`] | Build a `ContextBundle` from mixed discovery sources |
 //! | [`drift`]     | Compare predicted vs observed bundles, emit `DriftSignal`s |
 //! | [`versioning`]| Store, retrieve, and reconstruct versioned bundles |
+//! | [`container_metrics`] | Live CPU/memory/health from the Docker (Bollard) API |
 
+pub mod container_metrics;
 pub mod discovery;
 pub mod drift;
 pub mod versioning;
 
-pub use discovery::RealityModel;
+pub use container_metrics::ContainerMetrics;
+pub use discovery::{DiscoverySource, RealityModel};
 pub use drift::DriftDetector;
 pub use versioning::{ContextStore, InMemoryContextStore};
