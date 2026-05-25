@@ -7,6 +7,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::runtime::complexity::ComplexityScore;
 use crate::runtime::team::TeamRole;
 
 // ---------------------------------------------------------------------------
@@ -89,13 +90,37 @@ impl AgentTreeSpawner {
         role: TeamRole,
         count: usize,
     ) -> Result<Vec<AgentHandle>, ClawzError> {
+        // Preserve the original semantic that count == 0 spawns nothing.
+        if count == 0 {
+            return Ok(vec![]);
+        }
+        // Delegate to the complexity-aware path with a synthetic score that
+        // mirrors the caller's requested `count` exactly.
+        let score = ComplexityScore::from_parallelism(count);
+        self.spawn_children_with_complexity(decision, role, &score).await
+    }
+
+    /// Spawn children sized by a [`ComplexityScore`].
+    ///
+    /// The number of children actually spawned is:
+    ///
+    ///   `min(complexity.parallelism_hint, max_capacity_for_role(role) - current_children)`
+    ///
+    /// On any non-`ScaleUp` decision this returns an empty vec.
+    pub async fn spawn_children_with_complexity(
+        &self,
+        decision: ScaleDecision,
+        role: TeamRole,
+        complexity: &ComplexityScore,
+    ) -> Result<Vec<AgentHandle>, ClawzError> {
         if !matches!(decision, ScaleDecision::ScaleUp) {
             return Ok(vec![]);
         }
 
         let max_cap = Self::max_capacity_for_role(role);
         let current = self.current_children(&role).await;
-        let to_spawn = count.min(max_cap.saturating_sub(current));
+        let headroom = max_cap.saturating_sub(current);
+        let to_spawn = complexity.parallelism_hint.min(headroom);
 
         let mut handles = Vec::new();
         for _ in 0..to_spawn {
@@ -282,6 +307,56 @@ mod tests {
         let spawner = AgentTreeSpawner::new("cto-agent", policy, scheduler, make_tenant(), "clawz/agent:latest");
 
         let handles = spawner.spawn_children(ScaleDecision::Maintain, TeamRole::Worker, 5).await.unwrap();
+        assert!(handles.is_empty());
+    }
+
+    #[tokio::test]
+    async fn spawner_with_complexity_honors_parallelism_hint() {
+        use crate::runtime::complexity::ComplexityScore;
+
+        let policy = ScalePolicy::new(1.0, 0.5, 10);
+        let scheduler = Arc::new(MockScheduler::new()) as Arc<dyn AgentScheduler>;
+        let spawner = AgentTreeSpawner::new("parent", policy, scheduler, make_tenant(), "clawz/agent:latest");
+
+        // parallelism_hint = 4 -> spawn 4 workers (worker max cap = 8).
+        let score = ComplexityScore::from_parallelism(4);
+        let handles = spawner
+            .spawn_children_with_complexity(ScaleDecision::ScaleUp, TeamRole::Worker, &score)
+            .await
+            .unwrap();
+        assert_eq!(handles.len(), 4);
+    }
+
+    #[tokio::test]
+    async fn spawner_with_complexity_caps_at_role_capacity() {
+        use crate::runtime::complexity::ComplexityScore;
+
+        let policy = ScalePolicy::new(1.0, 0.5, 10);
+        let scheduler = Arc::new(MockScheduler::new()) as Arc<dyn AgentScheduler>;
+        let spawner = AgentTreeSpawner::new("parent", policy, scheduler, make_tenant(), "clawz/agent:latest");
+
+        // parallelism = 8 (Massive) but Reviewer cap = 2 -> only 2 spawn.
+        let score = ComplexityScore::from_parallelism(8);
+        let handles = spawner
+            .spawn_children_with_complexity(ScaleDecision::ScaleUp, TeamRole::Reviewer, &score)
+            .await
+            .unwrap();
+        assert_eq!(handles.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn spawner_with_complexity_ignores_non_scaleup_decisions() {
+        use crate::runtime::complexity::ComplexityScore;
+
+        let policy = ScalePolicy::new(1.0, 0.5, 10);
+        let scheduler = Arc::new(MockScheduler::new()) as Arc<dyn AgentScheduler>;
+        let spawner = AgentTreeSpawner::new("parent", policy, scheduler, make_tenant(), "clawz/agent:latest");
+
+        let score = ComplexityScore::from_parallelism(5);
+        let handles = spawner
+            .spawn_children_with_complexity(ScaleDecision::ScaleDown, TeamRole::Worker, &score)
+            .await
+            .unwrap();
         assert!(handles.is_empty());
     }
 }

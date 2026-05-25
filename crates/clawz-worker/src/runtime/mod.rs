@@ -31,6 +31,7 @@
 //!   calls inside its step handlers.
 
 pub mod agent;
+pub mod complexity;
 pub mod fan_out;
 pub mod orchestration;
 pub mod pipeline;
@@ -46,3 +47,5 @@ pub use agent::{AgentRuntime, RuntimeDependencies};
 pub use pipeline::Pipeline;
 /// Re-export the spawner types for consumers that need scale decisions.
 pub use spawner::{AgentTreeSpawner, ScaleDecision, ScalePolicy};
+/// Re-export the complexity analyzer for consumers that need to size sub-agent teams.
+pub use complexity::{ComplexityScore, TaskComplexity, TaskComplexityAnalyzer};
