@@ -19,12 +19,9 @@
 use crate::governance::approval::ApprovalWorkflow;
 use crate::governance::audit::{AuditLogger, AuditResult};
 use crate::governance::council::{Council, Proposal as CouncilProposal};
-use crate::governance::trust::TrustScorer;
 use crate::memory::improvement::ImprovementProposal;
-use chrono::Utc;
 use clawz_core::deployment::DeploymentMode;
 use clawz_core::error::ClawzError;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -42,7 +39,7 @@ pub struct GateConfig {
 // ── Decision ───────────────────────────────────────────────────────────────────
 
 /// Outcome of a proposal gate routing decision.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum GateDecision {
     /// Proposal is pending approval — returns the approval request ID.
     Pending(Uuid),
@@ -64,7 +61,6 @@ pub struct ProposalGatekeeper {
     config: GateConfig,
     approval_workflow: Arc<ApprovalWorkflow>,
     audit_logger: Arc<AuditLogger>,
-    trust_scorer: Arc<TrustScorer>,
     council: Option<Arc<Council>>,
 }
 
@@ -74,13 +70,11 @@ impl ProposalGatekeeper {
         config: GateConfig,
         approval_workflow: Arc<ApprovalWorkflow>,
         audit_logger: Arc<AuditLogger>,
-        trust_scorer: Arc<TrustScorer>,
     ) -> Self {
         Self {
             config,
             approval_workflow,
             audit_logger,
-            trust_scorer,
             council: None,
         }
     }
@@ -109,7 +103,7 @@ impl ProposalGatekeeper {
                         "system",
                         "improvement:apply",
                         context,
-                        1,
+                        self.config.required_approvals,
                     )
                     .await;
                 Ok(GateDecision::Pending(Uuid::parse_str(&approval_id).unwrap_or_default()))
@@ -121,7 +115,7 @@ impl ProposalGatekeeper {
                         "system",
                         "improvement:apply",
                         context,
-                        2,
+                        self.config.required_approvals,
                     )
                     .await;
                 Ok(GateDecision::Pending(Uuid::parse_str(&approval_id).unwrap_or_default()))
@@ -178,7 +172,6 @@ mod tests {
     use super::*;
     use crate::governance::approval::ApprovalWorkflow;
     use crate::governance::audit::AuditLogger;
-    use crate::governance::trust::TrustScorer;
     use chrono::Utc;
 
     fn make_proposal() -> ImprovementProposal {
@@ -200,7 +193,6 @@ mod tests {
             },
             Arc::new(ApprovalWorkflow::new()),
             Arc::new(AuditLogger::new()),
-            Arc::new(TrustScorer::new()),
         );
 
         let proposal = make_proposal();
@@ -217,7 +209,6 @@ mod tests {
             },
             Arc::new(ApprovalWorkflow::new()),
             Arc::new(AuditLogger::new()),
-            Arc::new(TrustScorer::new()),
         );
 
         let proposal = make_proposal();
@@ -234,7 +225,6 @@ mod tests {
             },
             Arc::new(ApprovalWorkflow::new()),
             Arc::new(AuditLogger::new()),
-            Arc::new(TrustScorer::new()),
         );
 
         let proposal = make_proposal();
@@ -259,7 +249,6 @@ mod tests {
             },
             Arc::new(ApprovalWorkflow::new()),
             Arc::new(AuditLogger::new()),
-            Arc::new(TrustScorer::new()),
         )
         .with_council(council.clone());
 
