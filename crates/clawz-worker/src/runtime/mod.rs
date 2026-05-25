@@ -37,6 +37,7 @@ pub mod pipeline;
 pub mod steps;
 pub mod subagent;
 pub mod team;
+pub mod swarm;
 
 /// Re-export the primary runtime entry point and its dependency bag.
 pub use agent::{AgentRuntime, RuntimeDependencies};
