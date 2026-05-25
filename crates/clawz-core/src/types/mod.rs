@@ -14,6 +14,7 @@ pub mod governance;
 pub mod mesh;
 pub mod message;
 pub mod orchestration;
+pub mod reality;
 pub mod tenant;
 pub mod tool;
 
@@ -25,5 +26,6 @@ pub use governance::*;
 pub use mesh::*;
 pub use message::*;
 pub use orchestration::*;
+pub use reality::*;
 pub use tenant::*;
 pub use tool::*;
