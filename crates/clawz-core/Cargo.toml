@@ -1,0 +1,23 @@
+[package]
+name = "clawz-core"
+version = "1.0.0"
+edition = "2024"
+license = "Elastic-2.0"
+rust-version = "1.87"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+base64 = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+toml = { workspace = true }
+futures-core = { workspace = true }
+http = { workspace = true }
+sqlx = { workspace = true }
+parking_lot = { workspace = true }

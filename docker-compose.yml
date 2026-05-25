@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=info
+      - WORKER_URL=worker:50051
+    depends_on:
+      - worker
+    networks:
+      - clawz-net
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      - RUST_LOG=info
+      - DATABASE_URL=postgresql://postgres:password@db:5432/clawz
+    depends_on:
+      - db
+    networks:
+      - clawz-net
+
+  db:
+    image: postgres:15-bookworm
+    environment:
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=clawz
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - clawz-net
+
+networks:
+  clawz-net:
+    driver: bridge
+
+volumes:
+  postgres-data:

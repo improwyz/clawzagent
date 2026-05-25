@@ -1,0 +1,440 @@
+//! WebSocket handler implementations for the ClawZ Gateway.
+//!
+//! Each handler follows the same pattern:
+//! 1. An outer `pub async fn` accepts `WebSocketUpgrade` and calls `on_upgrade`.
+//! 2. An inner `async fn` runs the actual WebSocket loop until the peer disconnects.
+//!
+//! All handlers are currently **demo / stub implementations** that stream canned data
+//! on deterministic timers so dashboards and clients have something to render while
+//! the back-end integrations are being built.
+//!
+//! # Cross-crate dependencies
+//!
+//! - `axum` — WebSocket upgrade, message framing, ping/pong.
+//! - `chrono` — RFC-3339 timestamps on every outbound message.
+//! - `serde_json` — ad-hoc JSON payload construction.
+//! - `tokio` — async runtime, `select!` for concurrent timers and socket I/O.
+
+use axum::{
+    extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    response::Response,
+};
+// Dependency: chrono provides UTC timestamps for every outbound message.
+use chrono::Utc;
+// Dependency: serde_json used for lightweight JSON payload construction.
+use serde_json::json;
+// Dependency: tokio time utilities for interval-driven demo data.
+use tokio::time::{interval, Duration};
+
+// ---------------------------------------------------------------------------
+// Helper macros
+// ---------------------------------------------------------------------------
+
+/// Build a `Message::Text` from a JSON value.
+///
+/// axum 0.8 requires `Utf8Bytes` instead of a plain `String`, so we convert
+/// via `.into()`. Using a macro keeps call-sites tidy.
+macro_rules! text_msg {
+    ($val:expr) => {
+        Message::Text($val.to_string().into())
+    };
+}
+
+// ---------------------------------------------------------------------------
+// agent_stream — bidirectional LLM-style token streaming
+// ---------------------------------------------------------------------------
+
+/// Upgrade an HTTP connection to a WebSocket that accepts a prompt and streams
+/// back tokens word-by-word, concluding with a `done` payload.
+pub async fn agent_stream(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_agent_stream)
+}
+
+/// Echoes the prompt back as a simulated LLM response.
+///
+/// Protocol:
+/// - Inbound: JSON `{"prompt": "..."}` or raw text.
+/// - Outbound:
+///   - `{"type":"status","data":"thinking"}`
+///   - `{"type":"token","data":"<word>"}`  (one per word, 40 ms apart)
+///   - `{"type":"done","data":{...}}`
+async fn handle_agent_stream(mut socket: WebSocket) {
+    while let Some(Ok(msg)) = socket.recv().await {
+        let user_text = match msg {
+            Message::Text(t) => t.to_string(),
+            Message::Close(_) => break,
+            _ => continue,
+        };
+
+        let prompt = serde_json::from_str::<serde_json::Value>(&user_text)
+            .ok()
+            .and_then(|v| v["prompt"].as_str().map(|s| s.to_string()))
+            // Why: if the client sends malformed JSON or omits the prompt field,
+            // we still want to echo the raw payload rather than silently failing.
+            .unwrap_or(user_text);
+
+        // Notify the client that "work" has started; this keeps the UI spinner alive.
+        if socket
+            .send(text_msg!(json!({"type": "status", "data": "thinking"})))
+            .await
+            .is_err()
+        {
+            // Peer disappeared before we could send; end the loop cleanly.
+            break;
+        }
+
+        // Build a canned response and stream it word by word.
+        let response = format!(
+            "I received your message: \"{}\". Here is a streamed response from ClawZ.",
+            prompt
+        );
+        let words: Vec<&str> = response.split_whitespace().collect();
+        let total = words.len();
+
+        for word in &words {
+            let token_msg = json!({"type": "token", "data": word});
+            if socket.send(text_msg!(token_msg)).await.is_err() {
+                // Connection dropped mid-stream; no need to send remaining tokens.
+                return;
+            }
+            // Why: 40 ms yields ~25 tokens/sec, a plausible "fast LLM" feel for demos.
+            tokio::time::sleep(Duration::from_millis(40)).await;
+        }
+
+        let done = json!({
+            "type": "done",
+            "data": {
+                "total_tokens": total,
+                "model": "clawz-internal",
+                "finish_reason": "stop"
+            }
+        });
+        if socket.send(text_msg!(done)).await.is_err() {
+            break;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// events — periodic agent lifecycle & system events
+// ---------------------------------------------------------------------------
+
+/// Upgrade an HTTP connection to a WebSocket that pushes canned agent events
+/// every 5 seconds.
+pub async fn events(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_events)
+}
+
+/// Streams a repeating cycle of agent status changes.
+///
+/// Protocol:
+/// - Outbound: `{"type":"connected",...}` on open, then periodic
+///   `{"type":"agent_status|task_complete|error", "agent_id":"...", "status":"..."}`.
+async fn handle_events(mut socket: WebSocket) {
+    let welcome = json!({
+        "type": "connected",
+        "data": {"message": "Subscribed to ClawZ event stream"},
+        "timestamp": Utc::now().to_rfc3339()
+    });
+    if socket.send(text_msg!(welcome)).await.is_err() {
+        return;
+    }
+
+    // Why: a fixed array is the simplest way to cycle through demo events deterministically.
+    let agent_events = [
+        ("agent_status", "agent-001", "running"),
+        ("agent_status", "agent-002", "idle"),
+        ("task_complete", "agent-001", "done"),
+        ("agent_status", "agent-003", "starting"),
+        ("error", "agent-002", "timeout"),
+    ];
+    let mut tick = interval(Duration::from_secs(5));
+    let mut idx = 0usize;
+
+    loop {
+        // Why: `select!` lets us emit ticks AND react to peer control messages
+        // (Close, Ping) on the same task without spawning extra threads.
+        tokio::select! {
+            _ = tick.tick() => {
+                let (ev_type, agent_id, status) = agent_events[idx % agent_events.len()];
+                idx += 1;
+                let event = json!({
+                    "type": ev_type,
+                    "agent_id": agent_id,
+                    "status": status,
+                    "timestamp": Utc::now().to_rfc3339()
+                });
+                if socket.send(text_msg!(event)).await.is_err() {
+                    break;
+                }
+            }
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Ping(data))) => {
+                        // RFC 6455 requires us to reply with a matching Pong.
+                        let _ = socket.send(Message::Pong(data)).await;
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// metrics — jittered operational metrics
+// ---------------------------------------------------------------------------
+
+/// Upgrade an HTTP connection to a WebSocket that pushes simulated gateway
+/// metrics every 2 seconds.
+pub async fn metrics(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_metrics)
+}
+
+/// Streams synthetic operational metrics that jitter within realistic bounds.
+///
+/// Protocol:
+/// - Outbound: `{"type":"metrics","timestamp":"...","data":{...}}`
+async fn handle_metrics(mut socket: WebSocket) {
+    let mut tick = interval(Duration::from_secs(2));
+    // Why: start with "plausible" demo values so the first frame isn't all zeros.
+    let mut active_agents: u32 = 3;
+    let mut rpm: u32 = 42;
+    let mut latency: u32 = 120;
+    let mut memory: u32 = 512;
+    let mut cpu: u32 = 25;
+
+    loop {
+        tokio::select! {
+            _ = tick.tick() => {
+                // Why: deterministic pseudo-random walk keeps the demo dashboard
+                // visually alive without needing an external metrics source.
+                active_agents = (active_agents + 1) % 12;
+                rpm = (rpm + 7) % 200;
+                latency = 50 + (latency + 13) % 150;
+                memory = 256 + (memory + 17) % 512;
+                cpu = (cpu + 5) % 80;
+
+                let payload = json!({
+                    "type": "metrics",
+                    "timestamp": Utc::now().to_rfc3339(),
+                    "data": {
+                        "active_agents": active_agents,
+                        "requests_per_min": rpm,
+                        "avg_latency_ms": latency,
+                        "memory_mb": memory,
+                        "cpu_percent": cpu,
+                    }
+                });
+                if socket.send(text_msg!(payload)).await.is_err() {
+                    break;
+                }
+            }
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Ping(data))) => {
+                        let _ = socket.send(Message::Pong(data)).await;
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// approvals — human-in-the-loop approval workflow
+// ---------------------------------------------------------------------------
+
+/// Upgrade an HTTP connection to a WebSocket that shows pending approvals and
+/// acknowledges client decisions.
+pub async fn approvals(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_approvals)
+}
+
+/// Pushes a snapshot of pending approvals, then re-broadcasts them periodically.
+///
+/// Also accepts inbound JSON decision messages and echoes them back as `approval_ack`.
+///
+/// Protocol:
+/// - Outbound: `{"type":"approvals_snapshot","data":[...]}` followed by
+///   `{"type":"approval_pending","data":{...}}` every 3 s.
+/// - Inbound:  `{"id":"...","decision":"approve|reject"}` (optional).
+async fn handle_approvals(mut socket: WebSocket) {
+    // Why: hard-coded demo queue so the UI has something to render immediately.
+    let pending = vec![
+        json!({"id": "appr-001", "agent_id": "agent-001", "action": "deploy", "resource": "prod-cluster", "risk": "high"}),
+        json!({"id": "appr-002", "agent_id": "agent-002", "action": "delete", "resource": "old-snapshots", "risk": "medium"}),
+    ];
+    let mut tick = interval(Duration::from_secs(3));
+    let mut idx = 0usize;
+
+    // Send the full queue once so the client can render the complete list.
+    let snapshot = json!({
+        "type": "approvals_snapshot",
+        "data": pending,
+        "timestamp": Utc::now().to_rfc3339()
+    });
+    if socket.send(text_msg!(snapshot)).await.is_err() {
+        return;
+    }
+
+    loop {
+        tokio::select! {
+            _ = tick.tick() => {
+                // Cycle through the same items so the demo never runs dry.
+                let item = &pending[idx % pending.len()];
+                idx += 1;
+                let update = json!({
+                    "type": "approval_pending",
+                    "data": item,
+                    "timestamp": Utc::now().to_rfc3339()
+                });
+                if socket.send(text_msg!(update)).await.is_err() {
+                    break;
+                }
+            }
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        // Why: the client may send lightweight decision JSON;
+                        // parsing lets us echo a structured ack. Failure is
+                        // harmless—malformed messages are simply dropped.
+                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(text.as_str()) {
+                            let ack = json!({
+                                "type": "approval_ack",
+                                "id": v["id"],
+                                "decision": v["decision"],
+                                "timestamp": Utc::now().to_rfc3339()
+                            });
+                            let _ = socket.send(text_msg!(ack)).await;
+                        }
+                    }
+                    Some(Ok(Message::Ping(data))) => {
+                        let _ = socket.send(Message::Pong(data)).await;
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// logs — structured log tailing
+// ---------------------------------------------------------------------------
+
+/// Upgrade an HTTP connection to a WebSocket that emits canned structured log
+/// lines every 800 ms.
+pub async fn logs(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_logs)
+}
+
+/// Cycles through a fixed set of JSON log lines to simulate log tailing.
+///
+/// Protocol:
+/// - Outbound: `{"type":"log_line","timestamp":"...","data":{...}}`
+async fn handle_logs(mut socket: WebSocket) {
+    // Why: pre-canned JSON strings let us test both valid and edge-case parsing.
+    let log_lines = [
+        r#"{"level":"INFO","target":"clawz_worker","message":"Agent started","agent_id":"agent-001"}"#,
+        r#"{"level":"DEBUG","target":"clawz_gateway","message":"Received request","path":"/api/agents"}"#,
+        r#"{"level":"INFO","target":"clawz_worker","message":"Task dispatched","task_id":"task-042"}"#,
+        r#"{"level":"WARN","target":"clawz_worker","message":"Provider rate limit approaching","provider":"openai"}"#,
+        r#"{"level":"INFO","target":"clawz_gateway","message":"WebSocket client connected","channel":"logs"}"#,
+        r#"{"level":"ERROR","target":"clawz_worker","message":"Tool execution failed","tool":"web_search","error":"timeout"}"#,
+        r#"{"level":"INFO","target":"clawz_worker","message":"Agent task complete","agent_id":"agent-002","duration_ms":1240}"#,
+    ];
+    let mut tick = interval(Duration::from_millis(800));
+    let mut idx = 0usize;
+
+    loop {
+        tokio::select! {
+            _ = tick.tick() => {
+                let line = log_lines[idx % log_lines.len()];
+                idx += 1;
+                let msg = json!({
+                    "type": "log_line",
+                    "timestamp": Utc::now().to_rfc3339(),
+                    // Why: some log sources may emit plain text; wrapping it in a
+                    // "raw" field keeps the schema consistent for the UI.
+                    "data": serde_json::from_str::<serde_json::Value>(line)
+                        .unwrap_or(json!({"raw": line}))
+                });
+                if socket.send(text_msg!(msg)).await.is_err() {
+                    break;
+                }
+            }
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Ping(data))) => {
+                        let _ = socket.send(Message::Pong(data)).await;
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// voice — duplex binary audio frame exchange
+// ---------------------------------------------------------------------------
+
+/// Upgrade an HTTP connection to a WebSocket that accepts binary audio frames
+/// and echoes them back (duplex).
+pub async fn voice(ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(handle_voice)
+}
+
+/// Receives binary audio frames and text control messages.
+///
+/// Protocol:
+/// - Inbound binary → echoed back immediately (duplex loopback).
+/// - Inbound text  → treated as control messages (`start`, `stop`, `config`).
+/// - Outbound      → `{"type":"audio_frame_ack","bytes":N}` or
+///                   `{"type":"voice_ack","received":"..."}`.
+async fn handle_voice(mut socket: WebSocket) {
+    while let Some(msg) = socket.recv().await {
+        match msg {
+            Ok(Message::Binary(data)) => {
+                let byte_len = data.len();
+                let meta = json!({
+                    "type": "audio_frame_ack",
+                    "bytes": byte_len,
+                    "timestamp": Utc::now().to_rfc3339()
+                });
+                if socket.send(text_msg!(meta)).await.is_err() {
+                    break;
+                }
+                // Why: echoing the binary back demonstrates real-time duplex
+                // capability even before a real audio pipeline is integrated.
+                if socket.send(Message::Binary(data)).await.is_err() {
+                    break;
+                }
+            }
+            Ok(Message::Text(text)) => {
+                // Why: text messages carry control state (start/stop/config);
+                // the actual audio payload stays in Binary frames.
+                let received_str = text.as_str().to_string();
+                let ack = json!({
+                    "type": "voice_ack",
+                    "received": received_str,
+                    "timestamp": Utc::now().to_rfc3339()
+                });
+                if socket.send(text_msg!(ack)).await.is_err() {
+                    break;
+                }
+            }
+            Ok(Message::Ping(data)) => {
+                let _ = socket.send(Message::Pong(data)).await;
+            }
+            Ok(Message::Close(_)) | Err(_) => break,
+            _ => {}
+        }
+    }
+}

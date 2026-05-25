@@ -1,0 +1,31 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# Documentation (generated locally)
+/docs/
+
+# Node
+node_modules/
+web/dist/
+
+# Logs
+*.log
+
+# Plugin/tool artifacts
+.superpowers/

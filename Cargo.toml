@@ -1,0 +1,43 @@
+[workspace]
+members = ["crates/clawz-core", "crates/clawz-worker", "crates/clawz-gateway"]
+resolver = "2"
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+license = "Elastic-2.0"
+rust-version = "1.87"
+
+[workspace.dependencies]
+# Core dependencies
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+base64 = "0.22"
+reqwest = { version = "0.12", features = ["json"] }
+
+# Gateway dependencies
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Worker dependencies
+bollard = "0.18"
+
+# Core additional dependencies
+toml = "0.8"
+futures-core = "0.3"
+http = "1"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
+parking_lot = "0.12"
+
+# Workspace packages
+clawz-core = { path = "crates/clawz-core", version = "1.0.0" }
+clawz-worker = { path = "crates/clawz-worker", version = "1.0.0" }
+clawz-gateway = { path = "crates/clawz-gateway", version = "1.0.0" }

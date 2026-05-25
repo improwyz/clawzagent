@@ -1,0 +1,40 @@
+# provider.toml - Example configuration
+# Copy to ~/.clawz/provider.toml or /etc/clawz/provider.toml
+
+[reliability]
+max_retries = 3
+base_delay_ms = 500
+max_delay_ms = 30000
+exponential_base = 2.0
+jitter = 0.1
+circuit_breaker_threshold = 5
+circuit_breaker_timeout_secs = 30
+
+[providers.openai]
+endpoint = "https://api.openai.com/v1"
+api_key = "${OPENAI_API_KEY}"
+models = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"]
+rate_limit_rpm = 500
+
+[providers.anthropic]
+endpoint = "https://api.anthropic.com/v1"
+api_key = "${ANTHROPIC_API_KEY}"
+models = ["claude-3-5-sonnet-20241022", "claude-3-opus-20240229"]
+rate_limit_rpm = 50
+
+[providers.gemini]
+endpoint = "https://generativelanguage.googleapis.com/v1beta"
+api_key = "${GEMINI_API_KEY}"
+models = ["gemini-1.5-pro", "gemini-1.5-flash"]
+rate_limit_rpm = 60
+
+[providers.bedrock]
+endpoint = "https://bedrock-runtime.amazonaws.com"
+api_key = "${AWS_ACCESS_KEY_ID}"
+models = ["anthropic.claude-3-sonnet-20240229-v1:0"]
+rate_limit_rpm = 100
+
+[providers.ollama]
+endpoint = "http://localhost:11434"
+api_key = ""  # No auth for local
+models = ["llama2", "mistral", "codellama"]
