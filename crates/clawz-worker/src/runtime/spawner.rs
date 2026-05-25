@@ -14,6 +14,16 @@ pub struct ScalePolicy {
     pub max_containers: usize,
 }
 
+impl ScalePolicy {
+    pub fn new(scale_up_threshold: f32, scale_down_threshold: f32, max_containers: usize) -> Self {
+        Self {
+            scale_up_threshold,
+            scale_down_threshold,
+            max_containers,
+        }
+    }
+}
+
 pub struct AgentTreeSpawner {
     parent_id: String,
     policy: ScalePolicy,
@@ -41,13 +51,11 @@ impl AgentTreeSpawner {
 
     pub fn max_capacity_for_role(role: TeamRole) -> usize {
         match role {
-            TeamRole::Leader => 2,
-            TeamRole::Reviewer => 2,
-            TeamRole::Tester => 3,
-            TeamRole::Documenter => 4,
-            TeamRole::Auditor => 3,
-            TeamRole::Coordinator => 3,
+            TeamRole::Leader => 5,
             TeamRole::Worker => 8,
+            TeamRole::Tester => 3,
+            TeamRole::Reviewer => 2,
+            _ => 2,
         }
     }
 }
