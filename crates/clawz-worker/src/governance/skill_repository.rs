@@ -46,6 +46,7 @@ pub trait SkillRepository: Send + Sync {
 
 /// Versioned skill repository with file-based provisioning and agent runtime updates.
 pub struct VersionedSkillRepository {
+    #[allow(dead_code)]
     base_path: std::path::PathBuf,
     file_provisions: HashMap<String, SkillBundle>,
     agent_updates: RwLock<HashMap<String, SkillBundle>>,
@@ -56,6 +57,7 @@ impl VersionedSkillRepository {
     ///
     /// Looks for `skill.md`, `soul.md`, and `agents.md` alongside `base_path`.
     pub fn provision(agent_id: &str, base_path: &Path) -> Result<Self> {
+        // Sync I/O is intentional — provisioning runs before the worker tokio runtime is spun up.
         let skill_md = std::fs::read_to_string(base_path.join("skill.md"))
             .map_err(|e| ClawzError::Internal(format!("skill.md: {e}")))?;
         let soul_md = std::fs::read_to_string(base_path.join("soul.md"))
@@ -79,11 +81,11 @@ impl VersionedSkillRepository {
             agent_updates: RwLock::new(HashMap::new()),
         })
     }
+}
 
-    /// Retrieve the current skill bundle for an agent.
-    ///
-    /// Agent runtime updates take precedence over file provisions.
-    pub async fn get_skill(&self, agent_id: &str) -> Result<Option<SkillBundle>> {
+#[async_trait]
+impl SkillRepository for VersionedSkillRepository {
+    async fn get_skill(&self, agent_id: &str) -> Result<Option<SkillBundle>> {
         let agent_update = self.agent_updates.read().await.get(agent_id).cloned();
         if let Some(bundle) = agent_update {
             return Ok(Some(bundle));
@@ -91,11 +93,13 @@ impl VersionedSkillRepository {
         Ok(self.file_provisions.get(agent_id).cloned())
     }
 
-    /// Record an agent-authored update to its skill bundle.
-    ///
-    /// Agent updates always win — they replace whatever was provisioned.
-    pub async fn update_skill(&self, agent_id: &str, bundle: SkillBundle) -> Result<()> {
+    async fn update_skill(&self, agent_id: &str, bundle: SkillBundle) -> Result<()> {
         let mut updates = self.agent_updates.write().await;
+        if let Some(existing) = updates.get(agent_id) {
+            if bundle.version <= existing.version {
+                return Ok(());
+            }
+        }
         updates.insert(agent_id.to_string(), bundle);
         Ok(())
     }
@@ -108,7 +112,7 @@ impl SkillBundle {
     /// agentskills.io registry.
     pub fn generate_skill_md(role: &str, skills: &[&str], principles: &[&str]) -> Self {
         let skill_md = format!(
-            "# <!-- agentskills.io --> Skill: {}\n\n## Capabilities\n{}\n\n## Principles\n{}\n",
+            "<!-- agentskills.io -->\n# Skill: {}\n\n## Capabilities\n{}\n\n## Principles\n{}\n",
             role,
             skills.iter().map(|s| format!("- {}", s)).collect::<Vec<_>>().join("\n"),
             principles.iter().map(|p| format!("- {}", p)).collect::<Vec<_>>().join("\n"),

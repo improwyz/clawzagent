@@ -74,7 +74,9 @@ pub use policy::PolicyEngine;
 /// Tracks agent trust scores (0–1000) with decay, tier mapping, and historical events.
 pub use trust::TrustScorer;
 /// Skill repository — skill.md / soul.md / agents.md lifecycle management.
-mod skill_repository;
+pub mod skill_repository;
+
+pub use skill_repository::{VersionedSkillRepository, SkillBundle, SkillSource, SkillRepository};
 /// Manages the request/approve/reject/escalate lifecycle for human-in-the-loop actions.
 pub use approval::ApprovalWorkflow;
 /// SHA-256 hash-chained audit logger for tamper-evident records.
