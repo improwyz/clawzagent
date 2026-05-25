@@ -1,4 +1,5 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
 use clawz_core::types::{ToolResult, ToolSchema};
@@ -80,6 +81,9 @@ impl Tool for GitTool {
         "Git operations: status, diff, log, commit, branch, checkout, push, pull. Formats output for LLM consumption."
     }
 
+
+    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Execute }
+    fn risk(&self) -> RiskLevel { RiskLevel::High }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "git".into(),

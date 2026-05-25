@@ -1,4 +1,5 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
 use clawz_core::types::{ToolResult, ToolSchema};
@@ -219,6 +220,9 @@ impl Tool for KnowledgeBaseTool {
         "Query and store information in the agent's knowledge base using vector similarity search (RAG). Requires pgvector-enabled PostgreSQL."
     }
 
+
+    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Read }
+    fn risk(&self) -> RiskLevel { RiskLevel::Low }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "knowledge_base".into(),

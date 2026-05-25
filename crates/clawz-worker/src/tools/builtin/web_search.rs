@@ -1,4 +1,5 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
 use clawz_core::types::{ToolResult, ToolSchema};
@@ -191,6 +192,9 @@ impl Tool for WebSearchTool {
         "Search the web for information. Returns a list of {title, url, snippet} results."
     }
 
+
+    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Read }
+    fn risk(&self) -> RiskLevel { RiskLevel::Low }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "web_search".into(),

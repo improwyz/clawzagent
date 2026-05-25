@@ -1,4 +1,5 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
 use clawz_core::types::{ToolResult, ToolSchema};
@@ -28,6 +29,9 @@ impl Tool for ImageGenTool {
         "Generate images from text prompts using DALL-E (OpenAI) or Stable Diffusion. Returns a URL or base64-encoded PNG."
     }
 
+
+    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Transform }
+    fn risk(&self) -> RiskLevel { RiskLevel::Medium }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "image_gen".into(),

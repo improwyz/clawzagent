@@ -1,4 +1,5 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use clawz_core::error::ClawzError;
@@ -119,6 +120,9 @@ impl Tool for WebFetchTool {
         "Fetch a URL with configurable method, headers, and body. Returns status, headers, and body content. SSRF-protected."
     }
 
+
+    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Read }
+    fn risk(&self) -> RiskLevel { RiskLevel::Low }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "web_fetch".into(),

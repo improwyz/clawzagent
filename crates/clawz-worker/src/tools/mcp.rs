@@ -719,6 +719,7 @@ impl Default for McpServerManager {
 // ── McpTool — wraps an MCP server tool as a local Tool ────────────────────────
 
 use crate::tools::tool_trait::{Tool, ToolContext};
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::types::ToolResult;
 
@@ -743,6 +744,9 @@ impl Tool for McpTool {
     fn description(&self) -> &str {
         &self.schema.description
     }
+
+    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Execute }
+    fn risk(&self) -> RiskLevel { RiskLevel::Medium }
 
     fn schema(&self) -> ToolSchema {
         self.schema.clone()

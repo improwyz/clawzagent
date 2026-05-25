@@ -1,4 +1,5 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
 use clawz_core::types::{ToolResult, ToolSchema};
@@ -112,6 +113,9 @@ impl Tool for ShellTool {
         "Execute shell commands with configurable timeout and sandboxing. Returns stdout, stderr, and exit code."
     }
 
+
+    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Execute }
+    fn risk(&self) -> RiskLevel { RiskLevel::High }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "shell".into(),

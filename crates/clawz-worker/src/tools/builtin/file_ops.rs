@@ -1,4 +1,5 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
 use clawz_core::types::{ToolResult, ToolSchema};
@@ -101,6 +102,9 @@ impl Tool for FileOpsTool {
         "File system operations: read, write, list directory, create directory, delete file. Sandboxed to allowed directories."
     }
 
+
+    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Write }
+    fn risk(&self) -> RiskLevel { RiskLevel::High }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "file_ops".into(),

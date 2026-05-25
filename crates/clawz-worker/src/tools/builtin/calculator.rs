@@ -1,4 +1,5 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
 use clawz_core::types::{ToolResult, ToolSchema};
@@ -45,6 +46,9 @@ impl Tool for CalculatorTool {
          and constants (pi, e, tau)."
     }
 
+
+    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Analyze }
+    fn risk(&self) -> RiskLevel { RiskLevel::Low }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "calculator".into(),
