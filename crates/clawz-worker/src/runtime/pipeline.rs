@@ -462,7 +462,7 @@ mod tests {
                 &self,
                 _ctx: &mut PipelineContext,
             ) -> Result<StepOutcome> {
-                Err(ClawzError::Internal("intentional failure".into()))
+                Err(clawz_core::error::ClawzError::Internal("intentional failure".into()))
             }
         }
 
