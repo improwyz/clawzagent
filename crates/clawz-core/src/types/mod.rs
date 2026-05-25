@@ -16,6 +16,7 @@ pub mod message;
 pub mod orchestration;
 pub mod tenant;
 pub mod tool;
+pub mod tool_risk;
 
 pub use agent::*;
 pub use channel::*;
@@ -27,3 +28,4 @@ pub use message::*;
 pub use orchestration::*;
 pub use tenant::*;
 pub use tool::*;
+pub use tool_risk::*;
