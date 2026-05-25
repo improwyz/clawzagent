@@ -17,6 +17,7 @@
 
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
+    extract::Path,
     response::Response,
 };
 // Dependency: chrono provides UTC timestamps for every outbound message.
@@ -25,6 +26,8 @@ use chrono::Utc;
 use serde_json::json;
 // Dependency: tokio time utilities for interval-driven demo data.
 use tokio::time::{interval, Duration};
+// Dependency: WsEvent / WsControl wire shapes for autonomous streaming.
+use super::{WsControl, WsEvent};
 
 // ---------------------------------------------------------------------------
 // Helper macros
@@ -436,5 +439,212 @@ async fn handle_voice(mut socket: WebSocket) {
             Ok(Message::Close(_)) | Err(_) => break,
             _ => {}
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// autonomous_stream — multi-turn autonomous activity broadcast
+// ---------------------------------------------------------------------------
+
+/// Upgrade an HTTP connection to a WebSocket that broadcasts
+/// [`WsEvent`](super::WsEvent)s emitted by an autonomous multi-turn agent run.
+///
+/// Mounted at `/ws/agents/{id}/stream`. The `{id}` segment is the agent's
+/// unique identifier; it is captured via [`axum::extract::Path`] and made
+/// available to the handler for future integration with the worker's
+/// `run_multi_turn` pipeline.
+///
+/// # Protocol
+///
+/// **Inbound** (text JSON):
+/// - `{"type":"start"}` — begin emitting events. Currently this is a no-op:
+///   the handler begins emitting a canned [`WsEvent::TurnStart`] sequence as
+///   soon as the upgrade completes. A follow-up commit will attach the
+///   handler to a real `run_multi_turn` event channel keyed by `{id}`.
+/// - `{"type":"stop"}` — terminate the session; the handler emits a final
+///   [`WsEvent::SessionEnd`] and closes the socket with code 1000 (normal).
+///
+/// **Outbound** (text JSON, all variants of [`WsEvent`]).
+///
+/// # Future integration
+///
+/// The event channel that feeds this stream is intentionally deferred — see
+/// Task 25 in the autonomous-activity plan. Once the worker exposes a
+/// per-session event sender, the canned sequence below will be replaced with
+/// `tokio::sync::broadcast::Receiver<WsEvent>` polling.
+pub async fn autonomous_stream(
+    Path(agent_id): Path<String>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    ws.on_upgrade(move |socket| handle_autonomous_stream(socket, agent_id))
+}
+
+/// Send a [`WsEvent`] as a text-frame JSON message.
+///
+/// Returns `false` if the peer has disconnected; callers should bail out of
+/// their loop in that case.
+async fn send_event(socket: &mut WebSocket, event: &WsEvent) -> bool {
+    let json = match serde_json::to_string(event) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    socket.send(Message::Text(json.into())).await.is_ok()
+}
+
+/// Runs the autonomous-stream WebSocket loop for a single client.
+///
+/// The current implementation emits a fixed three-turn demo sequence with a
+/// small delay between events so dashboards can wire up against a real
+/// `WsEvent` stream today. The actual event source will be wired in a
+/// follow-up commit once `run_multi_turn` exposes an event channel.
+async fn handle_autonomous_stream(mut socket: WebSocket, agent_id: String) {
+    // Greet the client so it knows the upgrade succeeded and which agent this
+    // session is bound to. This is a plain JSON envelope, not a WsEvent, so
+    // it never clashes with the typed event stream.
+    let hello = json!({
+        "type": "connected",
+        "agent_id": agent_id,
+        "timestamp": Utc::now().to_rfc3339(),
+    });
+    if socket
+        .send(Message::Text(hello.to_string().into()))
+        .await
+        .is_err()
+    {
+        return;
+    }
+
+    // Wait for the first control message — either {"type":"start"} to kick
+    // things off, or {"type":"stop"} for an immediate clean shutdown.
+    let mut started = false;
+    while !started {
+        let msg = match socket.recv().await {
+            Some(Ok(m)) => m,
+            _ => return,
+        };
+        match msg {
+            Message::Text(text) => {
+                match serde_json::from_str::<WsControl>(text.as_str()) {
+                    Ok(WsControl::Start) => started = true,
+                    Ok(WsControl::Stop) => {
+                        let _ = send_event(
+                            &mut socket,
+                            &WsEvent::SessionEnd {
+                                total_turns: 0,
+                                total_cost_usd: 0.0,
+                            },
+                        )
+                        .await;
+                        let _ = socket
+                            .send(Message::Close(Some(
+                                axum::extract::ws::CloseFrame {
+                                    code: axum::extract::ws::close_code::NORMAL,
+                                    reason: "stop requested".into(),
+                                },
+                            )))
+                            .await;
+                        return;
+                    }
+                    Err(e) => {
+                        let _ = send_event(
+                            &mut socket,
+                            &WsEvent::Error {
+                                error: format!("invalid control message: {e}"),
+                            },
+                        )
+                        .await;
+                    }
+                }
+            }
+            Message::Ping(data) => {
+                let _ = socket.send(Message::Pong(data)).await;
+            }
+            Message::Close(_) => return,
+            _ => {}
+        }
+    }
+
+    // Canned three-turn demo sequence. Replace with real event-channel polling
+    // once `run_multi_turn` exposes an event sender keyed by agent_id.
+    let canned_turns = [
+        ("Planning the next step.", 0.012f64),
+        ("Executing the planned action.", 0.018),
+        ("Reviewing results and consolidating output.", 0.011),
+    ];
+    let mut total_cost = 0.0f64;
+
+    for (turn_idx, (output, cost)) in canned_turns.iter().enumerate() {
+        // Why: select! lets us emit ticks while still reacting to a client
+        // {"type":"stop"} mid-session.
+        let stopped = tokio::select! {
+            stop = wait_for_stop(&mut socket) => stop,
+            _ = tokio::time::sleep(Duration::from_millis(100)) => false,
+        };
+        if stopped {
+            let _ = send_event(
+                &mut socket,
+                &WsEvent::SessionEnd {
+                    total_turns: turn_idx,
+                    total_cost_usd: total_cost,
+                },
+            )
+            .await;
+            let _ = socket
+                .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                    code: axum::extract::ws::close_code::NORMAL,
+                    reason: "stop requested".into(),
+                })))
+                .await;
+            return;
+        }
+
+        if !send_event(&mut socket, &WsEvent::TurnStart { turn: turn_idx }).await {
+            return;
+        }
+        total_cost += cost;
+        if !send_event(
+            &mut socket,
+            &WsEvent::TurnComplete {
+                turn: turn_idx,
+                output: output.to_string(),
+            },
+        )
+        .await
+        {
+            return;
+        }
+    }
+
+    let _ = send_event(
+        &mut socket,
+        &WsEvent::SessionEnd {
+            total_turns: canned_turns.len(),
+            total_cost_usd: total_cost,
+        },
+    )
+    .await;
+    let _ = socket
+        .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+            code: axum::extract::ws::close_code::NORMAL,
+            reason: "session complete".into(),
+        })))
+        .await;
+}
+
+/// Drain pending inbound frames non-blockingly; return `true` if a `stop`
+/// control message was observed. Pings are answered inline so heartbeats keep
+/// working across long autonomous sessions.
+async fn wait_for_stop(socket: &mut WebSocket) -> bool {
+    match socket.recv().await {
+        Some(Ok(Message::Text(text))) => matches!(
+            serde_json::from_str::<WsControl>(text.as_str()),
+            Ok(WsControl::Stop)
+        ),
+        Some(Ok(Message::Ping(data))) => {
+            let _ = socket.send(Message::Pong(data)).await;
+            false
+        }
+        Some(Ok(Message::Close(_))) | None => true,
+        _ => false,
     }
 }

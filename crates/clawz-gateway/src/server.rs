@@ -92,6 +92,10 @@ impl GatewayServer {
     fn ws_routes() -> Router<AppState> {
         Router::new()
             .route("/agent/{id}/stream", get(crate::ws::handlers::agent_stream))
+            .route(
+                "/agents/{id}/stream",
+                get(crate::ws::handlers::autonomous_stream),
+            )
             .route("/events", get(crate::ws::handlers::events))
             .route("/metrics", get(crate::ws::handlers::metrics))
             .route("/approvals", get(crate::ws::handlers::approvals))

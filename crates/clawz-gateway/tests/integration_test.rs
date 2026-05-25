@@ -226,3 +226,38 @@ async fn test_websocket_endpoints_reject_http() {
         );
     }
 }
+
+/// Smoke test: the autonomous-activity WebSocket route is registered.
+///
+/// We do not perform a full WebSocket handshake here (Axum requires the upgrade
+/// headers and tokio-tungstenite for that). Instead we send a plain HTTP GET
+/// and assert the response is one of the documented "missing upgrade" codes,
+/// proving the router has the route bound rather than 404-ing.
+#[tokio::test]
+async fn ws_autonomous_stream_endpoint_exists() {
+    let server = make_server();
+    let response = server
+        .app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/ws/agents/some-agent-id/stream")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // The route must exist: anything other than NOT_FOUND proves the WS route
+    // was matched. Axum returns BAD_REQUEST when WebSocket upgrade headers are
+    // missing, or UPGRADE_REQUIRED on some configurations.
+    assert_ne!(
+        response.status(),
+        StatusCode::NOT_FOUND,
+        "/ws/agents/{{id}}/stream must be registered as a route"
+    );
+    assert!(
+        response.status() == StatusCode::BAD_REQUEST
+            || response.status() == StatusCode::UPGRADE_REQUIRED
+            || response.status() == StatusCode::METHOD_NOT_ALLOWED,
+        "/ws/agents/{{id}}/stream should reject plain HTTP, got {}",
