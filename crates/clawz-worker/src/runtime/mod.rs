@@ -34,6 +34,7 @@ pub mod agent;
 pub mod fan_out;
 pub mod orchestration;
 pub mod pipeline;
+pub mod spawner;
 pub mod steps;
 pub mod subagent;
 pub mod team;
@@ -43,3 +44,5 @@ pub mod swarm;
 pub use agent::{AgentRuntime, RuntimeDependencies};
 /// Re-export the pipeline type for consumers that need to build custom pipelines.
 pub use pipeline::Pipeline;
+/// Re-export the spawner types for consumers that need scale decisions.
+pub use spawner::{AgentTreeSpawner, ScaleDecision, ScalePolicy};
