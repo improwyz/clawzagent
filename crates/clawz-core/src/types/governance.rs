@@ -308,3 +308,74 @@ impl ApprovalRequest {
         }
     }
 }
+
+// ── OversightLevel ────────────────────────────────────────────────────────────
+
+/// PRISM-G Volume 9 — the five levels of human oversight, from most to least
+/// autonomous. Used by the Governance dimension to gate actions by required
+/// human involvement.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OversightLevel {
+    /// AI acts independently; humans are not in the path.
+    Autonomous,
+    /// Humans observe and may intervene, but do not pre-approve.
+    Monitored,
+    /// A human is involved in the decision before the action proceeds.
+    HumanInTheLoop,
+    /// The human decides; the AI only assists.
+    HumanDirected,
+    /// The human performs the action; the AI only observes.
+    Manual,
+}
+
+impl OversightLevel {
+    /// All five levels, most→least autonomous.
+    pub const ALL: [OversightLevel; 5] = [
+        OversightLevel::Autonomous,
+        OversightLevel::Monitored,
+        OversightLevel::HumanInTheLoop,
+        OversightLevel::HumanDirected,
+        OversightLevel::Manual,
+    ];
+
+    /// Higher = more autonomous. Autonomous=4 … Manual=0.
+    pub fn autonomy_rank(&self) -> u8 {
+        match self {
+            OversightLevel::Autonomous => 4,
+            OversightLevel::Monitored => 3,
+            OversightLevel::HumanInTheLoop => 2,
+            OversightLevel::HumanDirected => 1,
+            OversightLevel::Manual => 0,
+        }
+    }
+
+    /// True when a human must take or approve the decision before execution.
+    pub fn requires_human_decision(&self) -> bool {
+        matches!(
+            self,
+            OversightLevel::HumanInTheLoop
+                | OversightLevel::HumanDirected
+                | OversightLevel::Manual
+        )
+    }
+}
+
+#[cfg(test)]
+mod oversight_tests {
+    use super::OversightLevel;
+
+    #[test]
+    fn five_levels_ordered_by_autonomy() {
+        assert!(
+            OversightLevel::Autonomous.autonomy_rank() > OversightLevel::Manual.autonomy_rank()
+        );
+        assert_eq!(OversightLevel::ALL.len(), 5);
+    }
+
+    #[test]
+    fn human_in_the_loop_requires_human_decision() {
+        assert!(OversightLevel::HumanInTheLoop.requires_human_decision());
+        assert!(!OversightLevel::Monitored.requires_human_decision());
+    }
+}

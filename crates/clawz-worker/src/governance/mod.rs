@@ -9,13 +9,13 @@
 //! ## Key Components
 //!
 //! | Module | Responsibility |
-//! |--------|--------------|
-//! | [`engine`] | [`ClawzGovernanceEngine`] — orchestrates all checks (policy, PRISM, trust, approval) and produces a final [`clawz_core::types::governance::GovernanceResult`]. |
+//! |--------|--------------| 
+//! | [`engine`] | [`ClawzGovernanceEngine`] — orchestrates all checks (policy, guardrails, trust, approval) and produces a final [`clawz_core::types::governance::GovernanceResult`]. |
 //! | [`policy`] | [`PolicyEngine`] — pattern-matching rule evaluation with priority ordering. |
 //! | [`trust`] | [`TrustScorer`] — score tracking with decay, tier mapping, and historical events. |
 //! | [`approval`] | [`ApprovalWorkflow`] — request/approve/reject/escalate lifecycle for human-in-the-loop actions. |
 //! | [`audit`] | [`AuditLogger`] — SHA-256 hash-chained audit log for tamper evidence. |
-//! | [`prism`] | [`PrismCompliance`] — PRISM-G compliance checks across Privacy, Reliability, Integrity, Safety, and Monitoring dimensions. |
+//! | [`guardrails`] | [`GovernanceGuardrails`] — G-dimension runtime safety/compliance enforcement (PRISM-G Vol 9). |
 //! | [`council`] | [`Council`] — multi-agent deliberation with configurable voting rules (unanimous, majority, supermajority). |
 //! | [`compliance`] | [`ComplianceExporter`] — maps audit evidence to external frameworks (SOC2, GDPR, EU AI Act). |
 //!
@@ -47,19 +47,19 @@ pub mod audit;
 pub mod compliance;
 /// Multi-agent deliberation with voting and tie-breaking.
 pub mod council;
-/// Governance engine implementation — combines policy, trust, PRISM, and approval checks.
+/// Governance engine implementation — combines policy, trust, guardrails, and approval checks.
 pub mod engine;
+/// Governance-dimension runtime guardrails (Vol 9).
+pub mod guardrails;
 /// Policy engine — pattern matching and condition evaluation.
 pub mod policy;
-/// PRISM-G compliance framework — Governance-First agentic AI governance.
-pub mod prism;
 /// Trust scoring with decay, history, and tier mapping.
 pub mod trust;
 
 /// Orchestrates governance checks and produces a final [`clawz_core::types::governance::GovernanceResult`].
 ///
 /// This is the primary entry point for the governance subsystem. It coordinates
-/// the [`PolicyEngine`], [`TrustScorer`], [`PrismCompliance`], and [`ApprovalWorkflow`]
+/// the [`PolicyEngine`], [`TrustScorer`], [`GovernanceGuardrails`], and [`ApprovalWorkflow`]
 /// according to [`GovernanceEngineConfig`].
 pub use engine::{ClawzGovernanceEngine, GovernanceEngineConfig};
 /// Pattern-matching rule engine that evaluates [`clawz_core::types::governance::GovernancePolicy`]
@@ -71,8 +71,8 @@ pub use trust::TrustScorer;
 pub use approval::ApprovalWorkflow;
 /// SHA-256 hash-chained audit logger for tamper-evident records.
 pub use audit::AuditLogger;
-/// PRISM-G compliance checker across Privacy, Reliability, Integrity, Safety, and Monitoring.
-pub use prism::PrismCompliance;
+/// G-dimension runtime guardrails — safety/compliance enforcement for the G dimension (PRISM-G Vol 9).
+pub use guardrails::GovernanceGuardrails;
 /// Multi-agent deliberation body with configurable voting rules and tie-breaking.
 pub use council::Council;
 /// Exports audit evidence mapped to external compliance frameworks (SOC2, GDPR, EU AI Act).

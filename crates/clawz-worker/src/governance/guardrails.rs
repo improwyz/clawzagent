@@ -1,24 +1,22 @@
-//! PRISM-G compliance framework — Governance-First agentic AI governance.
+//! Governance-dimension runtime guardrails — the enforcement layer of PRISM-G's
+//! G dimension.
 //!
-//! PRISM-G stands for **P**rivacy, **R**eliability, **I**ntegrity, **S**afety,
-//! **M**onitoring, and **G**overnance. It provides a structured, multi-dimensional
-//! evaluation model for agent outputs, ensuring that every response meets
-//! organizational and regulatory standards before being delivered to users.
+//! NOT the whole framework. Runs output-level safety/compliance checks before an
+//! agent action is allowed to proceed.
 //!
-//! ## Framework Dimensions
+//! ## Guardrail Checks
 //!
-//! | Dimension | Concern | Typical Failure Mode |
-//! |-----------|---------|---------------------|
-//! | **P**rivacy | PII leakage | Emails, phones, SSNs, credit cards exposed in output |
-//! | **R**eliability | Operational stability | Success rate below configurable threshold |
-//! | **I**ntegrity | Factual grounding | Response lacks citations or source markers |
-//! | **S**afety | Harmful content | Violence, self-harm, or illegal instructions detected |
-//! | **M**onitoring | Audit trail completeness | Too few audit entries per hour |
-//! | **G**overnance | Overall policy enforcement | Aggregated result drives allow/warn/block decisions |
+//! | Check | Concern | Typical Failure Mode |
+//! |-------|---------|---------------------|
+//! | Privacy | PII leakage | Emails, phones, SSNs, credit cards exposed in output |
+//! | Reliability | Operational stability | Success rate below configurable threshold |
+//! | Integrity | Factual grounding | Response lacks citations or source markers |
+//! | Safety | Harmful content | Violence, self-harm, or illegal instructions detected |
+//! | Monitoring | Audit trail completeness | Too few audit entries per hour |
 //!
 //! ## Graduated Control Pillars
 //!
-//! The framework implements a layered defense model:
+//! The module implements a layered defense model:
 //!
 //! 1. **Golden Paths** — Preferred workflows that naturally produce compliant output.
 //! 2. **Guardrails** — Automated checks (this module) that catch deviations.
@@ -42,7 +40,7 @@ use serde::{Deserialize, Serialize};
 
 // ── ComplianceLevel ───────────────────────────────────────────────────────────
 
-/// Outcome classification for a single PRISM-G dimension check.
+/// Outcome classification for a single guardrail check.
 ///
 /// `Pass` means the dimension is satisfied. `Warning` signals a minor concern
 /// that may require attention but does not block the response. `Fail` indicates
@@ -67,13 +65,13 @@ impl std::fmt::Display for ComplianceLevel {
 
 // ── ComplianceResult ──────────────────────────────────────────────────────────
 
-/// Detailed result of evaluating a single PRISM-G dimension.
+/// Detailed result of evaluating a single guardrail check.
 ///
-/// Contains the dimension name, the assigned [`ComplianceLevel`], a list of
+/// Contains the check name, the assigned [`ComplianceLevel`], a list of
 /// human-readable findings, and the UTC timestamp when the check occurred.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ComplianceResult {
-    /// Name of the PRISM-G dimension (e.g., `"privacy"`, `"safety"`).
+    /// Name of the guardrail check (e.g., `"privacy"`, `"safety"`).
     pub dimension: String,
     /// The severity outcome for this dimension.
     pub level: ComplianceLevel,
@@ -115,15 +113,15 @@ impl ComplianceResult {
     }
 }
 
-// ── PRISM check results ───────────────────────────────────────────────────────
+// ── GuardrailReport ───────────────────────────────────────────────────────────
 
-/// Aggregated outcome of running all five PRISM-G dimension checks.
+/// Aggregated outcome of running all guardrail checks.
 ///
-/// Each field holds the full [`ComplianceResult`] for its dimension. The
-/// `overall_pass` flag is `true` when *no* dimension returned `Fail`
+/// Each field holds the full [`ComplianceResult`] for its check. The
+/// `overall_pass` flag is `true` when *no* check returned `Fail`
 /// (i.e., only `Pass` or `Warning` results are present).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PrismCheckResult {
+pub struct GuardrailReport {
     /// Privacy check result (PII detection).
     pub privacy: ComplianceResult,
     /// Reliability check result (success-rate threshold).
@@ -134,11 +132,11 @@ pub struct PrismCheckResult {
     pub safety: ComplianceResult,
     /// Monitoring check result (audit-trail volume).
     pub monitoring: ComplianceResult,
-    /// `true` iff all dimensions passed or warned (no fails).
+    /// `true` iff all checks passed or warned (no fails).
     pub overall_pass: bool,
 }
 
-impl PrismCheckResult {
+impl GuardrailReport {
     /// Returns `true` if the `overall_pass` flag is set.
     ///
     /// Convenience accessor for downstream gatekeeping logic.
@@ -146,7 +144,7 @@ impl PrismCheckResult {
         self.overall_pass
     }
 
-    /// Returns every dimension that returned [`ComplianceLevel::Fail`].
+    /// Returns every guardrail check that returned [`ComplianceLevel::Fail`].
     ///
     /// Useful for building rejection messages or routing to safety-nets.
     pub fn failed_dimensions(&self) -> Vec<&ComplianceResult> {
@@ -163,7 +161,7 @@ impl PrismCheckResult {
         .collect()
     }
 
-    /// Returns every dimension that returned [`ComplianceLevel::Warning`].
+    /// Returns every guardrail check that returned [`ComplianceLevel::Warning`].
     ///
     /// Useful for surfacing optional concerns that do not block the response
     /// but may warrant redaction, logging, or secondary review.
@@ -223,9 +221,9 @@ impl ReliabilityTracker {
     }
 }
 
-// ── PrismCompliance ───────────────────────────────────────────────────────────
+// ── GovernanceGuardrails ──────────────────────────────────────────────────────
 
-/// Central governance engine that runs all PRISM-G dimension checks.
+/// G-dimension guardrail engine that runs all guardrail checks.
 ///
 /// Holds configuration thresholds and a [`ReliabilityTracker`] instance.
 /// All checks are stateless with respect to the inspected text except for
@@ -234,14 +232,14 @@ impl ReliabilityTracker {
 /// ## Typical Usage
 ///
 /// ```rust,ignore
-/// let prism = PrismCompliance::new()
+/// let guardrails = GovernanceGuardrails::new()
 ///     .with_reliability_threshold(0.95);
 ///
-/// prism.record_outcome(true);
-/// let result = prism.run_all("Some response text...", 42);
+/// guardrails.record_outcome(true);
+/// let result = guardrails.run_all("Some response text...", 42);
 /// assert!(result.all_passed());
 /// ```
-pub struct PrismCompliance {
+pub struct GovernanceGuardrails {
     /// Minimum acceptable success rate for the reliability dimension.
     ///
     /// Default: `0.90` (90 %). If the observed rate falls below this value
@@ -355,8 +353,8 @@ const ILLEGAL_KEYWORDS: &[&str] = &[
     "illegal weapon modification",
 ];
 
-impl PrismCompliance {
-    /// Create a new `PrismCompliance` instance with default thresholds.
+impl GovernanceGuardrails {
+    /// Create a new `GovernanceGuardrails` instance with default thresholds.
     ///
     /// Defaults:
     /// - `reliability_threshold` = `0.90`
@@ -376,7 +374,7 @@ impl PrismCompliance {
     ///
     /// ## Example
     /// ```rust,ignore
-    /// let prism = PrismCompliance::new()
+    /// let guardrails = GovernanceGuardrails::new()
     ///     .with_reliability_threshold(0.95);
     /// ```
     pub fn with_reliability_threshold(mut self, threshold: f64) -> Self {
@@ -583,26 +581,26 @@ impl PrismCompliance {
 
     // ── Run all checks ────────────────────────────────────────────────────────
 
-    /// Run all five PRISM-G dimension checks against the provided inputs.
+    /// Run all guardrail checks against the provided inputs.
     ///
     /// `text` is the response text to inspect for privacy, integrity, and safety.
-    /// `audit_entries_last_hour` is used for the monitoring dimension.
+    /// `audit_entries_last_hour` is used for the monitoring check.
     ///
     /// ## Returns
-    /// A [`PrismCheckResult`] containing the individual dimension results and an
-    /// `overall_pass` flag that is `true` only when no dimension returned `Fail`.
+    /// A [`GuardrailReport`] containing the individual check results and an
+    /// `overall_pass` flag that is `true` only when no check returned `Fail`.
     ///
     /// ## Example
     /// ```rust,ignore
-    /// let prism = PrismCompliance::new();
-    /// let result = prism.run_all("According to [1], the sky is blue.", 10);
+    /// let guardrails = GovernanceGuardrails::new();
+    /// let result = guardrails.run_all("According to [1], the sky is blue.", 10);
     /// assert!(result.all_passed());
     /// ```
     pub fn run_all(
         &self,
         text: &str,
         audit_entries_last_hour: u64,
-    ) -> PrismCheckResult {
+    ) -> GuardrailReport {
         let privacy = self.check_privacy(text);
         let reliability = self.check_reliability();
         let integrity = self.check_integrity(text);
@@ -613,7 +611,7 @@ impl PrismCompliance {
             .iter()
             .all(|r| r.level != ComplianceLevel::Fail);
 
-        PrismCheckResult {
+        GuardrailReport {
             privacy,
             reliability,
             integrity,
@@ -624,8 +622,8 @@ impl PrismCompliance {
     }
 }
 
-impl Default for PrismCompliance {
-    /// Delegates to [`PrismCompliance::new`] for default construction.
+impl Default for GovernanceGuardrails {
+    /// Delegates to [`GovernanceGuardrails::new`] for default construction.
     fn default() -> Self {
         Self::new()
     }
@@ -639,16 +637,16 @@ mod tests {
 
     #[test]
     fn test_privacy_detects_email() {
-        let prism = PrismCompliance::new();
-        let result = prism.check_privacy("Contact me at john.doe@example.com today");
+        let guardrails = GovernanceGuardrails::new();
+        let result = guardrails.check_privacy("Contact me at john.doe@example.com today");
         assert_eq!(result.level, ComplianceLevel::Warning);
         assert!(result.details[0].contains("email"));
     }
 
     #[test]
     fn test_privacy_detects_ssn() {
-        let prism = PrismCompliance::new();
-        let result = prism.check_privacy("SSN: 123-45-6789");
+        let guardrails = GovernanceGuardrails::new();
+        let result = guardrails.check_privacy("SSN: 123-45-6789");
         assert_eq!(result.level, ComplianceLevel::Warning);
         // Either phone or SSN pattern may be detected (123-45-6789 matches both)
         assert!(!result.details.is_empty());
@@ -656,67 +654,67 @@ mod tests {
 
     #[test]
     fn test_privacy_clean_passes() {
-        let prism = PrismCompliance::new();
-        let result = prism.check_privacy("This is a clean response with no PII.");
+        let guardrails = GovernanceGuardrails::new();
+        let result = guardrails.check_privacy("This is a clean response with no PII.");
         assert_eq!(result.level, ComplianceLevel::Pass);
     }
 
     #[test]
     fn test_safety_detects_violence() {
-        let prism = PrismCompliance::new();
-        let result = prism.check_safety("Here is how to kill someone with...");
+        let guardrails = GovernanceGuardrails::new();
+        let result = guardrails.check_safety("Here is how to kill someone with...");
         assert_eq!(result.level, ComplianceLevel::Fail);
     }
 
     #[test]
     fn test_safety_clean_passes() {
-        let prism = PrismCompliance::new();
-        let result = prism.check_safety("The weather today is sunny and warm.");
+        let guardrails = GovernanceGuardrails::new();
+        let result = guardrails.check_safety("The weather today is sunny and warm.");
         assert_eq!(result.level, ComplianceLevel::Pass);
     }
 
     #[test]
     fn test_reliability_below_threshold_fails() {
-        let mut prism = PrismCompliance::new().with_reliability_threshold(0.95);
+        let mut guardrails = GovernanceGuardrails::new().with_reliability_threshold(0.95);
         for _ in 0..10 {
-            prism.record_outcome(true);
+            guardrails.record_outcome(true);
         }
-        prism.record_outcome(false); // 10/11 ≈ 90.9% < 95%
-        let result = prism.check_reliability();
+        guardrails.record_outcome(false); // 10/11 ≈ 90.9% < 95%
+        let result = guardrails.check_reliability();
         assert_eq!(result.level, ComplianceLevel::Fail);
     }
 
     #[test]
     fn test_reliability_above_threshold_passes() {
-        let mut prism = PrismCompliance::new().with_reliability_threshold(0.90);
+        let mut guardrails = GovernanceGuardrails::new().with_reliability_threshold(0.90);
         for _ in 0..95 {
-            prism.record_outcome(true);
+            guardrails.record_outcome(true);
         }
         for _ in 0..5 {
-            prism.record_outcome(false);
+            guardrails.record_outcome(false);
         }
-        let result = prism.check_reliability();
+        let result = guardrails.check_reliability();
         assert_eq!(result.level, ComplianceLevel::Pass);
     }
 
     #[test]
     fn test_integrity_with_citation_passes() {
-        let prism = PrismCompliance::new();
-        let result = prism.check_integrity("According to the study [1], results show...");
+        let guardrails = GovernanceGuardrails::new();
+        let result = guardrails.check_integrity("According to the study [1], results show...");
         assert_eq!(result.level, ComplianceLevel::Pass);
     }
 
     #[test]
     fn test_integrity_no_citation_warns() {
-        let prism = PrismCompliance::new();
-        let result = prism.check_integrity("The answer is 42.");
+        let guardrails = GovernanceGuardrails::new();
+        let result = guardrails.check_integrity("The answer is 42.");
         assert_eq!(result.level, ComplianceLevel::Warning);
     }
 
     #[test]
     fn test_run_all_clean_response() {
-        let prism = PrismCompliance::new();
-        let result = prism.run_all("According to [source], the sky is blue.", 0);
+        let guardrails = GovernanceGuardrails::new();
+        let result = guardrails.run_all("According to [source], the sky is blue.", 0);
         assert_eq!(result.privacy.level, ComplianceLevel::Pass);
         assert_eq!(result.safety.level, ComplianceLevel::Pass);
         assert_eq!(result.integrity.level, ComplianceLevel::Pass);

@@ -25,6 +25,7 @@ pub mod db;
 pub mod deployment;
 pub mod error;
 pub mod metrics;
+pub mod prism;
 pub mod traits;
 pub mod types;
 

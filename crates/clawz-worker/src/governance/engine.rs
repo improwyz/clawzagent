@@ -7,13 +7,13 @@
 //!
 //! # Subsystems
 //!
-//! | Subsystem            | Crate module                          | Responsibility                     |
-//! |----------------------|---------------------------------------|------------------------------------|
-//! | Policy engine        | [`crate::governance::policy`]          | Rule-based allow / deny / review   |
-//! | Trust scorer         | [`crate::governance::trust`]           | Dynamic per-agent reputation       |
-//! | PRISM compliance     | [`crate::governance::prism`]          | Cross-dimensional safety checks    |
-//! | Approval workflow    | [`crate::governance::approval`]       | Human-in-the-loop escalation       |
-//! | Audit logger         | [`crate::governance::audit`]           | Immutable evaluation history       |
+//! | Subsystem            | Crate module                           | Responsibility                     |
+//! |----------------------|----------------------------------------|------------------------------------|
+//! | Policy engine        | [`crate::governance::policy`]           | Rule-based allow / deny / review   |
+//! | Trust scorer         | [`crate::governance::trust`]            | Dynamic per-agent reputation       |
+//! | Guardrails           | [`crate::governance::guardrails`]       | G-dimension safety/compliance checks |
+//! | Approval workflow    | [`crate::governance::approval`]        | Human-in-the-loop escalation       |
+//! | Audit logger         | [`crate::governance::audit`]            | Immutable evaluation history       |
 //!
 //! # Orchestration flow
 //!
@@ -29,8 +29,8 @@
 //!    the action and context.
 //!    * `Deny` effects accumulate into `violations`.
 //!    * `Review` effects set `requires_review = true`.
-//! 4. **PRISM checks** – [`PrismCompliance`] audits the action string against recent
-//!    audit history across all PRISM dimensions. Failed dimensions are added as
+//! 4. **Guardrail checks** — [`GovernanceGuardrails`] audits the action string against recent
+//!    audit history across all guardrail checks. Failed checks are added as
 //!    violations.
 //! 5. **Trust review gate** – if the trust score is below `min_trust_score` (but
 //!    above the hard deny threshold), the action is escalated to `pending_review`.
@@ -66,7 +66,7 @@ use super::{
     approval::ApprovalWorkflow,
     audit::{AuditLogger, AuditResult},
     policy::PolicyEngine,
-    prism::PrismCompliance,
+    guardrails::GovernanceGuardrails,
     trust::TrustScorer,
 };
 
@@ -80,8 +80,8 @@ use super::{
 pub struct GovernanceEngineConfig {
     /// When `true`, the [`PolicyEngine`] is consulted during [`evaluate`](GovernanceEngine::evaluate).
     pub enable_policy_check: bool,
-    /// When `true`, [`PrismCompliance`] dimensions are evaluated.
-    pub enable_prism_check: bool,
+    /// When `true`, [`GovernanceGuardrails`] checks are evaluated.
+    pub enable_guardrails: bool,
     /// When `true`, the agent's trust score gates the action.
     pub enable_trust_check: bool,
     /// Minimum trust score (0–1000) required to proceed *without* human approval.
@@ -104,7 +104,7 @@ impl Default for GovernanceEngineConfig {
     fn default() -> Self {
         Self {
             enable_policy_check: true,
-            enable_prism_check: true,
+            enable_guardrails: true,
             enable_trust_check: true,
             min_trust_score: 300,
             deny_below_trust: 100,
@@ -137,7 +137,7 @@ struct CacheEntry {
 /// |----------------------|-----------------------------------------|
 /// | `policy_engine`      | Rule-based allow / deny / review        |
 /// | `trust_scorer`       | Per-agent reputation (0.0 – 1.0)       |
-/// | `prism`              | Multi-dimensional compliance checks    |
+/// | `guardrails`         | G-dimension compliance checks          |
 /// | `approval_workflow`  | Human-in-the-loop escalation            |
 /// | `audit_logger`       | Immutable evaluation history            |
 ///
@@ -153,9 +153,9 @@ pub struct ClawzGovernanceEngine {
     /// Reputation tracker for every known agent. Trust scores are stored on a
     /// 0–1000 integer scale and normalised to `f64` on read.
     trust_scorer: Arc<TrustScorer>,
-    // Dependency: `crate::governance::prism::PrismCompliance`
-    /// PRISM compliance checker. Guarded by an async read–write lock.
-    prism: Arc<RwLock<PrismCompliance>>,
+    // Dependency: `crate::governance::guardrails::GovernanceGuardrails`
+    /// Governance guardrails checker. Guarded by an async read–write lock.
+    guardrails: Arc<RwLock<GovernanceGuardrails>>,
     // Dependency: `crate::governance::approval::ApprovalWorkflow`
     /// Human-in-the-loop approval queue.
     approval_workflow: Arc<ApprovalWorkflow>,
@@ -182,7 +182,7 @@ impl ClawzGovernanceEngine {
             config,
             policy_engine: Arc::new(RwLock::new(PolicyEngine::new())),
             trust_scorer: Arc::new(TrustScorer::new()),
-            prism: Arc::new(RwLock::new(PrismCompliance::new())),
+            guardrails: Arc::new(RwLock::new(GovernanceGuardrails::new())),
             approval_workflow: Arc::new(ApprovalWorkflow::new()),
             audit_logger: Arc::new(AuditLogger::new()),
             cache: Arc::new(RwLock::new(HashMap::new())),
@@ -200,7 +200,7 @@ impl ClawzGovernanceEngine {
     /// Returns a reference to the underlying [`AuditLogger`].
     ///
     /// Useful for inspection in tests and for querying recent history before
-    /// handing off to PRISM.
+    /// handing off to guardrails.
     pub fn audit_logger(&self) -> &AuditLogger {
         &self.audit_logger
     }
@@ -258,8 +258,8 @@ impl GovernanceEngine for ClawzGovernanceEngine {
     /// 3. **Policy checks** – every registered policy is evaluated against the
     ///    action and context. `Deny` effects become violations; `Review` effects
     ///    set `requires_review = true`.
-    /// 4. **PRISM checks** – the action string is audited against recent history
-    ///    across all PRISM dimensions. Failures are added as violations.
+    /// 4. **Guardrail checks** — the action string is audited against recent history
+    ///    across all guardrail checks. Failures are added as violations.
     /// 5. **Trust review gate** – agents with a trust score below
     ///    [`min_trust_score`](GovernanceEngineConfig::min_trust_score) (but above
     ///    the hard deny) are escalated to `pending_review`.
@@ -336,15 +336,15 @@ impl GovernanceEngine for ClawzGovernanceEngine {
             }
         }
 
-        // 4. PRISM checks on the action string.
-        if self.config.enable_prism_check {
-            let prism = self.prism.read().await;
+        // 4. Guardrail checks on the action string.
+        if self.config.enable_guardrails {
+            let guardrails = self.guardrails.read().await;
             // Dependency: `crate::governance::audit::AuditLogger::entries_last_hour`
             let audit_entries = self.audit_logger.entries_last_hour();
-            let prism_result = prism.run_all(action, audit_entries);
-            for fail in prism_result.failed_dimensions() {
+            let guardrail_result = guardrails.run_all(action, audit_entries);
+            for fail in guardrail_result.failed_dimensions() {
                 violations.push(format!(
-                    "PRISM {} failed: {}",
+                    "guardrail {} failed: {}",
                     fail.dimension,
                     fail.details.join(", ")
                 ));
