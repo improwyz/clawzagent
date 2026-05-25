@@ -127,6 +127,14 @@ pub mod observability;
 // Dependency: clawz-core::types::ProviderConfig — shared configuration types.
 pub mod providers;
 
+/// Reality dimension — model the operational environment, detect drift,
+/// and version reality snapshots over time.
+///
+/// Produces [`ContextBundle`](clawz_core::types::ContextBundle) snapshots from
+/// static, dynamic, and human discovery sources. Drift detection compares
+/// predicted vs observed bundles. Versioned storage is tenant-isolated.
+pub mod reality;
+
 /// Agent execution engine: `AgentRuntime`, `Pipeline`, `Team`, `SubAgent`,
 /// `FanOut`, and `Workflow`.
 ///
