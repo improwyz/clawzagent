@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, info};
 
 // ── Primitive counters / gauges ────────────────────────────────────────────────
@@ -361,4 +362,37 @@ pub fn record_deploy_event(registry: &MetricsRegistry, provider: &str, event: &s
 pub fn record_error(registry: &MetricsRegistry, subsystem: &str) {
     let key = format!("clawz_{}_errors_total", subsystem);
     registry.inc(&key);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PerfDimension {
+    Accuracy,
+    Speed,
+    Cost,
+    Reliability,
+    Satisfaction,
+    GoalAlignment,
+}
+
+impl PerfDimension {
+    pub const ALL: [PerfDimension; 6] = [
+        PerfDimension::Accuracy,
+        PerfDimension::Speed,
+        PerfDimension::Cost,
+        PerfDimension::Reliability,
+        PerfDimension::Satisfaction,
+        PerfDimension::GoalAlignment,
+    ];
+
+    pub fn title(&self) -> &'static str {
+        match self {
+            PerfDimension::Accuracy => "Accuracy",
+            PerfDimension::Speed => "Speed",
+            PerfDimension::Cost => "Cost",
+            PerfDimension::Reliability => "Reliability",
+            PerfDimension::Satisfaction => "Satisfaction",
+            PerfDimension::GoalAlignment => "Goal Alignment",
+        }
+    }
 }
