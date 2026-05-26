@@ -27,6 +27,7 @@ pub enum ChangeType {
     RetryPolicy,
     ModelSelection,
     ConcurrencyLimit,
+    IdentityModification,
     Custom(String),
 }
 
@@ -121,6 +122,21 @@ impl BehavioralAdaptor {
             }
         }
 
+        // Format: "identity <field> <delta>"
+        let parts: Vec<&str> = suggestion.split_whitespace().collect();
+        if parts.len() >= 3 && parts[0].to_lowercase() == "identity" {
+            let field = parts[1].to_string();
+            if let Ok(delta) = parts[2].parse::<f32>() {
+                let change = AppliedChange {
+                    proposal_id,
+                    change_type: ChangeType::IdentityModification,
+                    target: field,
+                    value: serde_json::json!(delta),
+                };
+                return Ok(Some(change));
+            }
+        }
+
         // Fallback: treat the whole suggestion as a custom change
         let change = AppliedChange {
             proposal_id,
@@ -196,6 +212,7 @@ mod tests {
             triggering_metrics: vec![(PerfDimension::Speed, 0.5)],
             suggested_changes: vec!["reduce tool timeout from 30s to 10s".into()],
             confidence: 0.85,
+            identity_modification: None,
         };
 
         let result = adaptor.apply(&proposal).await;
@@ -215,6 +232,7 @@ mod tests {
             triggering_metrics: vec![],
             suggested_changes: vec!["set tool_timeout_secs 15".into()],
             confidence: 0.9,
+            identity_modification: None,
         };
 
         let result = adaptor.apply(&proposal).await.unwrap();
@@ -234,6 +252,7 @@ mod tests {
             triggering_metrics: vec![],
             suggested_changes: vec![],
             confidence: 0.5,
+            identity_modification: None,
         };
 
         let result = adaptor.apply(&proposal).await.unwrap();

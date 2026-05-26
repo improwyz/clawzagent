@@ -19,6 +19,19 @@ pub struct Pattern {
     pub gaps: Vec<PerfGap>,
 }
 
+/// Optional identity modification suggested by the self-improvement loop.
+/// Only IdentityState fields are eligible — IdentityCore modifications
+/// are rejected at ProposalGatekeeper.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentityModification {
+    /// Which IdentityState field to modify (e.g., "self_esteem", "behaviour").
+    pub field: String,
+    /// Numeric delta to apply to the field.
+    pub delta: f32,
+    /// Why this modification is being proposed.
+    pub reason: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImprovementProposal {
     pub proposal_id: Uuid,
@@ -26,6 +39,8 @@ pub struct ImprovementProposal {
     pub triggering_metrics: Vec<(clawz_core::metrics::PerfDimension, f32)>,
     pub suggested_changes: Vec<String>,
     pub confidence: f32,
+    /// Optional identity state modification.
+    pub identity_modification: Option<IdentityModification>,
 }
 
 pub trait Evaluator: Send + Sync {
@@ -85,6 +100,7 @@ impl ImprovementGenerator for BasicImprovementGenerator {
             triggering_metrics: p.gaps.iter().map(|g| (g.dimension, g.current)).collect(),
             suggested_changes: vec![format!("address {} gap(s): {}", p.gaps.len(), p.name)],
             confidence: 0.8,
+            identity_modification: None,
         }).collect()
     }
 }
@@ -219,5 +235,24 @@ mod tests {
         let result = loop_.run_once().await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn improvement_proposal_can_carry_identity_modification() {
+        let proposal = ImprovementProposal {
+            proposal_id: uuid::Uuid::new_v4(),
+            generated_at: chrono::Utc::now(),
+            triggering_metrics: vec![],
+            suggested_changes: vec![],
+            confidence: 0.8,
+            identity_modification: Some(IdentityModification {
+                field: "self_esteem".to_string(),
+                delta: 0.1,
+                reason: "positive feedback from recent successes".to_string(),
+            }),
+        };
+
+        assert!(proposal.identity_modification.is_some());
+        assert_eq!(proposal.identity_modification.as_ref().unwrap().field, "self_esteem");
     }
 }

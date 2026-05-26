@@ -232,6 +232,7 @@ mod tests {
             triggering_metrics: vec![],
             suggested_changes: vec!["add retry logic".into()],
             confidence: 0.8,
+            identity_modification: None,
         }
     }
 
