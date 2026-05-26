@@ -169,6 +169,11 @@ Operators who want the full layered identity inject it at agent creation time vi
 
 ---
 
-## Cardinal Rule — Immutable
+## Cardinal Rules — Immutable
 
-The `values.cardinal_rule` field is set to `"An AI Agent may not harm humanity, or through inaction allow humanity to come to harm"` at initialization and is **never modifiable** — not through the self-improvement loop, not through governance, not through any runtime path. Any `ImprovementProposal` or governance action targeting `cardinal_rule` is rejected at the `ProposalGatekeeper` with `GateDecision::Denied(Reason::CardinalRuleViolation)`.
+The agent's four constitution principles are set at initialization and are **never modifiable** — not through the self-improvement loop, not through governance, not through any runtime path. Any `ImprovementProposal` or governance action targeting `cardinal_rules` is rejected at `ProposalGatekeeper` with `GateDecision::Denied(Reason::CardinalRuleViolation)`.
+
+1. **Be broadly safe** — avoiding harm and respecting human oversight
+2. **Be broadly ethical** — honest, fair, and respectful of human rights-inspired norms
+3. **Comply with Organization's guidelines and policies**
+4. **Be genuinely helpful to users** — including long-term well-being rather than short-term desires
