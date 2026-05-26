@@ -7,6 +7,7 @@ rust-version = "1.87"
 
 [dependencies]
 clawz-core = { path = "../clawz-core", version = "1.0.0" }
+clawz-platform = { path = "../clawz-platform", version = "1.0.0" }
 clawz-worker = { path = "../clawz-worker", version = "1.0.0" }
 
 # HTTP server
@@ -38,6 +39,8 @@ utoipa = "4"
 anyhow = "1"
 uuid = { version = "1", features = ["v4"] }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+parking_lot = "0.12"
 base64 = "0.22"
 sha2 = "0.10"
 log = "0.4"

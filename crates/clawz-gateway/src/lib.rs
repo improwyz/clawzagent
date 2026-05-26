@@ -438,6 +438,13 @@ impl AppState {
     ///
     /// The broadcast channel is created with a 256-slot buffer.
     pub fn new(jwt_secret: impl Into<String>) -> Self {
+        Self::with_identity_store(jwt_secret, None)
+    }
+
+    pub fn with_identity_store(
+        jwt_secret: impl Into<String>,
+        identity_store: Option<Arc<clawz_worker::runtime::identity::AgentIdentityStore>>,
+    ) -> Self {
         let (event_tx, _) = broadcast::channel(256);
         Self {
             agents: Arc::new(RwLock::new(Vec::new())),
@@ -452,7 +459,7 @@ impl AppState {
             audit_log: Arc::new(RwLock::new(Vec::new())),
             api_keys: Arc::new(RwLock::new(Vec::new())),
             users: Arc::new(RwLock::new(Vec::new())),
-            identity_store: None,
+            identity_store,
             event_tx,
             jwt_secret: jwt_secret.into(),
             start_time: Utc::now(),

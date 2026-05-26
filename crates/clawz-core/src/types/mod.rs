@@ -20,6 +20,9 @@ pub mod tenant;
 pub mod tool;
 pub mod tool_risk;
 
+// Explicit re-exports to avoid ambiguous glob conflicts (Rust issue #114095).
+// message::Role and tenant::Role both exist — only message::Role is exported
+// as the canonical "Role" to avoid breaking existing code.
 pub use agent::*;
 pub use channel::*;
 pub use cost::*;
@@ -30,6 +33,13 @@ pub use message::*;
 pub use orchestration::*;
 pub use purpose::*;
 pub use reality::*;
-pub use tenant::*;
+// tenant exports — rename Role to avoid collision with message::Role
+pub use tenant::BudgetLease;
+pub use tenant::NetworkScope;
+pub use tenant::PermissionSet;
+pub use tenant::TenantContext;
+pub use tenant::TenantId;
+// Re-export tenant::Role under a non-ambiguous name
+pub use tenant::Role as TenantRole;
 pub use tool::*;
 pub use tool_risk::*;

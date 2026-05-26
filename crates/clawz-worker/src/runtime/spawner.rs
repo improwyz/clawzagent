@@ -252,7 +252,7 @@ mod tests {
     use super::*;
 
     fn make_tenant() -> TenantContext {
-        TenantContext::new("test-tenant".into(), clawz_core::types::tenant::Role::Agent)
+        TenantContext::new("test-tenant".into(), clawz_core::types::TenantRole::Agent)
     }
 
     fn make_policy() -> ScalePolicy {

@@ -7,6 +7,7 @@ rust-version = "1.87"
 
 [dependencies]
 clawz-core = { path = "../clawz-core", version = "1.0.0" }
+clawz-platform = { path = "../clawz-platform", version = "1.0.0" }
 
 # HTTP client
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
@@ -62,6 +63,13 @@ tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 rustls = { version = "0.23", features = ["ring"] }
 rcgen = "0.13"
 bytes = "1"
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1"
 
 [dev-dependencies]
 tokio-test = "0.4"
