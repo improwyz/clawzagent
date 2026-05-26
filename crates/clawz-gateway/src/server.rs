@@ -38,8 +38,10 @@ impl GatewayServer {
     /// - `state` — the shared [`AppState`] containing registries, broadcast channel, and secrets.
     ///
     /// # Example
-    /// ```
-    /// let server = GatewayServer::new(AppState::default());
+    /// ```ignore
+    /// // Full example — run with: cargo run --bin clawz-gateway
+    /// let state = AppState::default();
+    /// let server = GatewayServer::new(state);
     /// server.serve("0.0.0.0:3000".parse().unwrap()).await?;
     /// ```
     pub fn new(state: AppState) -> Self {
