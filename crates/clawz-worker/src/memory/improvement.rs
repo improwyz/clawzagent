@@ -1,7 +1,9 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PerfGap {
@@ -87,6 +89,53 @@ impl ImprovementGenerator for BasicImprovementGenerator {
     }
 }
 
+/// Orchestrates the full closed self-improvement pipeline:
+/// outcome tracking → metric evaluation → pattern recognition →
+/// proposal generation → governance → application
+pub struct SelfImprovementLoop {
+    outcome_tracker: Arc<super::outcome_tracker::OutcomeTracker>,
+    evaluator: Arc<ThresholdEvaluator>,
+    recognizer: Arc<SimplePatternRecognizer>,
+    generator: Arc<BasicImprovementGenerator>,
+    gatekeeper: Arc<crate::governance::proposal_gate::ProposalGatekeeper>,
+    adaptor: Arc<super::behavioral_adaptor::BehavioralAdaptor>,
+}
+
+impl SelfImprovementLoop {
+    /// Create a new loop with all required components.
+    pub fn new(
+        outcome_tracker: Arc<super::outcome_tracker::OutcomeTracker>,
+        evaluator: Arc<ThresholdEvaluator>,
+        recognizer: Arc<SimplePatternRecognizer>,
+        generator: Arc<BasicImprovementGenerator>,
+        gatekeeper: Arc<crate::governance::proposal_gate::ProposalGatekeeper>,
+        adaptor: Arc<super::behavioral_adaptor::BehavioralAdaptor>,
+    ) -> Self {
+        Self { outcome_tracker, evaluator, recognizer, generator, gatekeeper, adaptor }
+    }
+
+    /// Run one iteration: metrics → gaps → patterns → proposals → gatekeeper → apply
+    pub async fn run_once(&self) -> Result<Vec<super::behavioral_adaptor::AppliedChange>, clawz_core::ClawzError> {
+        let metrics = self.outcome_tracker.current_metrics().await;
+        let gaps = self.evaluator.evaluate(&metrics);
+        if gaps.is_empty() { return Ok(vec![]); }
+
+        let patterns = self.recognizer.recognize(&gaps);
+        if patterns.is_empty() { return Ok(vec![]); }
+
+        let proposals = self.generator.generate(&patterns);
+        let mut all_changes = Vec::new();
+        for proposal in proposals {
+            let approved = self.gatekeeper.route(proposal.clone()).await?.is_approved();
+            if approved {
+                let changes = self.adaptor.apply(&proposal).await?;
+                all_changes.extend(changes);
+            }
+        }
+        Ok(all_changes)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +172,52 @@ mod tests {
         assert!(!proposals[0].proposal_id.to_string().is_empty());
         assert_eq!(proposals[0].triggering_metrics.len(), 1);
         assert_eq!(proposals[0].confidence, 0.8);
+    }
+
+    #[tokio::test]
+    async fn self_improvement_loop_runs_without_panic() {
+        // Smoke test: SelfImprovementLoop constructs and run_once completes.
+        // Uses empty thresholds so no gaps are detected → empty result.
+        use crate::governance::skill_repository::SkillRepository;
+
+        struct DummySkillRepo;
+        #[async_trait::async_trait]
+        impl SkillRepository for DummySkillRepo {
+            async fn get_skill(&self, _: &str) -> Result<Option<crate::governance::skill_repository::SkillBundle>, clawz_core::ClawzError> {
+                Ok(None)
+            }
+            async fn update_skill(&self, _: &str, _: crate::governance::skill_repository::SkillBundle) -> Result<(), clawz_core::ClawzError> {
+                Ok(())
+            }
+        }
+
+        let tracker = Arc::new(crate::memory::outcome_tracker::OutcomeTracker::new(3));
+        let evaluator = Arc::new(ThresholdEvaluator::new(HashMap::new()));
+        let recognizer = Arc::new(SimplePatternRecognizer);
+        let generator = Arc::new(BasicImprovementGenerator);
+        let gatekeeper = Arc::new(
+            crate::governance::proposal_gate::ProposalGatekeeper::new(
+                crate::governance::proposal_gate::GateConfig {
+                    mode: clawz_core::deployment::DeploymentMode::Micro,
+                    required_approvals: 0,
+                },
+                Arc::new(crate::governance::approval::ApprovalWorkflow::new()),
+                Arc::new(crate::governance::audit::AuditLogger::new()),
+                None,
+            ),
+        );
+        let adaptor = Arc::new(
+            crate::memory::behavioral_adaptor::BehavioralAdaptor::new(
+                Arc::new(DummySkillRepo),
+            ),
+        );
+
+        let loop_ = SelfImprovementLoop::new(
+            tracker, evaluator, recognizer, generator, gatekeeper, adaptor,
+        );
+        // With no thresholds, no gaps → empty result, no panic.
+        let result = loop_.run_once().await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
 }

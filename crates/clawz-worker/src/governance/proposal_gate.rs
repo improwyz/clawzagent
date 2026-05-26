@@ -59,6 +59,12 @@ pub enum GateDecision {
     Rejected(String),
 }
 
+impl GateDecision {
+    pub fn is_approved(&self) -> bool {
+        matches!(self, GateDecision::Approved(_))
+    }
+}
+
 // ── Gatekeeper ─────────────────────────────────────────────────────────────────
 
 /// Routes improvement proposals through mode-appropriate governance.
