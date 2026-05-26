@@ -30,6 +30,8 @@
 //! - `Workflow` is a higher-level abstraction that can embed `AgentRuntime`
 //!   calls inside its step handlers.
 
+pub mod identity_types;
+
 pub mod agent;
 pub mod complexity;
 pub mod fan_out;
