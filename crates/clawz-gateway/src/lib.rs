@@ -417,6 +417,9 @@ pub struct AppState {
     pub api_keys: Arc<RwLock<Vec<ApiKeyRecord>>>,
     /// Registry of human user accounts.
     pub users: Arc<RwLock<Vec<UserRecord>>>,
+    /// Optional cross-session identity store. When configured, exposes
+    /// the identity-version-hash Admin API at `GET /agents/{id}/identity/hash`.
+    pub identity_store: Option<Arc<clawz_worker::runtime::identity::AgentIdentityStore>>,
     /// Broadcast channel for real-time events (consumed by WebSocket subscribers).
     ///
     /// Capacity is fixed at 256 because events are best-effort; slow consumers
@@ -449,6 +452,7 @@ impl AppState {
             audit_log: Arc::new(RwLock::new(Vec::new())),
             api_keys: Arc::new(RwLock::new(Vec::new())),
             users: Arc::new(RwLock::new(Vec::new())),
+            identity_store: None,
             event_tx,
             jwt_secret: jwt_secret.into(),
             start_time: Utc::now(),

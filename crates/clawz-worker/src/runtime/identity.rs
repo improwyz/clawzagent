@@ -252,6 +252,18 @@ impl AgentIdentityStore {
         self.save(&identity).await
     }
 
+    /// Compute the current identity-version hash for the given agent.
+    ///
+    /// The hash is derived from the immutable [`IdentityCore`] plus the
+    /// evolving [`IdentityState`] (preferences + talent). It changes
+    /// whenever any observable identity field changes and is stable for
+    /// equivalent identities. Used by the Admin API to detect drift,
+    /// version snapshots, and verify integrity across sessions.
+    pub async fn get_identity_version_hash(&self, agent_id: &str) -> Result<String, ClawzError> {
+        let identity = self.load(agent_id).await?;
+        Ok(identity.compute_identity_version_hash())
+    }
+
     /// Record a task completion for an agent.
     pub async fn record_task(
         &self,

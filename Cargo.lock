@@ -357,6 +357,7 @@ dependencies = [
  "base64",
  "chrono",
  "clawz-core",
+ "clawz-worker",
  "futures",
  "http-body-util",
  "jsonwebtoken",

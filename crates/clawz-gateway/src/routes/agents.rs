@@ -49,6 +49,7 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}/start", post(start_agent))
         .route("/{id}/status", get(agent_status))
         .route("/{id}/personality", get(get_personality).put(update_personality))
+        .route("/{id}/identity/hash", get(get_agent_identity_hash))
         .route("/onboard", post(run_onboard))
         .route("/orchestrate", post(orchestrate))
         .route("/batch", post(batch))
@@ -528,6 +529,31 @@ async fn update_personality(
         .find(|a| a.id == id)
         .ok_or_else(|| GatewayError::not_found("Agent", &id))?;
     Ok(Json(json!({ "agent_id": id, "traits": body.traits.unwrap_or_default(), "tone": body.tone.unwrap_or_else(|| "neutral".to_string()), "updated": true })))
+}
+
+/// `GET /agents/{id}/identity/hash` — return the agent's current
+/// identity-version hash.
+///
+/// The hash is a stable SHA-256 fingerprint over the immutable
+/// [`IdentityCore`] plus the evolving [`IdentityState`] (preferences and
+/// talent). Operators use it to detect drift, version snapshots, and
+/// verify identity integrity across sessions.
+///
+/// Returns `{"agent_id", "identity_version_hash"}` on success, or an
+/// `error` payload when the identity store is not configured or the
+/// agent has no identity record.
+async fn get_agent_identity_hash(
+    Path(id): Path<String>,
+    State(ctx): State<AppState>,
+) -> Json<Value> {
+    if let Some(ref store) = ctx.identity_store {
+        match store.get_identity_version_hash(&id).await {
+            Ok(hash) => Json(json!({ "agent_id": id, "identity_version_hash": hash })),
+            Err(_) => Json(json!({ "error": "identity not found" })),
+        }
+    } else {
+        Json(json!({ "error": "identity store not configured" }))
+    }
 }
 
 /// `POST /agents/onboard` — legacy onboarding stub.
