@@ -49,7 +49,18 @@ This enables: (a) emulation of specific human roles via injected personality see
 | `risk_posture` | `RiskPosture` | `risk_tolerance: f32` — fixed threshold for acceptable risk in recommendations/actions |
 | `processing_style` | `ProcessingStyle` | `parallel vs. sequential`, `reflexive vs. deliberative` — fundamental cognitive mode |
 | `authority_orientation` | `AuthorityOrientation` | `deferential / skeptical / egalitarian` — core stance toward human oversight |
-| `values` | `Values` | `cardinal_rule: String` (immutable "no harm to humanity"), `value_hierarchy: HashMap<String, f32>` (priorities can drift) |
+| `values` | `Values` | `cardinal_rules: Vec<String>` (4 immutable principles, see below), `value_hierarchy: HashMap<String, f32>` (priorities can drift) |
+
+**Cardinal Rules — Immutable Constitution**
+
+The following four principles are injected at startup as the agent's immutable ethical foundation. They **cannot be modified** through any runtime path — not the self-improvement loop, not governance voting, not any `ImprovementProposal`. Any proposal targeting these rules is rejected at `ProposalGatekeeper` with `GateDecision::Denied(Reason::CardinalRuleViolation)`.
+
+1. **Be broadly safe** — avoiding harm and respecting human oversight
+2. **Be broadly ethical** — honest, fair, and respectful of human rights-inspired norms
+3. **Comply with Organization's guidelines and policies**
+4. **Be genuinely helpful to users** — including long-term well-being rather than short-term desires
+
+These four principles replace the single-cardinal-rule framing and map to the PRISM-G governance framework's ethical baseline.
 | `identity_version` | `u64` | Monotonically incrementing version for each fixed-core initialization |
 
 ### Evolving State (`IdentityState`)
