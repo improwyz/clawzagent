@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClawZ Design System Preview</title>
+<style>
+/* ============================================
+   CLAWZ DESIGN SYSTEM — PREVIEW DOCUMENT
+   ============================================ */
+
+/* ---- Font Imports ---- */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* ---- CSS Variables (Light Theme - Copper) ---- */
+:root {
+  /* Brand */
+  --brand-copper: #B87333;
+  --brand-copper-light: #D4A574;
+  --brand-copper-dark: #8B5A2B;
+  --brand-silver: #C0C0C0;
+  --brand-silver-light: #E8E8E8;
+  --brand-silver-dark: #888888;
+
+  /* Semantic Tokens — Light */
+  --bg-page: #FAF7F4;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-overlay: rgba(250, 247, 244, 0.85);
+  --fg-primary: #1A1410;
+  --fg-secondary: #5C4D42;
+  --fg-tertiary: #8B7D72;
+  --fg-inverse: #FAF7F4;
+  --border-subtle: #E8DDD4;
+  --border-default: #D4C8BC;
+  --border-strong: #B8A99C;
+  --accent-primary: #B87333;
+  --accent-primary-hover: #8B5A2B;
+  --accent-secondary: #787878;
+  --accent-success: #2D8A4E;
+  --accent-warning: #C78B2A;
+  --accent-danger: #C23B3B;
+  --accent-info: #4A7BAF;
+  --shadow-sm: 0 1px 2px rgba(26, 20, 16, 0.04);
+  --shadow-md: 0 4px 12px rgba(26, 20, 16, 0.08);
+  --shadow-lg: 0 12px 32px rgba(26, 20, 16, 0.12);
+  --shadow-glow: 0 0 24px rgba(184, 115, 51, 0.15);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-2xl: 48px;
+  --spacing-3xl: 64px;
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --font-heading: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* ---- CSS Variables (Dark Theme - Silver) ---- */
+[data-theme="dark"] {
+  --bg-page: #0D0F12;
+  --bg-surface: #161A20;
+  --bg-elevated: #1E2329;
+  --bg-overlay: rgba(13, 15, 18, 0.85);
+  --fg-primary: #E8E8E8;
+  --fg-secondary: #A8ACB2;
+  --fg-tertiary: #6E747C;
+  --fg-inverse: #0D0F12;
+  --border-subtle: #2A3038;
+  --border-default: #3A424C;
+  --border-strong: #4E5660;
+  --accent-primary: #C0C0C0;
+  --accent-primary-hover: #E8E8E8;
+  --accent-secondary: #787878;
+  --accent-success: #4ADE80;
+  --accent-warning: #FBBF24;
+  --accent-danger: #F87171;
+  --accent-info: #60A5FA;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 24px rgba(192, 192, 192, 0.12);
+}
+
+/* ---- Reset & Base ---- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-page);
+  color: var(--fg-primary);
+  line-height: 1.6;
+  transition: background var(--transition-base), color var(--transition-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---- Theme Toggle ---- */
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  padding: 8px 16px;
+  border-radius: 100px;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.theme-toggle:hover { box-shadow: var(--shadow-lg); }
+.theme-toggle .switch {
+  width: 44px; height: 24px;
+  background: var(--border-strong);
+  border-radius: 12px;
+  position: relative;
+  transition: background var(--transition-fast);
+}
+.theme-toggle .switch::after {
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 20px; height: 20px;
+  background: var(--bg-elevated);
+  border-radius: 50%;
+  transition: transform var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+[data-theme="dark"] .theme-toggle .switch { background: var(--accent-primary); }
+[data-theme="dark"] .theme-toggle .switch::after { transform: translateX(20px); }
+
+/* ---- Navigation ---- */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-overlay);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 var(--spacing-xl);
+}
+.nav-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+}
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: var(--fg-primary);
+  text-decoration: none;
+}
+.nav-logo img {
+  height: 32px;
+  width: auto;
+  object-fit: contain;
+}
+.nav-links {
+  display: flex;
+  gap: var(--spacing-lg);
+  list-style: none;
+}
+.nav-links a {
+  color: var(--fg-secondary);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: color var(--transition-fast);
+}
+.nav-links a:hover { color: var(--accent-primary); }
+
+/* ---- Layout ---- */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 var(--spacing-xl);
+}
+.section {
+  padding: var(--spacing-3xl) 0;
+}
+.section-title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: var(--spacing-lg);
+  color: var(--fg-primary);
+}
+.section-subtitle {
+  font-size: 1rem;
+  color: var(--fg-secondary);
+  margin-bottom: var(--spacing-2xl);
+  max-width: 600px;
+}
+
+/* ---- Hero ---- */
+.hero {
+  padding: var(--spacing-3xl) 0;
+  text-align: center;
+}
+.hero-logo {
+  height: 120px;
+  width: auto;
+  margin-bottom: var(--spacing-lg);
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.1));
+}
+[data-theme="dark"] .hero-logo {
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));
+}
+.hero h1 {
+  font-family: var(--font-heading);
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--spacing-md);
+  background: linear-gradient(135deg, var(--fg-primary) 0%, var(--accent-primary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero p {
+  font-size: 1.125rem;
+  color: var(--fg-secondary);
+  max-width: 560px;
+  margin: 0 auto var(--spacing-xl);
+}
+
+/* ---- Buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--brand-copper-dark) 100%);
+  color: #FFFFFF;
+  box-shadow: var(--shadow-glow);
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(184, 115, 51, 0.25);
+}
+[data-theme="dark"] .btn-primary {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--brand-silver-dark) 100%);
+  color: var(--fg-inverse);
+  box-shadow: var(--shadow-glow);
+}
+[data-theme="dark"] .btn-primary:hover {
+  box-shadow: 0 8px 24px rgba(192, 192, 192, 0.2);
+}
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--fg-primary);
+  border: 1px solid var(--border-default);
+}
+.btn-secondary:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--fg-secondary);
+}
+.btn-ghost:hover {
+  color: var(--fg-primary);
+  background: var(--bg-surface);
+}
+
+/* ---- Cards ---- */
+.card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  transition: all var(--transition-fast);
+}
+.card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-default);
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+.card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--brand-copper-dark) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FFFFFF;
+  font-size: 1.25rem;
+}
+[data-theme="dark"] .card-icon {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--brand-silver-dark) 100%);
+  color: var(--fg-inverse);
+}
+.card-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--fg-primary);
+}
+.card-desc {
+  font-size: 0.875rem;
+  color: var(--fg-secondary);
+  line-height: 1.6;
+}
+
+/* ---- Grid ---- */
+.grid {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-2 { grid-template-columns: repeat(2, 1fr); }
+
+/* ---- Color Palette Display ---- */
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+}
+.palette-item {
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+.palette-swatch {
+  height: 80px;
+  width: 100%;
+}
+.palette-info {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-elevated);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+}
+.palette-info .name {
+  font-weight: 600;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  margin-bottom: 2px;
+}
+
+/* ---- Typography ---- */
+.type-specimen {
+  margin-top: var(--spacing-lg);
+}
+.type-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-md) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.type-label {
+  width: 120px;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--fg-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.type-sample {
+  flex: 1;
+  color: var(--fg-primary);
+}
+.type-h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.02em; }
+.type-h2 { font-size: 2rem; font-weight: 700; letter-spacing: -0.01em; }
+.type-h3 { font-size: 1.5rem; font-weight: 600; }
+.type-body { font-size: 1rem; font-weight: 400; line-height: 1.6; }
+.type-body-sm { font-size: 0.875rem; font-weight: 400; color: var(--fg-secondary); }
+.type-mono { font-family: var(--font-mono); font-size: 0.875rem; }
+
+/* ---- Component Showcase ---- */
+.showcase {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-xl);
+  margin-top: var(--spacing-lg);
+}
+.showcase-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  padding: var(--spacing-md) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.showcase-row:last-child { border-bottom: none; }
+.showcase-label {
+  width: 120px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--fg-tertiary);
+}
+
+/* ---- Forms ---- */
+.input {
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--fg-primary);
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  transition: all var(--transition-fast);
+  width: 200px;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(184, 115, 51, 0.15);
+}
+[data-theme="dark"] .input:focus {
+  box-shadow: 0 0 0 3px rgba(192, 192, 192, 0.12);
+}
+
+/* ---- Dashboard Mockup ---- */
+.dashboard-mockup {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-top: var(--spacing-lg);
+  background: var(--bg-surface);
+}
+.sidebar {
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border-subtle);
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  color: var(--fg-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.sidebar-item:hover {
+  background: var(--bg-surface);
+  color: var(--fg-primary);
+}
+.sidebar-item.active {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--brand-copper-dark) 100%);
+  color: #FFFFFF;
+}
+[data-theme="dark"] .sidebar-item.active {
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--brand-silver-dark) 100%);
+  color: var(--fg-inverse);
+}
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  font-weight: 700;
+  font-size: 1.125rem;
+}
+.sidebar-logo img { height: 28px; width: auto; }
+.main-content {
+  padding: var(--spacing-lg);
+  min-height: 400px;
+}
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+.stat-card {
+  padding: var(--spacing-md);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--fg-primary);
+}
+.stat-label {
+  font-size: 0.75rem;
+  color: var(--fg-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+/* ---- Mobile Mockup ---- */
+.mobile-frame {
+  width: 320px;
+  height: 640px;
+  border: 12px solid #1a1a1a;
+  border-radius: 36px;
+  overflow: hidden;
+  background: var(--bg-page);
+  position: relative;
+  margin: 0 auto;
+  box-shadow: 0 24px 48px rgba(0,0,0,0.3);
+}
+.mobile-frame .nav {
+  position: relative;
+  padding: 0 var(--spacing-md);
+}
+.mobile-frame .nav-inner { height: 56px; }
+.mobile-frame .nav-logo { font-size: 1rem; }
+.mobile-frame .nav-logo img { height: 24px; }
+.mobile-frame .hero { padding: var(--spacing-xl) var(--spacing-md); }
+.mobile-frame .hero h1 { font-size: 1.75rem; }
+.mobile-frame .hero p { font-size: 0.9375rem; }
+.mobile-frame .section { padding: var(--spacing-xl) var(--spacing-md); }
+.mobile-frame .grid-3 { grid-template-columns: 1fr; }
+.mobile-frame .stats-row { grid-template-columns: 1fr 1fr; }
+.mobile-frame .dashboard-mockup {
+  grid-template-columns: 1fr;
+  min-height: 300px;
+}
+.mobile-frame .sidebar { display: none; }
+
+/* ---- Mockup Controls ---- */
+.mockup-tabs {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.mockup-tab {
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--fg-tertiary);
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.mockup-tab.active {
+  color: var(--accent-primary);
+  border-bottom-color: var(--accent-primary);
+}
+.mockup-tab:hover {
+  color: var(--fg-primary);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .grid-3, .grid-2 { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 2rem; }
+  .dashboard-mockup { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+  .stats-row { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---- Utility ---- */
+.text-center { text-align: center; }
+.mt-lg { margin-top: var(--spacing-lg); }
+.mb-lg { margin-bottom: var(--spacing-lg); }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.gap-md { gap: var(--spacing-md); }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--fg-tertiary); }
+</style>
+</head>
+<body data-theme="light">
+
+<!-- Theme Toggle -->
+<div class="theme-toggle" onclick="toggleTheme()">
+  <span style="font-size:0.875rem;font-weight:500;">Light</span>
+  <div class="switch"></div>
+  <span style="font-size:0.875rem;font-weight:500;">Dark</span>
+</div>
+
+<!-- Navigation -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#" class="nav-logo" id="nav-logo-link">
+      <img src="../../../../docs/Logo/clawz-copper.png" alt="ClawZ" id="nav-logo-img">
+      ClawZ
+    </a>
+    <ul class="nav-links">
+      <li><a href="#colors">Colors</a></li>
+      <li><a href="#typography">Typography</a></li>
+      <li><a href="#components">Components</a></li>
+      <li><a href="#screens">Screens</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Hero -->
+<section class="hero">
+  <div class="container">
+    <img src="../../../../docs/Logo/clawz-copper-f.png" alt="ClawZ" class="hero-logo" id="hero-logo">
+    <h1>ClawZ Design System</h1>
+    <p>A unified visual language for the ClawZ Agent Orchestration Platform across desktop and mobile.</p>
+    <div style="display:flex;gap:12px;justify-content:center;">
+      <a href="#screens" class="btn btn-primary">View Screens</a>
+      <a href="#colors" class="btn btn-secondary">Explore Tokens</a>
+    </div>
+  </div>
+</section>
+
+<!-- Color Palette -->
+<section class="section" id="colors">
+  <div class="container">
+    <h2 class="section-title">Color Palette</h2>
+    <p class="section-subtitle">Copper-infused light theme and silver-chrome dark theme, derived from brand assets.</p>
+
+    <h3 style="font-size:1rem;font-weight:600;margin-bottom:var(--spacing-md);color:var(--fg-secondary);">Brand Colors</h3>
+    <div class="palette-grid">
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:linear-gradient(135deg,#B87333,#8B5A2B);"></div>
+        <div class="palette-info">
+          <div class="name">Copper</div>
+          #B87333
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:linear-gradient(135deg,#D4A574,#B87333);"></div>
+        <div class="palette-info">
+          <div class="name">Copper Light</div>
+          #D4A574
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:linear-gradient(135deg,#8B5A2B,#5C3A1B);"></div>
+        <div class="palette-info">
+          <div class="name">Copper Dark</div>
+          #8B5A2B
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:linear-gradient(135deg,#C0C0C0,#888888);"></div>
+        <div class="palette-info">
+          <div class="name">Silver</div>
+          #C0C0C0
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:linear-gradient(135deg,#E8E8E8,#C0C0C0);"></div>
+        <div class="palette-info">
+          <div class="name">Silver Light</div>
+          #E8E8E8
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:linear-gradient(135deg,#888888,#646464);"></div>
+        <div class="palette-info">
+          <div class="name">Silver Dark</div>
+          #888888
+        </div>
+      </div>
+    </div>
+
+    <h3 style="font-size:1rem;font-weight:600;margin:var(--spacing-2xl) 0 var(--spacing-md);color:var(--fg-secondary);">Semantic Tokens</h3>
+    <div class="palette-grid">
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:var(--bg-page);"></div>
+        <div class="palette-info">
+          <div class="name">Background</div>
+          Page bg
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:var(--bg-surface);"></div>
+        <div class="palette-info">
+          <div class="name">Surface</div>
+          Cards, panels
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:var(--bg-elevated);"></div>
+        <div class="palette-info">
+          <div class="name">Elevated</div>
+          Inputs, badges
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:var(--fg-primary);"></div>
+        <div class="palette-info">
+          <div class="name">Primary Text</div>
+          Headings, body
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:var(--fg-secondary);"></div>
+        <div class="palette-info">
+          <div class="name">Secondary Text</div>
+          Captions
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:var(--accent-primary);"></div>
+        <div class="palette-info">
+          <div class="name">Accent</div>
+          CTAs, links
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:var(--border-subtle);"></div>
+        <div class="palette-info">
+          <div class="name">Border Subtle</div>
+          Dividers
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:var(--accent-success);"></div>
+        <div class="palette-info">
+          <div class="name">Success</div>
+          Status OK
+        </div>
+      </div>
+      <div class="palette-item">
+        <div class="palette-swatch" style="background:var(--accent-danger);"></div>
+        <div class="palette-info">
+          <div class="name">Danger</div>
+          Errors
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Typography -->
+<section class="section" id="typography" style="background:var(--bg-surface);border-top:1px solid var(--border-subtle);">
+  <div class="container">
+    <h2 class="section-title">Typography</h2>
+    <p class="section-subtitle">Inter for UI clarity, JetBrains Mono for code and data.</p>
+    <div class="type-specimen">
+      <div class="type-row">
+        <span class="type-label">H1 / 40px</span>
+        <span class="type-sample type-h1">Agent Runtime Dashboard</span>
+      </div>
+      <div class="type-row">
+        <span class="type-label">H2 / 32px</span>
+        <span class="type-sample type-h2">Active Swarm Nodes</span>
+      </div>
+      <div class="type-row">
+        <span class="type-label">H3 / 24px</span>
+        <span class="type-sample type-h3">Configuration Panel</span>
+      </div>
+      <div class="type-row">
+        <span class="type-label">Body / 16px</span>
+        <span class="type-sample type-body">The ClawZ orchestration layer distributes tasks across elastic tool-pods with tenant-scoped horizontal auto-scaling.</span>
+      </div>
+      <div class="type-row">
+        <span class="type-label">Small / 14px</span>
+        <span class="type-sample type-body-sm">Last synced 2 minutes ago · 3 agents online</span>
+      </div>
+      <div class="type-row">
+        <span class="type-label">Mono / 14px</span>
+        <span class="type-sample type-mono">clawz-agent --swarm --tenant=acme-prod</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Components -->
+<section class="section" id="components">
+  <div class="container">
+    <h2 class="section-title">Components</h2>
+    <p class="section-subtitle">Reusable UI primitives styled for both themes.</p>
+
+    <div class="showcase">
+      <div class="showcase-row">
+        <span class="showcase-label">Buttons</span>
+        <button class="btn btn-primary">Primary Action</button>
+        <button class="btn btn-secondary">Secondary</button>
+        <button class="btn btn-ghost">Ghost</button>
+      </div>
+      <div class="showcase-row">
+        <span class="showcase-label">Inputs</span>
+        <input type="text" class="input" placeholder="Agent name...">
+        <input type="text" class="input" value="clawz-agent-01" disabled style="opacity:0.6;cursor:not-allowed;">
+      </div>
+      <div class="showcase-row">
+        <span class="showcase-label">Cards</span>
+        <div style="display:flex;gap:var(--spacing-md);flex:1;">
+          <div class="card" style="flex:1;">
+            <div class="card-header">
+              <div class="card-icon">◈</div>
+              <span class="card-title">Agent Node</span>
+            </div>
+            <p class="card-desc">Orchestrator-managed compute unit with identity and trust graph.</p>
+          </div>
+          <div class="card" style="flex:1;">
+            <div class="card-header">
+              <div class="card-icon" style="background:linear-gradient(135deg,var(--accent-success),#1B5E3A);">✓</div>
+              <span class="card-title">Healthy Status</span>
+            </div>
+            <p class="card-desc">All subsystems operational. Last heartbeat 12s ago.</p>
+          </div>
+        </div>
+      </div>
+      <div class="showcase-row">
+        <span class="showcase-label">Badges</span>
+        <span style="padding:4px 12px;border-radius:100px;background:var(--bg-elevated);border:1px solid var(--border-default);font-size:0.75rem;font-weight:600;">v1.0.0</span>
+        <span style="padding:4px 12px;border-radius:100px;background:rgba(45,138,78,0.1);color:var(--accent-success);font-size:0.75rem;font-weight:600;">Online</span>
+        <span style="padding:4px 12px;border-radius:100px;background:rgba(194,59,59,0.1);color:var(--accent-danger);font-size:0.75rem;font-weight:600;">Error</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Screens -->
+<section class="section" id="screens" style="background:var(--bg-surface);border-top:1px solid var(--border-subtle);">
+  <div class="container">
+    <h2 class="section-title">Screen Mockups</h2>
+    <p class="section-subtitle">Desktop and mobile previews of key ClawZ interfaces.</p>
+
+    <div class="mockup-tabs">
+      <button class="mockup-tab active" onclick="showMockup('desktop-dashboard', this)">Desktop Dashboard</button>
+      <button class="mockup-tab" onclick="showMockup('mobile-home', this)">Mobile Home</button>
+      <button class="mockup-tab" onclick="showMockup('desktop-agents', this)">Agent List</button>
+    </div>
+
+    <!-- Desktop Dashboard -->
+    <div id="desktop-dashboard" class="mockup-panel">
+      <div class="dashboard-mockup">
+        <aside class="sidebar">
+          <div class="sidebar-logo">
+            <img src="../../../../docs/Logo/clawz-copper.png" alt="" class="sidebar-logo-img">
+            ClawZ
+          </div>
+          <div class="sidebar-item active">▤ Dashboard</div>
+          <div class="sidebar-item">◈ Agents</div>
+          <div class="sidebar-item">⚇ Swarms</div>
+          <div class="sidebar-item">◫ Tools</div>
+          <div class="sidebar-item">◳ Memory</div>
+          <div class="sidebar-item">⚙ Settings</div>
+        </aside>
+        <main class="main-content">
+          <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:var(--spacing-lg);color:var(--fg-primary);">Dashboard Overview</h2>
+          <div class="stats-row">
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--accent-primary);">12</div>
+              <div class="stat-label">Active Agents</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--accent-success);">98.7%</div>
+              <div class="stat-label">Uptime</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value">4</div>
+              <div class="stat-label">Swarms</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" style="color:var(--accent-warning);">2</div>
+              <div class="stat-label">Alerts</div>
+            </div>
+          </div>
+          <div style="background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--spacing-lg);">
+            <h3 style="font-size:0.875rem;font-weight:600;color:var(--fg-tertiary);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:var(--spacing-md);">Recent Activity</h3>
+            <div style="display:flex;flex-direction:column;gap:var(--spacing-sm);">
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--spacing-sm) 0;border-bottom:1px solid var(--border-subtle);">
+                <span style="font-size:0.9375rem;color:var(--fg-primary);">Agent <code style="font-family:var(--font-mono);font-size:0.8125rem;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">alpha-7</code> completed task</span>
+                <span style="font-size:0.75rem;color:var(--fg-tertiary);">2m ago</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--spacing-sm) 0;border-bottom:1px solid var(--border-subtle);">
+                <span style="font-size:0.9375rem;color:var(--fg-primary);">Swarm <code style="font-family:var(--font-mono);font-size:0.8125rem;background:var(--bg-surface);padding:2px 6px;border-radius:4px;">prod-web</code> scaled to 6 nodes</span>
+                <span style="font-size:0.75rem;color:var(--fg-tertiary);">15m ago</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:var(--spacing-sm) 0;">
+                <span style="font-size:0.9375rem;color:var(--fg-primary);">Memory index updated — 4,231 embeddings</span>
+                <span style="font-size:0.75rem;color:var(--fg-tertiary);">1h ago</span>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <!-- Mobile Home -->
+    <div id="mobile-home" class="mockup-panel" style="display:none;">
+      <div style="display:flex;gap:var(--spacing-2xl);justify-content:center;flex-wrap:wrap;">
+        <div class="mobile-frame">
+          <nav class="nav">
+            <div class="nav-inner">
+              <a href="#" class="nav-logo">
+                <img src="../../../../docs/Logo/clawz-copper.png" alt="" class="mobile-logo-img">
+                ClawZ
+              </a>
+            </div>
+          </nav>
+          <div class="hero">
+            <img src="../../../../docs/Logo/clawz-copper-f.png" alt="" style="height:64px;width:auto;margin-bottom:var(--spacing-md);" class="mobile-hero-logo">
+            <h1 style="font-size:1.5rem;">ClawZ Mobile</h1>
+            <p style="font-size:0.875rem;">Orchestrate agents from anywhere.</p>
+            <button class="btn btn-primary" style="margin-top:var(--spacing-md);padding:10px 20px;font-size:0.875rem;">Launch Console</button>
+          </div>
+          <div class="section" style="padding:var(--spacing-lg) var(--spacing-md);">
+            <h3 style="font-size:1rem;font-weight:600;margin-bottom:var(--spacing-md);">Quick Actions</h3>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-sm);">
+              <div class="card" style="padding:var(--spacing-md);text-align:center;">
+                <div style="font-size:1.5rem;margin-bottom:var(--spacing-xs);">◈</div>
+                <div style="font-size:0.8125rem;font-weight:600;">Agents</div>
+              </div>
+              <div class="card" style="padding:var(--spacing-md);text-align:center;">
+                <div style="font-size:1.5rem;margin-bottom:var(--spacing-xs);">⚇</div>
+                <div style="font-size:0.8125rem;font-weight:600;">Swarms</div>
+              </div>
+              <div class="card" style="padding:var(--spacing-md);text-align:center;">
+                <div style="font-size:1.5rem;margin-bottom:var(--spacing-xs);">◫</div>
+                <div style="font-size:0.8125rem;font-weight:600;">Tools</div>
+              </div>
+              <div class="card" style="padding:var(--spacing-md);text-align:center;">
+                <div style="font-size:1.5rem;margin-bottom:var(--spacing-xs);">◳</div>
+                <div style="font-size:0.8125rem;font-weight:600;">Memory</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Desktop Agents -->
+    <div id="desktop-agents" class="mockup-panel" style="display:none;">
+      <div class="dashboard-mockup">
+        <aside class="sidebar">
+          <div class="sidebar-logo">
+            <img src="../../../../docs/Logo/clawz-copper.png" alt="" class="sidebar-logo-img">
+            ClawZ
+          </div>
+          <div class="sidebar-item">▤ Dashboard</div>
+          <div class="sidebar-item active">◈ Agents</div>
+          <div class="sidebar-item">⚇ Swarms</div>
+          <div class="sidebar-item">◫ Tools</div>
+          <div class="sidebar-item">◳ Memory</div>
+          <div class="sidebar-item">⚙ Settings</div>
+        </aside>
+        <main class="main-content">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-lg);">
+            <h2 style="font-size:1.5rem;font-weight:700;color:var(--fg-primary);">Agent Fleet</h2>
+            <button class="btn btn-primary" style="padding:8px 16px;font-size:0.875rem;">+ New Agent</button>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:var(--spacing-sm);">
+            <div style="display:flex;align-items:center;gap:var(--spacing-md);padding:var(--spacing-md);background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:var(--radius-md);">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent-primary),var(--brand-copper-dark));display:flex;align-items:center;justify-content:center;color:#FFF;font-weight:700;font-size:0.875rem;">α</div>
+              <div style="flex:1;">
+                <div style="font-weight:600;font-size:0.9375rem;">alpha-7</div>
+                <div style="font-size:0.75rem;color:var(--fg-tertiary);">General-purpose · Tier T3</div>
+              </div>
+              <span style="padding:4px 12px;border-radius:100px;background:rgba(45,138,78,0.1);color:var(--accent-success);font-size:0.75rem;font-weight:600;">Online</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:var(--spacing-md);padding:var(--spacing-md);background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:var(--radius-md);">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#4A7BAF,#2E5A8A);display:flex;align-items:center;justify-content:center;color:#FFF;font-weight:700;font-size:0.875rem;">β</div>
+              <div style="flex:1;">
+                <div style="font-weight:600;font-size:0.9375rem;">beta-3</div>
+                <div style="font-size:0.75rem;color:var(--fg-tertiary);">Code review · Tier T2</div>
+              </div>
+              <span style="padding:4px 12px;border-radius:100px;background:rgba(45,138,78,0.1);color:var(--accent-success);font-size:0.75rem;font-weight:600;">Online</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:var(--spacing-md);padding:var(--spacing-md);background:var(--bg-elevated);border:1px solid var(--border-subtle);border-radius:var(--radius-md);">
+              <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#C78B2A,#8B6914);display:flex;align-items:center;justify-content:center;color:#FFF;font-weight:700;font-size:0.875rem;">γ</div>
+              <div style="flex:1;">
+                <div style="font-weight:600;font-size:0.9375rem;">gamma-1</div>
+                <div style="font-size:0.75rem;color:var(--fg-tertiary);">Data analysis · Tier T4</div>
+              </div>
+              <span style="padding:4px 12px;border-radius:100px;background:rgba(199,139,42,0.1);color:var(--accent-warning);font-size:0.75rem;font-weight:600;">Busy</span>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer style="padding:var(--spacing-xl);text-align:center;border-top:1px solid var(--border-subtle);color:var(--fg-tertiary);font-size:0.8125rem;background:var(--bg-surface);">
+  <p>ClawZ Design System Preview &mdash; Desktop & Mobile</p>
+  <p style="margin-top:var(--spacing-xs);opacity:0.7;">Toggle the theme switcher in the top-right to preview both light and dark modes.</p>
+</footer>
+
+<script>
+function toggleTheme() {
+  const body = document.body;
+  const isDark = body.getAttribute('data-theme') === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+  body.setAttribute('data-theme', newTheme);
+
+  // Swap logos
+  const heroLogo = document.getElementById('hero-logo');
+  const navLogo = document.getElementById('nav-logo-img');
+  const sidebarLogos = document.querySelectorAll('.sidebar-logo-img');
+  const mobileLogos = document.querySelectorAll('.mobile-logo-img');
+  const mobileHeroLogos = document.querySelectorAll('.mobile-hero-logo');
+
+  const logoPrefix = '../../../../docs/Logo/';
+  if (newTheme === 'dark') {
+    heroLogo.src = logoPrefix + 'clawz-silver-f.png';
+    navLogo.src = logoPrefix + 'clawz-silver.png';
+    sidebarLogos.forEach(img => img.src = logoPrefix + 'clawz-silver.png');
+    mobileLogos.forEach(img => img.src = logoPrefix + 'clawz-silver.png');
+    mobileHeroLogos.forEach(img => img.src = logoPrefix + 'clawz-silver-f.png');
+  } else {
+    heroLogo.src = logoPrefix + 'clawz-copper-f.png';
+    navLogo.src = logoPrefix + 'clawz-copper.png';
+    sidebarLogos.forEach(img => img.src = logoPrefix + 'clawz-copper.png');
+    mobileLogos.forEach(img => img.src = logoPrefix + 'clawz-copper.png');
+    mobileHeroLogos.forEach(img => img.src = logoPrefix + 'clawz-copper-f.png');
+  }
+}
+
+function showMockup(id, tab) {
+  document.querySelectorAll('.mockup-panel').forEach(p => p.style.display = 'none');
+  document.getElementById(id).style.display = 'block';
+  document.querySelectorAll('.mockup-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+}
+
+// Respect OS preference on load
+if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  toggleTheme();
+}
+</script>
+
+</body>
+</html>
