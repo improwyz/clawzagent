@@ -144,7 +144,13 @@ impl SelfImprovementLoop {
         for proposal in proposals {
             let approved = self.gatekeeper.route(proposal.clone()).await?.is_approved();
             if approved {
-                let changes = self.adaptor.apply(&proposal).await?;
+                let mut proposal_to_apply = proposal.clone();
+                // Wire identity_modification into suggested_changes so parse_and_apply can consume it.
+                if let Some(ref identity_mod) = proposal.identity_modification {
+                    let suggestion = format!("identity {} {}", identity_mod.field, identity_mod.delta);
+                    proposal_to_apply.suggested_changes.push(suggestion);
+                }
+                let changes = self.adaptor.apply(&proposal_to_apply).await?;
                 all_changes.extend(changes);
             }
         }
