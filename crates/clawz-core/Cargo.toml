@@ -12,7 +12,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
-uuid = { workspace = true }
+uuid = { workspace = true, optional = true }
 base64 = { workspace = true }
 reqwest = { workspace = true }
 tracing = { workspace = true }
@@ -20,4 +20,13 @@ toml = { workspace = true }
 futures-core = { workspace = true }
 http = { workspace = true }
 sqlx = { workspace = true }
-parking_lot = { workspace = true }
+parking_lot = { workspace = true, optional = true }
+
+[features]
+default = ["std"]
+std = ["dep:parking_lot", "dep:uuid"]
+t0 = []
+t1 = []
+t2 = ["tokio/rt"]
+t3 = ["tokio/rt-multi-thread"]
+tauri = ["tokio/rt"]
