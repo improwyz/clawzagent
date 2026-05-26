@@ -1,8 +1,8 @@
-FROM rust:1.87-bookworm AS builder
-
+# Stage 1: Build
+FROM rust:1.88-bookworm AS builder
 WORKDIR /app
 
-# Copy workspace files
+# Copy all crates needed (gateway depends on worker)
 COPY Cargo.toml Cargo.lock ./
 COPY crates/clawz-core ./crates/clawz-core
 COPY crates/clawz-worker ./crates/clawz-worker
@@ -10,16 +10,10 @@ COPY crates/clawz-gateway ./crates/clawz-gateway
 
 # Build the gateway
 RUN cargo build --release -p clawz-gateway
+RUN strip /app/target/release/clawz-gateway || true
 
-# Runtime stage
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
+# Stage 2: Runtime
+FROM gcr.io/distroless/cc-debian12
 COPY --from=builder /app/target/release/clawz-gateway /usr/local/bin/
-
-EXPOSE 3000
-
-CMD ["clawz-gateway"]
+USER nonroot:nonroot
+ENTRYPOINT ["/usr/local/bin/clawz-gateway"]
