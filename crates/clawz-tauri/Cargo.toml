@@ -18,11 +18,15 @@ serde_json = "1"
 
 # ClawZ runtime
 clawz-core = { path = "../clawz-core" }
+clawz-platform = { path = "../clawz-platform" }
 clawz-runtime = { path = "../clawz-runtime" }
 clawz-worker = { path = "../clawz-worker" }
 
 # Async runtime
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
+
+# Concurrency primitives
+parking_lot = "0.12"
 
 # Local storage
 rusqlite = { version = "0.32", features = ["bundled"] }
@@ -30,6 +34,11 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # Error handling
 thiserror = "2"
 anyhow = "1"
+
+# Logging
+log = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [features]
 default = []

@@ -111,6 +111,61 @@ pub struct RuntimeDependencies {
 }
 
 impl RuntimeDependencies {
+    /// Construct with the four required dependencies. All optional components are
+    /// left absent; use the builder-style `with_*` methods to attach them.
+    pub fn new(
+        provider_router: Arc<ProviderRouter>,
+        memory: Arc<dyn MemoryBackend>,
+        governance: Arc<dyn GovernanceEngine>,
+        cost_tracker: Arc<CostTracker>,
+    ) -> Self {
+        Self {
+            provider_router,
+            memory,
+            governance,
+            cost_tracker,
+            approval_workflow: None,
+            council: None,
+            audit_logger: None,
+            trust_scorer: None,
+            proposal_gatekeeper: None,
+            skill_repository: None,
+            spawner: None,
+            elasticity: None,
+            capability_registry: None,
+            outcome_tracker: None,
+            complexity_analyzer: None,
+            container_metrics: None,
+            negotiation_protocol: None,
+            self_improvement_loop: None,
+            self_improvement_interval_turns: 0,
+            constitution: None,
+            identity_store: None,
+            idempotency_store: None,
+            mbti_drift_detector: None,
+        }
+    }
+
+    /// Builder-style method to set provider_router
+    pub fn with_provider_router(mut self, r: Arc<ProviderRouter>) -> Self {
+        self.provider_router = r; self
+    }
+
+    /// Builder-style method to set memory
+    pub fn with_memory(mut self, m: Arc<dyn MemoryBackend>) -> Self {
+        self.memory = m; self
+    }
+
+    /// Builder-style method to set governance
+    pub fn with_governance(mut self, g: Arc<dyn GovernanceEngine>) -> Self {
+        self.governance = g; self
+    }
+
+    /// Builder-style method to set cost_tracker
+    pub fn with_cost_tracker(mut self, c: Arc<CostTracker>) -> Self {
+        self.cost_tracker = c; self
+    }
+
     /// Builder-style method to set approval_workflow
     pub fn with_approval_workflow(mut self, w: Arc<crate::governance::approval::ApprovalWorkflow>) -> Self {
         self.approval_workflow = Some(w); self
