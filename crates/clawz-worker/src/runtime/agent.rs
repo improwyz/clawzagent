@@ -87,6 +87,8 @@ pub struct RuntimeDependencies {
     pub spawner: Option<Arc<crate::runtime::spawner::AgentTreeSpawner>>,
     /// FSM-based deployment mode transitions and elastic scaling.
     pub elasticity: Option<Arc<crate::deployment::elasticity::DeploymentElasticity>>,
+    /// Runtime capability registry for semantic tool discovery.
+    pub capability_registry: Option<Arc<crate::tools::capability_registry::ToolCapabilityRegistry>>,
 }
 
 impl RuntimeDependencies {
@@ -368,6 +370,15 @@ impl AgentRuntime {
         &self.config
     }
 
+    /// Get the capability registry for semantic tool discovery.
+    ///
+    /// Returns the capability registry if one was configured in
+    /// [`RuntimeDependencies`], enabling agents to discover tools by
+    /// keyword query at runtime.
+    pub fn get_capabilities(&self) -> Option<Arc<crate::tools::capability_registry::ToolCapabilityRegistry>> {
+        self.deps.capability_registry.clone()
+    }
+
     /// Start a long-running autonomous session for this agent.
     ///
     /// Constructs an [`AutonomousSession`] that records the per-session budgets
@@ -517,6 +528,7 @@ mod tests {
             skill_repository: None,
             spawner: None,
             elasticity: None,
+            capability_registry: None,
         };
         let rt = AgentRuntime::new(config, deps);
         assert_eq!(rt.max_turns, DEFAULT_MAX_TURNS);
@@ -545,6 +557,7 @@ mod tests {
             skill_repository: None,
             spawner: None,
             elasticity: None,
+            capability_registry: None,
         };
         let rt = AgentRuntime::new(config, deps);
 

@@ -42,6 +42,7 @@ pub mod browser;
 pub mod docker;
 pub mod mcp;
 pub mod registry;
+pub mod capability_registry;
 
 pub use tool_trait::{Tool, ToolConfig, ToolContext};
 pub use registry::ToolRegistry;
