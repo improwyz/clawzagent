@@ -29,6 +29,10 @@ pub mod prism;
 pub mod traits;
 pub mod types;
 pub mod runtime_backend;
+pub mod licensing;
+
+// Re-export PlatformTier from clawz-platform for internal use
+pub use clawz_platform::PlatformTier;
 
 // Re-export the two items every downstream crate needs immediately.
 pub use config::AppConfig;

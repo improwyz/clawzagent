@@ -1,9 +1,9 @@
 [package]
 name = "clawz-core"
 version = "1.0.0"
-edition = "2024"
+edition = "2021"
 license = "Elastic-2.0"
-rust-version = "1.87"
+rust-version = "1.75"
 
 [dependencies]
 serde = { workspace = true }
@@ -21,12 +21,13 @@ futures-core = { workspace = true }
 http = { workspace = true }
 sqlx = { workspace = true }
 parking_lot = { workspace = true, optional = true }
+clawz-platform = { path = "../clawz-platform", version = "1.0.0" }
 
 [features]
 default = ["std"]
 std = ["dep:parking_lot", "dep:uuid"]
 t0 = []
-t1 = []
-t2 = ["tokio/rt"]
-t3 = ["tokio/rt-multi-thread"]
+t1 = ["tokio/rt"]
+t2 = ["tokio/rt", "dep:parking_lot"]
+t3 = ["tokio/rt-multi-thread", "dep:parking_lot"]
 tauri = ["tokio/rt"]

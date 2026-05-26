@@ -2,12 +2,12 @@
 
 mod detect;
 
-pub use detect::{PlatformTier, detect_platform_auto, detect_platform_fallback};
+pub use detect::{detect_platform_auto, detect_platform_fallback};
 
 /// Platform tier — determines which features and backends are available.
 /// Detected at compile time via Cargo feature flags, or at runtime via
 /// `detect_platform_auto()`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
 #[repr(u8)]
 pub enum PlatformTier {
     /// ESP32-S3, Arduino, or other bare-metal with no OS.
@@ -61,5 +61,18 @@ impl PlatformTier {
 impl std::fmt::Display for PlatformTier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
+    }
+}
+
+impl std::str::FromStr for PlatformTier {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "T0" => Ok(PlatformTier::T0),
+            "T1" => Ok(PlatformTier::T1),
+            "T2" => Ok(PlatformTier::T2),
+            "T3" => Ok(PlatformTier::T3),
+            _ => Err(format!("unknown platform tier: {}", s)),
+        }
     }
 }
