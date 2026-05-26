@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/clawz-core", "crates/clawz-worker", "crates/clawz-gateway", "crates/clawz-platform", "crates/clawz-runtime"]
+members = ["crates/clawz-core", "crates/clawz-worker", "crates/clawz-gateway", "crates/clawz-platform", "crates/clawz-runtime", "crates/clawz-embedded"]
 resolver = "2"
 
 [workspace.package]
@@ -43,6 +43,7 @@ clawz-worker = { path = "crates/clawz-worker", version = "1.0.0" }
 clawz-gateway = { path = "crates/clawz-gateway", version = "1.0.0" }
 clawz-platform = { path = "crates/clawz-platform", version = "1.0.0" }
 clawz-runtime = { path = "crates/clawz-runtime", version = "1.0.0" }
+clawz-embedded = { path = "crates/clawz-embedded", version = "1.0.0" }
 
 # =============================================================================
 # Platform Feature Flags
