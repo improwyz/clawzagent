@@ -1,0 +1,15 @@
+[package]
+name = "clawz-platform"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.75"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[features]
+default = ["t3"]
+t0 = []
+t1 = []
+t2 = []
+t3 = []

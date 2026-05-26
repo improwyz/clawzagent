@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/clawz-core", "crates/clawz-worker", "crates/clawz-gateway"]
+members = ["crates/clawz-core", "crates/clawz-worker", "crates/clawz-gateway", "crates/clawz-platform", "crates/clawz-runtime"]
 resolver = "2"
 
 [workspace.package]
@@ -41,3 +41,12 @@ parking_lot = "0.12"
 clawz-core = { path = "crates/clawz-core", version = "1.0.0" }
 clawz-worker = { path = "crates/clawz-worker", version = "1.0.0" }
 clawz-gateway = { path = "crates/clawz-gateway", version = "1.0.0" }
+clawz-platform = { path = "crates/clawz-platform", version = "1.0.0" }
+clawz-runtime = { path = "crates/clawz-runtime", version = "1.0.0" }
+
+# =============================================================================
+# Platform Feature Flags
+# =============================================================================
+[workspace.metadata.frictionless.platform]
+tiers = ["t0", "t1", "t2", "t3"]
+default = "t3"
