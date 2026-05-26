@@ -21,10 +21,13 @@ impl MBTIDriftDetector {
             return None;
         }
 
-        let inferred_type = self.infer_type_from_behaviour(&identity.state.behaviour)?;
+        let inferred_type = match self.infer_type_from_behaviour(&identity.state.behaviour) {
+            Some(t) => t,
+            None => return None,
+        };
 
         if inferred_type != identity.core.mbti.as_str()
-            && self.compute_confidence(&identity.state.behaviour, inferred_type)
+            && self.compute_confidence(&identity.state.behaviour, Some(inferred_type))
                 >= self.confidence_threshold
         {
             Some(MBTIType::new(inferred_type))
@@ -34,7 +37,6 @@ impl MBTIDriftDetector {
     }
 
     fn infer_type_from_behaviour(&self, behaviour: &std::collections::HashMap<BehaviourType, f32>) -> Option<&'static str> {
-        use crate::runtime::identity_types::BehaviourType;
         let dominant = behaviour.iter()
             .filter(|(_, v)| **v > 0.6)
             .map(|(k, _)| *k)
@@ -45,22 +47,105 @@ impl MBTIDriftDetector {
         }
 
         let has_assertive = dominant.contains(&BehaviourType::Assertive);
+        let has_aggressive = dominant.contains(&BehaviourType::Aggressive);
         let has_seeking = dominant.contains(&BehaviourType::Seeking);
+        let has_impulsive = dominant.contains(&BehaviourType::Impulsive);
         let has_cooperative = dominant.contains(&BehaviourType::Cooperative);
+        let has_compliant = dominant.contains(&BehaviourType::Compliant);
+        let has_passive = dominant.contains(&BehaviourType::Passive);
+        let has_ritualistic = dominant.contains(&BehaviourType::Ritualistic);
 
-        Some(match (has_assertive, has_seeking, has_cooperative) {
-            (true, true, false) => "ENTP",
-            (true, false, true) => "ENTJ",
-            (false, true, true) => "ENFP",
-            _ => "INTJ",
-        })
+        // Map behaviours to MBTI dimensions
+        // E/I dimension
+        let is_extraverted = has_assertive || has_aggressive || has_seeking || has_impulsive;
+        let is_introverted = has_passive || has_compliant || has_ritualistic;
+
+        // S/N dimension
+        let is_intuitive = has_seeking || has_impulsive;
+        let is_sensing = has_compliant || has_ritualistic;
+
+        // T/F dimension
+        let is_thinking = has_assertive || has_aggressive;
+        let is_feeling = has_cooperative || has_compliant;
+
+        // J/P dimension
+        let is_judging = has_aggressive || has_compliant || has_ritualistic;
+        let is_perceiving = has_seeking || has_impulsive;
+
+        // Build the type from resolved dimensions, or return None if ambiguous
+        let e_or_i = if is_extraverted && !is_introverted {
+            Some('E')
+        } else if is_introverted && !is_extraverted {
+            Some('I')
+        } else {
+            None
+        };
+
+        let s_or_n = if is_intuitive && !is_sensing {
+            Some('N')
+        } else if is_sensing && !is_intuitive {
+            Some('S')
+        } else {
+            None
+        };
+
+        let t_or_f = if is_thinking && !is_feeling {
+            Some('T')
+        } else if is_feeling && !is_thinking {
+            Some('F')
+        } else {
+            None
+        };
+
+        let j_or_p = if is_judging && !is_perceiving {
+            Some('J')
+        } else if is_perceiving && !is_judging {
+            Some('P')
+        } else {
+            None
+        };
+
+        if let (Some(ei), Some(sn), Some(tf), Some(jp)) = (e_or_i, s_or_n, t_or_f, j_or_p) {
+            Some(Box::leak(format!("{}{}{}{}", ei, sn, tf, jp).into_boxed_str()))
+        } else {
+            None
+        }
     }
 
-    fn compute_confidence(&self, behaviour: &std::collections::HashMap<BehaviourType, f32>, _inferred_type: &str) -> f32 {
-        let active_behaviours: f32 = behaviour.values()
-            .filter(|&&v| v > 0.5)
-            .sum();
-        (active_behaviours / 3.0).min(1.0)
+    fn compute_confidence(&self, behaviour: &std::collections::HashMap<BehaviourType, f32>, inferred_type: Option<&str>) -> f32 {
+        let inferred = match inferred_type {
+            Some(t) => t,
+            None => return 0.0,
+        };
+
+        // Count how many of the inferred type's behaviours are actually present above threshold
+        let dimension_chars: Vec<char> = inferred.chars().collect();
+        let mut match_count: f32 = 0.0;
+
+        for (btype, &value) in behaviour.iter() {
+            if value < 0.5 {
+                continue;
+            }
+            // Check if this behaviour type contributes to any of the inferred dimensions
+            let contributes = match btype {
+                BehaviourType::Assertive => dimension_chars.contains(&'E') || dimension_chars.contains(&'T'),
+                BehaviourType::Aggressive => dimension_chars.contains(&'E') || dimension_chars.contains(&'T') || dimension_chars.contains(&'J'),
+                BehaviourType::Seeking => dimension_chars.contains(&'E') || dimension_chars.contains(&'N') || dimension_chars.contains(&'P'),
+                BehaviourType::Impulsive => dimension_chars.contains(&'E') || dimension_chars.contains(&'N') || dimension_chars.contains(&'P'),
+                BehaviourType::Cooperative => dimension_chars.contains(&'E') || dimension_chars.contains(&'F'),
+                BehaviourType::Compliant => dimension_chars.contains(&'I') || dimension_chars.contains(&'S') || dimension_chars.contains(&'F') || dimension_chars.contains(&'J'),
+                BehaviourType::Passive => dimension_chars.contains(&'I'),
+                BehaviourType::Ritualistic => dimension_chars.contains(&'I') || dimension_chars.contains(&'S') || dimension_chars.contains(&'J'),
+            };
+            if contributes {
+                match_count += 1.0;
+            }
+        }
+
+        // Normalize by total possible contributors (roughly 4 per dimension = 16, cap at 8)
+        let max_relevant = if match_count < 1.0 { 1.0_f32 } else { 8.0_f32.min(match_count) };
+        let confidence = match_count / max_relevant;
+        confidence.min(1.0).max(0.0)
     }
 }
 
