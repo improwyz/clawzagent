@@ -1,18 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-/// The four MBTI preference dimensions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum MBTIDimension {
-    Extraversion,
-    Introversion,
-    Sensing,
-    Intuition,
-    Thinking,
-    Feeling,
-    Judging,
-    Perceiving,
-}
-
 /// A full MBTI type — four letters, e.g. "INTJ" or "ENFP".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MBTIType(pub String);
@@ -117,7 +104,8 @@ pub enum BehaviourType {
     Seeking,
 }
 
-/// Behaviour map.
+/// Behaviour map (placeholder for future identity-state integration).
+#[allow(dead_code)]
 pub type BehaviourMap = std::collections::HashMap<BehaviourType, f32>;
 
 /// Response calibration.
@@ -178,5 +166,12 @@ mod tests {
     fn test_temperament_default() {
         let t = Temperament::default();
         assert_eq!(t.reactivity, 0.5);
+    }
+
+    #[test]
+    fn test_values_default() {
+        let v = Values::default();
+        assert_eq!(v.cardinal_rules.len(), 4);
+        assert!(v.value_hierarchy.is_empty());
     }
 }
