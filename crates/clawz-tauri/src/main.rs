@@ -1,0 +1,28 @@
+//! ClawZ Tauri application entry point.
+
+use clawz_tauri::commands;
+use clawz_tauri::tray;
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
+        .setup(|app| {
+            // Build system tray
+            let _ = tray::build_tray(app.handle());
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::agent_chat,
+            commands::get_platform_tier,
+            commands::health_check,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+
+fn main() {
+    run();
+}
