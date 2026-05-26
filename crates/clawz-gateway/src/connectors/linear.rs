@@ -182,7 +182,7 @@ impl SaaSConnector for LinearConnector {
     }
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
-        let (mutation, key) = match obj {
+        let (mutation, _key) = match obj {
             "issues" => (r#"mutation($id: String!) { issueDelete(id: $id) { success } }"#, "issueDelete"),
             "projects" => (r#"mutation($id: String!) { projectDelete(id: $id) { success } }"#, "projectDelete"),
             _ => return Err(ClawzError::Provider(format!("Unknown Linear object: {obj}"))),

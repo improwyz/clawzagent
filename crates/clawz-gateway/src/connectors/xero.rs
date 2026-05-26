@@ -103,7 +103,7 @@ impl SaaSConnector for XeroConnector {
         self.oauth.exchange(code).await
     }
 
-    async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
+    async fn list_objects(&self, obj: &str, _filters: &Filters) -> Result<Vec<Value>> {
         let client = self.client()?;
         let path = match obj {
             "invoices" => "/Invoices",

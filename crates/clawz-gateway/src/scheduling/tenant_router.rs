@@ -27,7 +27,6 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use clawz_core::{
     error::Result,
     traits::AgentScheduler,

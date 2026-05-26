@@ -139,7 +139,7 @@ impl SaaSConnector for MetaAdsConnector {
         crate::connectors::common::parse_json(resp).await
     }
 
-    async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
+    async fn update_object(&self, _obj: &str, id: &str, data: Value) -> Result<Value> {
         let token = self.token()?;
         let resp = reqwest::Client::new()
             .post(format!("{}/{}", Self::base_url(), id))
@@ -151,7 +151,7 @@ impl SaaSConnector for MetaAdsConnector {
         crate::connectors::common::parse_json(resp).await
     }
 
-    async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
+    async fn delete_object(&self, _obj: &str, id: &str) -> Result<()> {
         let token = self.token()?;
         let resp = reqwest::Client::new()
             .delete(format!("{}/{}", Self::base_url(), id))

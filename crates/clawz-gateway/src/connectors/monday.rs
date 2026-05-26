@@ -154,7 +154,7 @@ impl SaaSConnector for MondayConnector {
     }
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
-        let (mutation, key) = match obj {
+        let (mutation, _key) = match obj {
             "boards" => (r#"mutation($id: ID!) { delete_board(board_id: $id) { id } }"#, "delete_board"),
             "items" => (r#"mutation($id: ID!) { delete_item(item_id: $id) { id } }"#, "delete_item"),
             _ => return Err(ClawzError::Provider(format!("Unknown Monday.com object: {obj}"))),

@@ -201,7 +201,7 @@ impl SaaSConnector for DropboxConnector {
         }
     }
 
-    async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
+    async fn delete_object(&self, _obj: &str, id: &str) -> Result<()> {
         let token = self.token()?;
         let resp = self.rpc_post("files/delete_v2")
             .bearer_auth(&token)

@@ -147,7 +147,7 @@ impl SaaSConnector for QuickBooksConnector {
         crate::connectors::common::parse_json(resp).await
     }
 
-    async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
+    async fn update_object(&self, obj: &str, _id: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let entity = match obj {
             "invoices" => "invoice",
