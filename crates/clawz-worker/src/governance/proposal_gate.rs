@@ -25,6 +25,19 @@ use clawz_core::error::ClawzError;
 use std::sync::Arc;
 use uuid::Uuid;
 
+/// Fields on [`IdentityModification`] that constitute the agent's IdentityCore.
+///
+/// Proposals targeting any of these fields are rejected at the gate — they cannot
+/// be changed through the improvement workflow regardless of governance mode.
+const IDENTITY_CORE_FIELDS: &[&str] = &[
+    "mbti",
+    "temperament",
+    "risk_posture",
+    "processing_style",
+    "authority_orientation",
+    "values",
+];
+
 /// Parse an approval ID string to Uuid, propagating errors as ClawzError.
 fn parse_approval_id(id: &str) -> Result<Uuid, ClawzError> {
     Uuid::parse_str(id).map_err(|_| {
@@ -57,11 +70,13 @@ pub enum GateDecision {
     Approved(Uuid),
     /// Proposal was rejected — contains the rejection reason.
     Rejected(String),
+    /// Proposal was denied at the gate — contains the denial reason.
+    Denied(String),
 }
 
 impl GateDecision {
     pub fn is_approved(&self) -> bool {
-        matches!(self, GateDecision::Approved(_))
+        matches!(self, GateDecision::Approved(_) | GateDecision::Pending(_))
     }
 }
 
@@ -137,6 +152,14 @@ impl ProposalGatekeeper {
     /// - **Elastic**: delegates to [`Council::deliberate`] if a council is configured,
     ///   otherwise rejects.
     pub async fn route(&self, proposal: ImprovementProposal) -> Result<GateDecision, ClawzError> {
+        // Reject proposals targeting IdentityCore fields at the gate — these
+        // cannot be changed through the improvement workflow in any mode.
+        if let Some(ref modification) = proposal.identity_modification {
+            if IDENTITY_CORE_FIELDS.contains(&modification.field.as_str()) {
+                return Ok(GateDecision::Denied("identity_core_modification".into()));
+            }
+        }
+
         let context = serde_json::to_value(&proposal)
             .map_err(|e| ClawzError::Internal(e.to_string()))?;
 
