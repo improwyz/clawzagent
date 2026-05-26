@@ -89,6 +89,9 @@ pub struct RuntimeDependencies {
     pub elasticity: Option<Arc<crate::deployment::elasticity::DeploymentElasticity>>,
     /// Runtime capability registry for semantic tool discovery.
     pub capability_registry: Option<Arc<crate::tools::capability_registry::ToolCapabilityRegistry>>,
+    /// Cross-session accumulated identity (trust, skills, experience).
+    pub identity_store: Option<Arc<crate::runtime::identity::AgentIdentityStore>>,
+    pub idempotency_store: Option<Arc<dyn clawz_core::traits::IdempotencyStore>>,
 }
 
 impl RuntimeDependencies {
@@ -123,6 +126,12 @@ impl RuntimeDependencies {
     /// Builder-style method to set elasticity
     pub fn with_elasticity(mut self, e: Arc<crate::deployment::elasticity::DeploymentElasticity>) -> Self {
         self.elasticity = Some(e); self
+    }
+    pub fn with_identity_store(mut self, s: Arc<crate::runtime::identity::AgentIdentityStore>) -> Self {
+        self.identity_store = Some(s); self
+    }
+    pub fn with_idempotency_store(mut self, s: Arc<dyn clawz_core::traits::IdempotencyStore>) -> Self {
+        self.idempotency_store = Some(s); self
     }
 }
 
@@ -291,6 +300,15 @@ impl AgentRuntime {
 
         let mut current_message = first_message;
 
+        // Load and persist identity before/after the multi-turn session.
+        let agent_id = self.config.id.to_string();
+        if let Some(ref identity_store) = self.deps.identity_store {
+            if let Ok(mut identity) = identity_store.load(&agent_id).await {
+                identity.increment_session();
+                let _ = identity_store.save(&identity).await;
+            }
+        }
+
         loop {
             // Budget guard — check *before* each turn so we never exceed the cap.
             if ctx.cost_accumulated >= self.cost_budget_usd {
@@ -358,6 +376,14 @@ impl AgentRuntime {
         }
 
         ctx.agent_state.set_status(AgentStatus::Idle);
+
+        // Persist identity after the session.
+        if let Some(ref identity_store) = self.deps.identity_store {
+            if let Ok(mut identity) = identity_store.load(&agent_id).await {
+                let _ = identity_store.save(&identity).await;
+            }
+        }
+
         Ok(ctx.messages)
     }
 
@@ -529,6 +555,8 @@ mod tests {
             spawner: None,
             elasticity: None,
             capability_registry: None,
+            identity_store: None,
+            idempotency_store: None,
         };
         let rt = AgentRuntime::new(config, deps);
         assert_eq!(rt.max_turns, DEFAULT_MAX_TURNS);
@@ -558,6 +586,8 @@ mod tests {
             spawner: None,
             elasticity: None,
             capability_registry: None,
+            identity_store: None,
+            idempotency_store: None,
         };
         let rt = AgentRuntime::new(config, deps);
 

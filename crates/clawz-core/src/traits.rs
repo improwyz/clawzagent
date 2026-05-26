@@ -94,7 +94,6 @@ pub trait Provider: Send + Sync {
 /// as the request flows through pre-processing → governance → provider
 /// → post-processing.
 /// // Used by: worker::pipeline_engine
-#[derive(Debug)]
 pub struct PipelineContext {
     pub agent_id: String,
     pub conversation_id: String,
@@ -104,6 +103,7 @@ pub struct PipelineContext {
     pub governance_result: Option<GovernanceResult>,
     pub cost_accumulated: f64,
     pub created_at: DateTime<Utc>,
+    pub idempotency_store: Option<Box<dyn IdempotencyStore>>,
 }
 
 impl PipelineContext {
@@ -117,6 +117,7 @@ impl PipelineContext {
             governance_result: None,
             cost_accumulated: 0.0,
             created_at: Utc::now(),
+            idempotency_store: None,
         }
     }
 
@@ -572,4 +573,62 @@ pub trait TenantMesh: Send + Sync {
 
     /// Tear down the tenant's network.
     async fn destroy_network(&self, tenant_id: &TenantId) -> Result<()>;
+}
+
+// ── IdempotencyStore (implemented in clawz-worker) ────────────────────────────
+
+#[async_trait]
+pub trait IdempotencyStore: Send + Sync {
+    async fn check_and_record(&self, key: &IdempotencyKey, result: ToolResult) -> IdempotencyResult;
+    async fn get(&self, key: &IdempotencyKey) -> Option<ToolResult>;
+}
+
+#[derive(Debug, Clone)]
+pub struct IdempotencyKey {
+    pub task_id: String,
+    pub action_name: String,
+    pub date: String,
+    pub nonce: String,
+}
+
+impl IdempotencyKey {
+    pub fn new(task_id: &str, action_name: &str) -> Self {
+        Self {
+            task_id: task_id.to_string(),
+            action_name: action_name.to_string(),
+            date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+            nonce: uuid::Uuid::new_v4().to_string()[..8].to_string(),
+        }
+    }
+    pub fn with_date(task_id: &str, action_name: &str, date: &str) -> Self {
+        Self {
+            task_id: task_id.to_string(),
+            action_name: action_name.to_string(),
+            date: date.to_string(),
+            nonce: uuid::Uuid::new_v4().to_string()[..8].to_string(),
+        }
+    }
+    pub fn with_nonce(task_id: &str, action_name: &str, nonce: &str) -> Self {
+        Self {
+            task_id: task_id.to_string(),
+            action_name: action_name.to_string(),
+            date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
+            nonce: nonce.to_string(),
+        }
+    }
+    pub fn with_date_and_nonce(task_id: &str, action_name: &str, date: &str, nonce: &str) -> Self {
+        Self {
+            task_id: task_id.to_string(),
+            action_name: action_name.to_string(),
+            date: date.to_string(),
+            nonce: nonce.to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum IdempotencyResult {
+    New,
+    Cached(ToolResult),
+    Expired,
 }

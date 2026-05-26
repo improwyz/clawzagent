@@ -91,3 +91,6 @@ pub use council::Council;
 pub use compliance::ComplianceExporter;
 /// Routing bridge between the improvement pipeline and mode-appropriate governance.
 pub use proposal_gate::{ProposalGatekeeper, GateConfig, GateDecision};
+/// Constitutional Convention — agent-driven rule amendment via deliberative voting.
+pub mod constitution;
+pub use constitution::{ConstitutionalConvention, ProposedAmendment, AmendmentStatus, ConstitutionalDecision};
