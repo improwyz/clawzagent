@@ -21,7 +21,7 @@
 //! - Persists state via `clawz_core::traits::MemoryBackend`.
 //! - Governance checks via `clawz_core::traits::GovernanceEngine`.
 
-use std::sync::Arc;
+use std::{fs, path::PathBuf, sync::Arc};
 
 // Dependency: core error and trait definitions from the shared `clawz_core` crate.
 use clawz_core::{
@@ -482,6 +482,29 @@ impl AgentRuntime {
                             identity.core.original_mbti.as_str(),
                             label_str
                         );
+                        // Trigger self-healing: checkpoint current state when drift exceeds threshold
+                        if identity.drift_score() > 0.75 {
+                            let checkpoint_id = identity.compute_identity_version_hash();
+                            let checkpoint_path = std::path::PathBuf::from(format!("/tmp/drift_checkpoint_{}.json", agent_id));
+                            let checkpoint = serde_json::json!({
+                                "agent_id": agent_id,
+                                "identity_version_hash": checkpoint_id,
+                                "timestamp": chrono::Utc::now().to_rfc3339(),
+                            });
+                            if let Some(parent) = checkpoint_path.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
+                            let _ = std::fs::write(&checkpoint_path, serde_json::to_string_pretty(&checkpoint).unwrap());
+                            log::warn!(
+                                "[agent_runtime] identity drift checkpoint written (score={:.2})",
+                                identity.drift_score()
+                            );
+                            // Emit governance event
+                            let _ = identity.emit(crate::runtime::identity::GovernanceEvent::IdentityDrift {
+                                drift_score: identity.drift_score(),
+                                checkpoint_id: checkpoint_path,
+                            }).await;
+                        }
                     }
                 }
                 let _ = identity_store.save(&identity).await;

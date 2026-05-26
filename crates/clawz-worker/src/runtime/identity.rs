@@ -164,6 +164,32 @@ impl AgentIdentity {
         self.session_count += 1;
         self.last_seen = Utc::now();
     }
+
+    /// Compute drift score (0.0-1.0) — ratio of current vs original MBTI stability.
+    pub fn drift_score(&self) -> f64 {
+        // Compare current mbti against original_mbti
+        if self.state.mbti_drift_label.is_none() {
+            return 0.0;
+        }
+        // Score based on accumulated experience and drift label presence
+        let experience_factor = (self.accumulated_experience as f64 / 100.0).min(1.0);
+        experience_factor
+    }
+
+    /// Emit a governance event for identity drift (stub for now).
+    pub async fn emit(&mut self, _event: GovernanceEvent) -> std::result::Result<(), ClawzError> {
+        // Governance event emission would go here
+        Ok(())
+    }
+}
+
+/// Governance event types for identity drift tracking.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum GovernanceEvent {
+    IdentityDrift {
+        drift_score: f64,
+        checkpoint_id: std::path::PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

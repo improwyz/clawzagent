@@ -191,3 +191,18 @@ pub mod tools;
 ///
 /// The selector automatically picks the best path based on health probes.
 pub mod transport;
+
+// ── Self-healing & supervision ────────────────────────────────────────────────
+// Self-healing patterns for resilient agent execution across all deployment tiers.
+// Includes circuit breaker integration, watchdog timers, and identity drift rollback.
+
+/// Self-healing supervisor patterns for ClawZ agent runtime.
+///
+/// Patterns implemented per tier:
+/// - T0: Hardware watchdog (ESP-IDF) via embassy watchdog task
+/// - T1: Software watchdog + file-based state checkpoint
+/// - T2: Container restart policy + periodic health checks
+/// - T3: Process supervisor + SQLite WAL snapshots
+///
+/// Wire into agent scheduler via [`self_healing::run_with_supervisor()`].
+pub mod self_healing;
