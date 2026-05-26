@@ -36,6 +36,8 @@ const IDENTITY_CORE_FIELDS: &[&str] = &[
     "processing_style",
     "authority_orientation",
     "values",
+    "identity_version",
+    "original_mbti",
 ];
 
 /// Parse an approval ID string to Uuid, propagating errors as ClawzError.
