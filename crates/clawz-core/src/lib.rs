@@ -28,6 +28,7 @@ pub mod metrics;
 pub mod prism;
 pub mod traits;
 pub mod types;
+pub mod runtime_backend;
 
 // Re-export the two items every downstream crate needs immediately.
 pub use config::AppConfig;
