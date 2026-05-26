@@ -37,6 +37,7 @@ pub mod complexity;
 pub mod fan_out;
 pub mod identity;
 pub mod idempotency;
+pub mod mbti_drift_detector;
 pub mod negotiation;
 pub mod orchestration;
 pub mod pipeline;
