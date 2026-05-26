@@ -14,7 +14,7 @@ pub mod esp32_watchdog {
     ) {
         // ESP-IDF: `esp_idf_svc::hal::watchdog::WatchdogDriver::new()`
         // Timeout range: 40,000µs to 4,294,967,295µs
-        tracing::info!("ESP32 watchdog started with {}ms timeout", timeout_ms);
+        eprintln!("ESP32 watchdog started with {}ms timeout", timeout_ms);
     }
 }
 
@@ -64,11 +64,11 @@ impl SoftwareWatchdog {
 /// On receipt of SIGUSR1 (Unix) or equivalent, reloads config from disk.
 pub fn install_config_reloader(
     config_path: std::path::PathBuf,
-    reload_fn: impl Fn(std::path::PathBuf) -> Result<()> + Send + 'static,
+    _reload_fn: impl Fn(std::path::PathBuf) -> clawz_core::error::Result<()> + Send + 'static,
 ) {
     // In tokio: tokio::signal::unix::signal(SignalKind::user_defined1())
     // for SIGUSR1
-    tracing::info!("config hot-reload handler installed for {:?}", config_path);
+    eprintln!("config hot-reload handler installed for {:?}", config_path);
 }
 
 /// Identity drift checkpoint for T1-T3.
@@ -105,7 +105,7 @@ impl DriftCheckpoint {
         file.write_all(serde_json::to_string_pretty(&checkpoint).unwrap().as_bytes())
             .unwrap_or_else(|_| panic!("failed to write checkpoint to {:?}", path));
 
-        tracing::warn!("identity drift checkpoint written to {:?}", path);
+        eprintln!("identity drift checkpoint written to {:?}", path);
         path
     }
 }

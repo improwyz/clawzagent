@@ -10,7 +10,7 @@
 
 pub mod watchdog;
 
-use crate::error::{Error, Result};
+use clawz_core::error::Result;
 
 /// Supervisor config for the current platform tier.
 #[derive(Debug, Clone)]
@@ -70,7 +70,7 @@ pub async fn run_with_supervisor<S: CircuitBreakerScheduler>(
                 scheduler.record_failure();
 
                 if scheduler.should_open_circuit() {
-                    tracing::warn!("circuit breaker opened for {:?}", e);
+                    eprintln!("circuit breaker opened for {:?}", e);
 
                     if restart_attempts < config.max_restart_attempts {
                         restart_attempts += 1;
@@ -80,10 +80,9 @@ pub async fn run_with_supervisor<S: CircuitBreakerScheduler>(
 
                         scheduler.recover().await?;
                     } else {
-                        return Err(Error::Agent(format!(
-                            "max restart attempts ({}) exceeded",
-                            config.max_restart_attempts
-                        )));
+                        return Err(clawz_core::error::ClawzError::Orchestration(
+                            format!("max restart attempts ({}) exceeded", config.max_restart_attempts)
+                        ).into());
                     }
                 }
             }

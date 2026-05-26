@@ -1,7 +1,5 @@
 # Cross-compilation targets for ClawZ
-[target.x86_64-unknown-linux-gnu]
-linker = "clang"
-rustflags = ["-C", "target-feature=-crt-static"]
+# NOTE: x86_64 host builds use default system linker — no override needed.
 
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
@@ -12,6 +10,5 @@ linker = "riscv64-linux-gnu-gcc"
 [target.armv7-unknown-linux-gnueabihf]
 linker = "arm-linux-gnueabihf-gcc"
 
-# For native debug builds
 [build]
 jobs = 4
