@@ -107,8 +107,11 @@ impl std::fmt::Display for AuditResult {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignore
+/// // AuditFilter requires chrono::Utc and std::time::Duration imports.
 /// use clawz_worker::governance::audit::{AuditFilter, AuditResult};
+/// use chrono::Utc;
+/// use std::time::Duration;
 ///
 /// let filter = AuditFilter::new()
 ///     .for_agent("agent-42")

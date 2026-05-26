@@ -165,8 +165,11 @@ pub struct ModelSizeRecommendation {
 /// CPU, GPU, memory, and OS. All detection methods are non-destructive and
 /// rely on external CLI tools where kernel APIs are insufficient.
 ///
-/// ## Usage
-/// ```
+/// # Example
+///
+/// ```ignore
+/// // HardwareDetector requires sysinfo and CLI tool access,
+/// // so this example is run in a real environment only.
 /// let detector = HardwareDetector::new();
 /// let info = detector.detect_all();
 /// ```

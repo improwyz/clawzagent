@@ -61,10 +61,10 @@
 //! council.add_member("reviewer-1",  CouncilRole::Reviewer).await;
 //! council.add_member("arbiter-1",   CouncilRole::Arbiter).await;
 //!
-//! council.cast_vote("proponent-1", Vote::Approve, Some("LGTM")).await.unwrap();
-//! council.cast_vote("reviewer-1",  Vote::Reject,  Some("Needs work")).await.unwrap();
+//! council.cast_vote("proponent-1", Vote::Approve, Some("LGTM".to_string())).await.unwrap();
+//! council.cast_vote("reviewer-1",  Vote::Reject,  Some("Needs work".to_string())).await.unwrap();
 //! // tie → arbiter decides
-//! council.cast_vote("arbiter-1",   Vote::Approve, Some("I break the tie")).await.unwrap();
+//! council.cast_vote("arbiter-1",   Vote::Approve, Some("I break the tie".to_string())).await.unwrap();
 //! # }
 //! ```
 

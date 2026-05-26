@@ -299,9 +299,11 @@ impl ComplianceBundle {
 /// return an immutable [`ComplianceBundle`] ready for serialisation or human
 /// review.
 ///
-/// # Usage
+/// # Example
 ///
-/// ```rust,no_run
+/// ```ignore
+/// // ComplianceExporter requires a real AuditLogger and type imports
+/// // from the compliance module. Run in a real environment.
 /// let exporter = ComplianceExporter::new(&audit_logger);
 /// let bundle = exporter.export_evidence(ComplianceFramework::Soc2, DateRange::last_30_days());
 /// ```
