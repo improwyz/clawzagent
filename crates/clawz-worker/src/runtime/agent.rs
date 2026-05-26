@@ -106,6 +106,8 @@ pub struct RuntimeDependencies {
     /// Cross-session accumulated identity (trust, skills, experience).
     pub identity_store: Option<Arc<crate::runtime::identity::AgentIdentityStore>>,
     pub idempotency_store: Option<Arc<dyn clawz_core::traits::IdempotencyStore>>,
+    /// MBTI drift detector — checks if observed behaviour no longer matches the seeded type.
+    pub mbti_drift_detector: Option<Arc<crate::runtime::mbti_drift_detector::MBTIDriftDetector>>,
 }
 
 impl RuntimeDependencies {
@@ -167,6 +169,10 @@ impl RuntimeDependencies {
     }
     pub fn with_constitution(mut self, c: Arc<crate::governance::constitution::ConstitutionalConvention>) -> Self {
         self.constitution = Some(c); self
+    }
+    /// Builder-style method to set mbti_drift_detector
+    pub fn with_mbti_drift_detector(mut self, d: Arc<crate::runtime::mbti_drift_detector::MBTIDriftDetector>) -> Self {
+        self.mbti_drift_detector = Some(d); self
     }
 }
 
@@ -466,6 +472,18 @@ impl AgentRuntime {
         // Persist identity after the session.
         if let Some(ref identity_store) = self.deps.identity_store {
             if let Ok(mut identity) = identity_store.load(&agent_id).await {
+                // MBTI drift detection — check if observed behaviour no longer matches seeded type.
+                if let Some(ref detector) = self.deps.mbti_drift_detector {
+                    if let Some(drift_label) = detector.detect_drift(&identity) {
+                        identity.state.mbti_drift_label = Some(drift_label);
+                        let label_str = identity.state.mbti_drift_label.as_ref().unwrap().as_str();
+                        log::info!(
+                            "[agent_runtime] MBTI drift detected: {} -> {}",
+                            identity.core.original_mbti.as_str(),
+                            label_str
+                        );
+                    }
+                }
                 let _ = identity_store.save(&identity).await;
             }
         }
@@ -663,6 +681,7 @@ mod tests {
             constitution: None,
             identity_store: None,
             idempotency_store: None,
+            mbti_drift_detector: None,
         };
         let rt = AgentRuntime::new(config, deps);
         assert_eq!(rt.max_turns, DEFAULT_MAX_TURNS);
@@ -701,6 +720,7 @@ mod tests {
             constitution: None,
             identity_store: None,
             idempotency_store: None,
+            mbti_drift_detector: None,
         };
         let rt = AgentRuntime::new(config, deps);
 
