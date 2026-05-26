@@ -25,6 +25,8 @@ use crate::connectors::r#trait::{AuthType, Credentials, Filters, SaaSConnector};
 /// All operations are routed through `https://graph.microsoft.com/v1.0`.
 /// The tenant ID is baked into the OAuth2 authorize/token URLs so users authenticate
 /// against the correct Azure AD instance.
+/// Microsoft 365 connector — email, calendar, SharePoint, Teams integration.
+#[allow(dead_code)]
 pub struct Microsoft365Connector {
     /// OAuth2 flow scoped to the tenant’s endpoints.
     oauth: OAuth2Flow,

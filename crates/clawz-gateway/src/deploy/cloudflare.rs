@@ -29,6 +29,7 @@ use clawz_core::error::{ClawzError, Result};
 ///
 /// The `account_id` is required for most Cloudflare API paths; the actual
 /// API token is supplied at credential-validation time.
+#[allow(dead_code)]
 pub struct CloudflareAdapter {
     /// Shared HTTP client for Cloudflare API requests.
     client: reqwest::Client,

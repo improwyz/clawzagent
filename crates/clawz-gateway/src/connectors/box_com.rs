@@ -24,6 +24,7 @@ use crate::connectors::r#trait::{AuthType, Credentials, Filters, SaaSConnector};
 ///
 /// Stores an OAuth2 flow and optional credentials. Box separates its API into two
 /// domains: `api.box.com` for metadata/RPC and `upload.box.com` for binary uploads.
+#[allow(dead_code)]
 pub struct BoxConnector {
     /// OAuth2 configuration including authorize and token endpoints.
     oauth: OAuth2Flow,

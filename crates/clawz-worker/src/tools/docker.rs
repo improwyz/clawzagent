@@ -351,6 +351,7 @@ pub fn docker_tool_library() -> Vec<DockerToolEntry> {
 }
 
 /// Docker Tool Manager — manages containerized tools via the Docker API.
+#[allow(dead_code)]
 pub struct DockerToolManager {
     docker: Docker,
     /// Label applied to all containers managed by this instance
