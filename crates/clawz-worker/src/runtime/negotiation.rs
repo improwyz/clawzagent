@@ -252,8 +252,8 @@ mod tests {
         let NegotiationMessage::CounterPropose { offered, requested, .. } = resp else {
             panic!("expected CounterPropose, got {resp:?}");
         };
-        assert_eq!(offered, 80.0);
-        assert_eq!(requested, 120.0);
+        assert!((offered - 80.0).abs() < 1e-4, "offered = {offered}, expected 80.0");
+        assert!((requested - 120.0).abs() < 1e-4, "requested = {requested}, expected 120.0");
 
         // Bob's counter-propose: offered=80, requested=120
         // Auto-accept since 80 >= 0.8 * 120 = 96 → 80 < 96, so not auto-accept
@@ -271,8 +271,8 @@ mod tests {
         let NegotiationMessage::CounterPropose { offered: offered2, requested: requested2, .. } = resp2 else {
             panic!("expected CounterPropose, got {resp2:?}");
         };
-        assert_eq!(offered2, 84.0);
-        assert_eq!(requested2, 114.0);
+        assert!((offered2 - 84.0).abs() < 1e-4, "offered2 = {offered2}, expected 84.0");
+        assert!((requested2 - 114.0).abs() < 1e-4, "requested2 = {requested2}, expected 114.0");
 
         // Alice accepts the counter-propose
         let resp3 = protocol
@@ -364,8 +364,8 @@ mod tests {
         let NegotiationMessage::CounterPropose { offered, requested, .. } = resp else {
             panic!("expected CounterPropose");
         };
-        assert_eq!(offered, 80.0);
-        assert_eq!(requested, 120.0);
+        assert!((offered - 80.0).abs() < 1e-4, "offered = {offered}, expected 80.0");
+        assert!((requested - 120.0).abs() < 1e-4, "requested = {requested}, expected 120.0");
 
         // Alice's counter-propose: 80 >= 0.75 * 120 = 90? No → another counter-propose, not auto-accept
         let resp2 = protocol
@@ -381,8 +381,8 @@ mod tests {
         let NegotiationMessage::CounterPropose { offered: o2, requested: r2, .. } = resp2 else {
             panic!("expected CounterPropose, got {resp2:?}");
         };
-        assert_eq!(o2, 84.0);
-        assert_eq!(r2, 114.0);
+        assert!((o2 - 84.0).abs() < 1e-4, "o2 = {o2}, expected 84.0");
+        assert!((r2 - 114.0).abs() < 1e-4, "r2 = {r2}, expected 114.0");
 
         // Now check: 84 >= 0.75 * 114 = 85.5? false → counter-propose again
         let resp3 = protocol

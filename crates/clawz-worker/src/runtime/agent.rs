@@ -89,6 +89,20 @@ pub struct RuntimeDependencies {
     pub elasticity: Option<Arc<crate::deployment::elasticity::DeploymentElasticity>>,
     /// Runtime capability registry for semantic tool discovery.
     pub capability_registry: Option<Arc<crate::tools::capability_registry::ToolCapabilityRegistry>>,
+    /// Tracks task outcomes for the self-improvement loop and performance metrics.
+    pub outcome_tracker: Option<Arc<crate::memory::outcome_tracker::OutcomeTracker>>,
+    /// Analyzes task complexity to inform dynamic sub-agent spawning.
+    pub complexity_analyzer: Option<Arc<crate::runtime::complexity::TaskComplexityAnalyzer>>,
+    /// Environmental metrics (CPU, memory, queue depth) via Bollard Docker API.
+    pub container_metrics: Option<Arc<crate::reality::container_metrics::ContainerMetrics>>,
+    /// Peer-to-peer negotiation protocol for multi-round resource/task bargaining.
+    pub negotiation_protocol: Option<Arc<crate::runtime::negotiation::NegotiationProtocol>>,
+    /// Closed-loop self-improvement orchestrator (outcome → proposal → apply).
+    pub self_improvement_loop: Option<Arc<crate::memory::improvement::SelfImprovementLoop>>,
+    /// How often (in turns) to invoke the self-improvement loop. 0 = disabled.
+    pub self_improvement_interval_turns: usize,
+    /// Constitutional convention for agent-authored rule amendments and voting.
+    pub constitution: Option<Arc<crate::governance::constitution::ConstitutionalConvention>>,
     /// Cross-session accumulated identity (trust, skills, experience).
     pub identity_store: Option<Arc<crate::runtime::identity::AgentIdentityStore>>,
     pub idempotency_store: Option<Arc<dyn clawz_core::traits::IdempotencyStore>>,
@@ -132,6 +146,27 @@ impl RuntimeDependencies {
     }
     pub fn with_idempotency_store(mut self, s: Arc<dyn clawz_core::traits::IdempotencyStore>) -> Self {
         self.idempotency_store = Some(s); self
+    }
+    pub fn with_outcome_tracker(mut self, t: Arc<crate::memory::outcome_tracker::OutcomeTracker>) -> Self {
+        self.outcome_tracker = Some(t); self
+    }
+    pub fn with_complexity_analyzer(mut self, a: Arc<crate::runtime::complexity::TaskComplexityAnalyzer>) -> Self {
+        self.complexity_analyzer = Some(a); self
+    }
+    pub fn with_container_metrics(mut self, m: Arc<crate::reality::container_metrics::ContainerMetrics>) -> Self {
+        self.container_metrics = Some(m); self
+    }
+    pub fn with_negotiation_protocol(mut self, n: Arc<crate::runtime::negotiation::NegotiationProtocol>) -> Self {
+        self.negotiation_protocol = Some(n); self
+    }
+    pub fn with_self_improvement_loop(mut self, l: Arc<crate::memory::improvement::SelfImprovementLoop>) -> Self {
+        self.self_improvement_loop = Some(l); self
+    }
+    pub fn with_self_improvement_interval(mut self, n: usize) -> Self {
+        self.self_improvement_interval_turns = n; self
+    }
+    pub fn with_constitution(mut self, c: Arc<crate::governance::constitution::ConstitutionalConvention>) -> Self {
+        self.constitution = Some(c); self
     }
 }
 
@@ -234,6 +269,27 @@ impl AgentRuntime {
         ctx.messages.push(message);
         let pipeline = self.build_pipeline();
         let result = pipeline.execute(ctx).await?;
+
+        // Record outcome for the self-improvement loop.
+        if let Some(ref tracker) = self.deps.outcome_tracker {
+            let outcome = match &result.outcome {
+                StepOutcome::Continue => crate::memory::outcome_tracker::TaskOutcome::Success,
+                StepOutcome::Halt => crate::memory::outcome_tracker::TaskOutcome::Failure,
+                StepOutcome::Delegate { .. } => crate::memory::outcome_tracker::TaskOutcome::Success,
+            };
+            let _ = tracker.record(&ctx.conversation_id, outcome).await;
+        }
+
+        // Record environmental metrics for reality awareness.
+        if let Some(ref metrics) = self.deps.container_metrics {
+            if let Ok(m) = crate::reality::container_metrics::ContainerMetrics::fetch(&ctx.agent_id).await {
+                log::debug!(
+                    "[agent_runtime] container {} — cpu={:.1}%, mem={:.1}%, queue={}",
+                    m.container_id, m.cpu_percent, m.memory_percent, m.queue_depth
+                );
+            }
+        }
+
         Ok(result.outcome)
     }
 
@@ -333,8 +389,38 @@ impl AgentRuntime {
             }
 
             ctx.agent_state.set_status(AgentStatus::Running);
+
+            // Analyze task complexity to inform spawning decisions.
+            if let Some(ref analyzer) = self.deps.complexity_analyzer {
+                if let Some(first_msg) = ctx.messages.first() {
+                    if let Some(text) = first_msg.content.as_text() {
+                        if let Ok(score) = analyzer.analyze(text).await {
+                            log::debug!(
+                                "[agent_runtime] complexity score: {:?} (parallelism_hint={})",
+                                score.complexity,
+                                score.parallelism_hint
+                            );
+                        }
+                    }
+                }
+            }
+
             let outcome = self.run_turn(&mut ctx, current_message.clone()).await?;
             turns += 1;
+
+            // Run self-improvement loop periodically.
+            if self.deps.self_improvement_interval_turns > 0
+                && turns % self.deps.self_improvement_interval_turns == 0
+            {
+                if let Some(ref loop_) = self.deps.self_improvement_loop {
+                    log::debug!("[agent_runtime] self-improvement at turn {}", turns);
+                    if let Ok(changes) = loop_.run_once().await {
+                        for change in &changes {
+                            log::info!("[agent_runtime] applied: {:?}", change);
+                        }
+                    }
+                }
+            }
 
             match outcome {
                 StepOutcome::Continue => {
@@ -403,6 +489,19 @@ impl AgentRuntime {
     /// keyword query at runtime.
     pub fn get_capabilities(&self) -> Option<Arc<crate::tools::capability_registry::ToolCapabilityRegistry>> {
         self.deps.capability_registry.clone()
+    }
+
+    /// Get the negotiation protocol for P2P resource/task bargaining.
+    ///
+    /// Returns the protocol if one was configured in [`RuntimeDependencies`],
+    /// enabling agents to initiate multi-round negotiations during sessions.
+    pub fn get_negotiation_protocol(&self) -> Option<Arc<crate::runtime::negotiation::NegotiationProtocol>> {
+        self.deps.negotiation_protocol.clone()
+    }
+
+    /// Get the constitutional convention for agent-authored rule amendments.
+    pub fn get_constitution(&self) -> Option<Arc<crate::governance::constitution::ConstitutionalConvention>> {
+        self.deps.constitution.clone()
     }
 
     /// Start a long-running autonomous session for this agent.
@@ -555,6 +654,13 @@ mod tests {
             spawner: None,
             elasticity: None,
             capability_registry: None,
+            outcome_tracker: None,
+            complexity_analyzer: None,
+            container_metrics: None,
+            negotiation_protocol: None,
+            self_improvement_loop: None,
+            self_improvement_interval_turns: 0,
+            constitution: None,
             identity_store: None,
             idempotency_store: None,
         };
@@ -586,6 +692,13 @@ mod tests {
             spawner: None,
             elasticity: None,
             capability_registry: None,
+            outcome_tracker: None,
+            complexity_analyzer: None,
+            container_metrics: None,
+            negotiation_protocol: None,
+            self_improvement_loop: None,
+            self_improvement_interval_turns: 0,
+            constitution: None,
             identity_store: None,
             idempotency_store: None,
         };
