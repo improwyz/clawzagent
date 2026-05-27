@@ -113,7 +113,7 @@ impl DependencyGraph {
         let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
         for (node, deps) in &self.edges {
             for dep in deps {
-                dependents.entry(dep.clone()).or_insert_with(Vec::new).push(node.clone());
+                dependents.entry(dep.clone()).or_default().push(node.clone());
             }
         }
 
@@ -197,16 +197,21 @@ impl DependencyGraph {
         for node in &topo {
             let dur = *self.durations.get(node).unwrap_or(&1) as i64;
             let node_deps = self.edges.get(node);
-            if node_deps.is_none() || node_deps.unwrap().is_empty() {
-                dist_from_root.insert(node.clone(), dur);
-            } else {
-                let max_from_pred = node_deps
-                    .unwrap()
-                    .iter()
-                    .map(|p| dist_from_root.get(p).copied().unwrap_or(0))
-                    .max()
-                    .unwrap_or(0);
-                dist_from_root.insert(node.clone(), max_from_pred + dur);
+            match node_deps {
+                None => {
+                    dist_from_root.insert(node.clone(), dur);
+                }
+                Some(deps) if deps.is_empty() => {
+                    dist_from_root.insert(node.clone(), dur);
+                }
+                Some(deps) => {
+                    let max_from_pred = deps
+                        .iter()
+                        .map(|p| dist_from_root.get(p).copied().unwrap_or(0))
+                        .max()
+                        .unwrap_or(0);
+                    dist_from_root.insert(node.clone(), max_from_pred + dur);
+                }
             }
         }
 

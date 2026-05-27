@@ -1,47 +1,86 @@
-#!/bin/sh
-# ClawZ single-line install script
-# Usage: curl -fsSL https://install.clawz.net | sh
-# or: curl -fsSL https://releases.clawz.net/latest/install.sh | sh
+#!/usr/bin/env bash
+# ClawZ one-click install — Linux & macOS
+#
+# From a clone:
+#   ./scripts/install.sh
+#   ./scripts/install.sh --source
+#   ./scripts/install.sh --with-web
+#
+# Remote one-liner:
+#   curl -fsSL https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.sh | bash
+#
+# Options:
+#   --docker      Use Docker Compose (default when Docker is available)
+#   --source      Build and run from source with cargo (no Docker)
+#   --with-web    Build the React dashboard in web/
+#   --dir PATH    Install/clone location (default: ~/clawz)
+#   --help        Show usage
 
-set -e
+set -euo pipefail
 
-ARCH="$(uname -m)"
-OS="$(uname -s)"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
-RELEASE_BASE="${RELEASE_BASE:-https://releases.clawz.net/latest}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=install-common.sh
+source "${SCRIPT_DIR}/install-common.sh"
 
-echo "Installing ClawZ agent runtime for ${OS}/${ARCH}..."
+MODE="auto"
+WITH_WEB=0
 
-case "$OS" in
-  Linux)
-    case "$ARCH" in
-      x86_64)   ASSET="clawz-linux-amd64.tar.gz";;
-      aarch64)  ASSET="clawz-linux-arm64.tar.gz";;
-      riscv64)  ASSET="clawz-linux-riscv64.tar.gz";;
-      *) echo "Unsupported architecture: $ARCH"; exit 1;;
-    esac;;
-  Darwin)
-    case "$ARCH" in
-      x86_64)   ASSET="clawz-macos-x86_64.tar.gz";;
-      arm64)    ASSET="clawz-macos-arm64.tar.gz";;
-      *) echo "Unsupported architecture: $ARCH"; exit 1;;
-    esac;;
-  *)
-    echo "Unsupported OS: $OS"; exit 1;;
+usage() {
+  sed -n '2,18p' "$0"
+  exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --docker) MODE="docker"; shift ;;
+    --source) MODE="source"; shift ;;
+    --with-web) WITH_WEB=1; shift ;;
+    --dir)
+      CLAWZ_INSTALL_DIR="$2"
+      shift 2
+      ;;
+    --help|-h) usage ;;
+    *)
+      err "Unknown option: $1"
+      usage
+      ;;
+  esac
+done
+
+OS="$(detect_os)"
+if [[ "$OS" == "unsupported" ]]; then
+  err "Unsupported OS. Use scripts/install.ps1 on Windows."
+  exit 1
+fi
+
+log "ClawZ installer — ${OS}"
+
+if ! ensure_repo_root "$SCRIPT_DIR/.."; then
+  clone_or_update_repo
+else
+  cd "$SCRIPT_DIR/.."
+fi
+
+ROOT="$(pwd)"
+log "Using repository at $ROOT"
+
+if [[ "$MODE" == "auto" ]]; then
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    MODE="docker"
+  else
+    MODE="source"
+    warn "Docker not available — falling back to source install"
+  fi
+fi
+
+case "$MODE" in
+  docker) install_with_docker ;;
+  source) install_from_source ;;
+  *) err "Invalid mode: $MODE"; exit 1 ;;
 esac
 
-# Download and verify
-TMPDIR="$(mktemp -d)"
-curl -fsSL "${RELEASE_BASE}/${ASSET}" -o "${TMPDIR}/clawz.tar.gz"
-curl -fsSL "${RELEASE_BASE}/${ASSET}.sha256" -o "${TMPDIR}/clawz.tar.gz.sha256"
-sha256sum -c "${TMPDIR}/clawz.tar.gz.sha256"
+if [[ "$WITH_WEB" -eq 1 ]]; then
+  install_web_dashboard
+fi
 
-# Extract
-tar xzf "${TMPDIR}/clawz.tar.gz" -C "${INSTALL_DIR}"
-chmod +x "${INSTALL_DIR}/clawz-agent"
-
-# Cleanup
-rm -rf "${TMPDIR}"
-
-echo "ClawZ installed to ${INSTALL_DIR}/clawz-agent"
-echo "Run 'clawz-agent --version' to verify"
+log "Install complete."

@@ -24,7 +24,6 @@
 //! - `tokio::sync::Mutex` — async-safe rate-limiter state.
 //! - `reqwest` — HTTP types for header parsing (implicit via `map_http_error`).
 
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -251,9 +250,7 @@ pub fn markdown_to_plain(text: &str) -> String {
     text.replace("**", "")
         .replace("__", "")
         .replace("~~", "")
-        .replace('*', "")
-        .replace('_', "")
-        .replace('`', "")
+        .replace(['*', '_', '`'], "")
 }
 
 // ── X-RateLimit header helpers ────────────────────────────────────────────────

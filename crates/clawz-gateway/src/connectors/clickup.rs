@@ -110,16 +110,7 @@ impl SaaSConnector for ClickUpConnector {
         let resp = self.get(&path).send().await
             .map_err(|e| ClawzError::Provider(format!("ClickUp list failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
-        // ClickUp wraps collections under plural keys.
-        let key = match obj {
-            "tasks" => "tasks",
-            "spaces" => "spaces",
-            "folders" => "folders",
-            "lists" => "lists",
-            "teams" => "teams",
-            _ => obj,
-        };
-        Ok(json[key].as_array().cloned().unwrap_or_default())
+        Ok(json[obj].as_array().cloned().unwrap_or_default())
     }
 
     async fn create_object(&self, obj: &str, data: Value) -> Result<Value> {

@@ -108,6 +108,7 @@ pub enum ContainerRestartPolicy {
 }
 
 impl ContainerRestartPolicy {
+    #[allow(dead_code)]
     fn to_bollard_policy(&self) -> &'static str {
         match self {
             Self::No => "no",
@@ -620,16 +621,14 @@ impl DockerToolManager {
                 .ports
                 .unwrap_or_default()
                 .iter()
-                .filter_map(|p| {
-                    Some(MappedPort {
-                        container_port: p.private_port as u16,
-                        host_port: p.public_port.unwrap_or(0) as u16,
+                .map(|p| MappedPort {
+                        container_port: p.private_port,
+                        host_port: p.public_port.unwrap_or(0),
                         protocol: p.typ
                             .as_ref()
                             .map(|t| format!("{:?}", t).to_lowercase())
                             .unwrap_or_else(|| "tcp".into()),
                     })
-                })
                 .collect();
 
             let health = self.health_check(&container_id).await;

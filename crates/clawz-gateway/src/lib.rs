@@ -22,17 +22,28 @@
 //! This crate is designed to compile as a standalone binary or as a library for integration tests.
 
 pub mod auth;
+pub mod bootstrap;
+pub mod db_bootstrap;
+pub mod password;
+pub mod postgres_store;
+pub mod postgres_platform_store;
+pub mod prism_check;
 pub mod cloudflare;
 pub mod connectors;
 pub mod deploy;
 pub mod mcp;
 pub mod routes;
 pub mod scheduling;
+pub mod secrets;
 pub mod server;
 pub mod shutdown;
 pub mod tui;
+pub mod telephony;
+pub mod voice_pipeline;
 pub mod ws;
 
+use clawz_core::traits::AgentScheduler;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use serde::{Deserialize, Serialize};
@@ -45,10 +56,11 @@ use axum::{http::StatusCode, response::IntoResponse};
 /// Runtime lifecycle states for an agent instance.
 ///
 /// Stored as lowercase strings when serialized via serde.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentStatus {
     /// Agent is idle and ready to accept work.
+    #[default]
     Idle,
     /// Agent is currently executing a task.
     Running,
@@ -56,10 +68,6 @@ pub enum AgentStatus {
     Stopped,
     /// Agent encountered an unrecoverable error during execution.
     Error,
-}
-
-impl Default for AgentStatus {
-    fn default() -> Self { AgentStatus::Idle }
 }
 
 impl std::fmt::Display for AgentStatus {
@@ -112,6 +120,70 @@ pub struct MessageRecord {
     pub created_at: DateTime<Utc>,
 }
 
+/// Participant in a multi-participant agent room.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomParticipantRecord {
+    /// User or agent identifier.
+    pub participant_id: String,
+    /// `"user"` or `"agent"`.
+    pub participant_type: String,
+    /// Room role: `"owner"`, `"member"`, `"observer"`, etc.
+    pub role: String,
+    pub joined_at: DateTime<Utc>,
+}
+
+/// Message within a multi-participant room (sequenced, visibility-aware).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomMessageRecord {
+    pub id: String,
+    pub room_id: String,
+    /// Monotonic sequence number within the room.
+    pub seq: u64,
+    /// `"user"`, `"agent"`, or `"system"`.
+    #[serde(default = "default_sender_type_user")]
+    pub sender_type: String,
+    pub sender_id: String,
+    pub client_message_id: Option<String>,
+    pub content: String,
+    pub mentions: Vec<String>,
+    /// `"room"`, `"side_thread"`, or `"private"`.
+    pub visibility: String,
+    /// Set when the message belongs to a side-thread (Hybrid C).
+    pub thread_id: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+fn default_sender_type_user() -> String {
+    "user".to_string()
+}
+
+/// Private side-thread scoped to a subset of room participants.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomSideThreadRecord {
+    pub id: String,
+    pub room_id: String,
+    pub title: Option<String>,
+    pub participant_ids: Vec<String>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Multi-participant agent room with orchestration binding.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoomRecord {
+    pub id: String,
+    pub tenant_id: String,
+    pub room_type: String,
+    pub orchestration_mode: Option<String>,
+    pub orchestration_config: Option<serde_json::Value>,
+    pub participants: Vec<RoomParticipantRecord>,
+    pub messages: Vec<RoomMessageRecord>,
+    pub side_threads: Vec<RoomSideThreadRecord>,
+    pub created_by: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// A threaded conversation between a user and an agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationRecord {
@@ -131,6 +203,10 @@ pub struct ConversationRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+fn default_channel_tenant() -> String {
+    "default".to_string()
+}
+
 /// An external communication channel integrated into the platform.
 ///
 /// Channels allow agents to receive inputs and send outputs via Slack, email,
@@ -139,6 +215,9 @@ pub struct ConversationRecord {
 pub struct ChannelRecord {
     /// Unique identifier for this channel integration.
     pub id: String,
+    /// Tenant that owns this channel integration.
+    #[serde(default = "default_channel_tenant")]
+    pub tenant_id: String,
     /// Human-readable name shown in the UI.
     pub name: String,
     /// Channel category: `"slack"`, `"email"`, `"webhook"`, etc.
@@ -397,6 +476,12 @@ pub struct AppState {
     pub agents: Arc<RwLock<Vec<AgentRecord>>>,
     /// In-memory registry of all conversations.
     pub conversations: Arc<RwLock<Vec<ConversationRecord>>>,
+    /// In-memory registry of multi-participant agent rooms.
+    pub rooms: Arc<RwLock<Vec<RoomRecord>>>,
+    /// Active orchestration run IDs keyed by room ID.
+    pub room_runs: Arc<RwLock<HashMap<String, String>>>,
+    /// Room IDs with an agent turn currently in flight.
+    pub room_turn_inflight: Arc<RwLock<HashSet<String>>>,
     /// In-memory registry of external channel integrations.
     pub channels: Arc<RwLock<Vec<ChannelRecord>>>,
     /// In-memory registry of configured LLM providers.
@@ -425,12 +510,35 @@ pub struct AppState {
     /// Capacity is fixed at 256 because events are best-effort; slow consumers
     /// are dropped rather than blocking the publisher.
     pub event_tx: broadcast::Sender<String>,
+    /// Per-room broadcast channels for multi-participant agent room WebSockets.
+    pub room_broadcasts: Arc<RwLock<HashMap<String, broadcast::Sender<String>>>>,
     /// Secret key used to sign and verify JWT access tokens.
     pub jwt_secret: String,
     /// UTC timestamp recorded when the gateway process started.
     ///
     /// Used to compute uptime in health-check responses.
     pub start_time: DateTime<Utc>,
+    /// Worker delegation layer (in-process or HTTP).
+    pub platform: Option<Arc<clawz_services::Platform>>,
+    /// Optional Postgres pool (migrations applied at startup).
+    pub db: Option<sqlx::PgPool>,
+    /// Optional Postgres-backed platform store (agents CRUD).
+    pub platform_store: Option<Arc<dyn clawz_services::PlatformStore>>,
+    /// Fleet deploy scheduler (standalone or Docker per `CLAWZ_MODE`).
+    pub agent_scheduler: Option<Arc<dyn AgentScheduler>>,
+    /// Cloud provider deployment orchestrator (18 adapters).
+    pub deploy_manager: Arc<crate::deploy::DeployManager>,
+    /// Per-agent personality metadata (traits, tone) until persisted in identity store.
+    pub personality: Arc<RwLock<HashMap<String, serde_json::Value>>>,
+    /// Human-in-the-loop approval queue (shared with worker in standalone mode).
+    pub approval_workflow: Arc<clawz_worker::governance::approval::ApprovalWorkflow>,
+}
+
+/// Personality preferences stored per agent.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PersonalityPrefs {
+    pub traits: Vec<String>,
+    pub tone: String,
 }
 
 impl AppState {
@@ -445,10 +553,27 @@ impl AppState {
         jwt_secret: impl Into<String>,
         identity_store: Option<Arc<clawz_worker::runtime::identity::AgentIdentityStore>>,
     ) -> Self {
+        let approval = Arc::new(clawz_worker::governance::approval::ApprovalWorkflow::new());
+        Self::full(jwt_secret, identity_store, None, None, approval, None, None)
+    }
+
+    pub fn full(
+        jwt_secret: impl Into<String>,
+        identity_store: Option<Arc<clawz_worker::runtime::identity::AgentIdentityStore>>,
+        platform: Option<Arc<clawz_services::Platform>>,
+        db: Option<sqlx::PgPool>,
+        approval_workflow: Arc<clawz_worker::governance::approval::ApprovalWorkflow>,
+        platform_store: Option<Arc<dyn clawz_services::PlatformStore>>,
+        agent_scheduler: Option<Arc<dyn AgentScheduler>>,
+    ) -> Self {
         let (event_tx, _) = broadcast::channel(256);
+        let db_for_deploy = db.clone();
         Self {
             agents: Arc::new(RwLock::new(Vec::new())),
             conversations: Arc::new(RwLock::new(Vec::new())),
+            rooms: Arc::new(RwLock::new(Vec::new())),
+            room_runs: Arc::new(RwLock::new(HashMap::new())),
+            room_turn_inflight: Arc::new(RwLock::new(HashSet::new())),
             channels: Arc::new(RwLock::new(Vec::new())),
             providers: Arc::new(RwLock::new(Vec::new())),
             tools: Arc::new(RwLock::new(Vec::new())),
@@ -461,16 +586,77 @@ impl AppState {
             users: Arc::new(RwLock::new(Vec::new())),
             identity_store,
             event_tx,
+            room_broadcasts: Arc::new(RwLock::new(HashMap::new())),
             jwt_secret: jwt_secret.into(),
             start_time: Utc::now(),
+            platform,
+            db,
+            platform_store,
+            agent_scheduler,
+            deploy_manager: Arc::new(crate::deploy::DeployManager::new_default(
+                Arc::new(crate::deploy::MemoryDeploymentStore::new()),
+                db_for_deploy,
+            )),
+            personality: Arc::new(RwLock::new(HashMap::new())),
+            approval_workflow,
         }
     }
 
-    /// Convenience constructor that reads `JWT_SECRET` from the environment.
+    /// Subscribe to platform events when configured, otherwise the legacy broadcast channel.
+    pub fn subscribe_events(&self) -> broadcast::Receiver<String> {
+        if let Some(ref platform) = self.platform {
+            platform.events.subscribe()
+        } else {
+            self.event_tx.subscribe()
+        }
+    }
+
+    /// Publish an event to all WebSocket subscribers.
+    pub fn publish_event(&self, event_type: &str, payload: serde_json::Value) {
+        if let Some(ref platform) = self.platform {
+            platform.events.publish_json(event_type, payload);
+        } else {
+            let envelope = serde_json::json!({
+                "type": event_type,
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+                "data": payload,
+            });
+            let _ = self.event_tx.send(envelope.to_string());
+        }
+    }
+
+    /// Subscribe to the broadcast channel for a multi-participant room.
     ///
-    /// Falls back to a hard-coded development secret (`"clawz-secret"`) when the
-    /// variable is absent. **Do not use the default in production.**
-    pub fn default() -> Self {
+    /// Creates a channel on first subscription so later publishers can reach
+    /// connected clients.
+    pub async fn subscribe_room(&self, room_id: &str) -> broadcast::Receiver<String> {
+        let mut map = self.room_broadcasts.write().await;
+        if let Some(tx) = map.get(room_id) {
+            tx.subscribe()
+        } else {
+            let (tx, rx) = broadcast::channel(256);
+            map.insert(room_id.to_string(), tx);
+            rx
+        }
+    }
+
+    /// Publish a JSON event to all WebSocket subscribers in a room.
+    pub async fn publish_room_event(&self, room_id: &str, json: serde_json::Value) {
+        let tx = {
+            let mut map = self.room_broadcasts.write().await;
+            map.entry(room_id.to_string())
+                .or_insert_with(|| {
+                    let (tx, _) = broadcast::channel(256);
+                    tx
+                })
+                .clone()
+        };
+        let _ = tx.send(json.to_string());
+    }
+}
+
+impl Default for AppState {
+    fn default() -> Self {
         Self::new(std::env::var("JWT_SECRET").unwrap_or_else(|_| "clawz-secret".into()))
     }
 }
@@ -505,7 +691,17 @@ impl AppState {
             details,
             created_at: Utc::now(),
         };
-        self.audit_log.write().await.push(entry);
+        self.audit_log.write().await.push(entry.clone());
+        if let Some(ref pool) = self.db {
+            crate::postgres_store::persist_audit(pool, &entry).await;
+        }
+    }
+
+    /// Best-effort Postgres persistence for an agent record.
+    pub async fn persist_agent_record(&self, record: &AgentRecord) {
+        if let Some(ref pool) = self.db {
+            let _ = crate::postgres_store::persist_agent(pool, record).await;
+        }
     }
 }
 
@@ -536,6 +732,8 @@ pub enum GatewayError {
     Unprocessable(String),
     /// The caller did not supply valid credentials or lacks permission.
     Unauthorized(String),
+    /// Request conflicts with current resource state (e.g. duplicate in-flight turn).
+    Conflict(String),
     /// An unexpected internal failure (database, network, worker RPC, etc.).
     Internal(String),
     /// The endpoint exists but the underlying feature is not yet implemented.
@@ -558,6 +756,7 @@ impl std::fmt::Display for GatewayError {
             GatewayError::NotFound { resource, id } => write!(f, "{resource} {id} not found"),
             GatewayError::Unprocessable(msg) => write!(f, "unprocessable: {msg}"),
             GatewayError::Unauthorized(msg) => write!(f, "unauthorized: {msg}"),
+            GatewayError::Conflict(msg) => write!(f, "conflict: {msg}"),
             GatewayError::Internal(msg) => write!(f, "internal error: {msg}"),
             GatewayError::NotImplemented => write!(f, "not implemented"),
         }
@@ -587,6 +786,11 @@ impl IntoResponse for GatewayError {
             GatewayError::Unauthorized(msg) => (
                 StatusCode::UNAUTHORIZED,
                 "unauthorized",
+                msg.clone(),
+            ),
+            GatewayError::Conflict(msg) => (
+                StatusCode::CONFLICT,
+                "conflict",
                 msg.clone(),
             ),
             GatewayError::Internal(msg) => (

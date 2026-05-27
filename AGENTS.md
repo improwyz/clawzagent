@@ -296,6 +296,22 @@ The `DeploymentMode` enum (clawz-core::deployment) controls which subsystems act
 
 ---
 
+## Installation
+
+For local development, use the one-click installer (Docker Compose by default):
+
+```bash
+./scripts/install.sh              # Linux/macOS — gateway + worker + Postgres
+./scripts/install.sh --with-web   # Include React dashboard
+./scripts/install.sh --source     # Force cargo build without Docker
+```
+
+Windows: `.\scripts\install.ps1`. Full guide: **[INSTALL.md](INSTALL.md)**.
+
+**Branding:** Logo assets in **`web/public/branding/`** — silver on dark, copper on light. UI tokens: **[crates/clawz-tauri/design/design-system.md](crates/clawz-tauri/design/design-system.md)**.
+
+---
+
 ## Build Commands
 
 ```bash

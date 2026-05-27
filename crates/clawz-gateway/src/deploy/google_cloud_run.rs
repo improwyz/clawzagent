@@ -15,7 +15,9 @@
 //! * `clawz_core::error` — error types.
 
 // Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{
+    destroy_http_ok, external_resource_name, generate_deployment_id, resolve_api_token,
+};
 // Dependency: provider trait and shared vocabulary.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -104,10 +106,13 @@ impl DeployProvider for GoogleCloudRunAdapter {
         };
 
         let id = generate_deployment_id("gcr");
-        let service_name = format!("clawz-{}", id.replace('-', ""));
+        let service_name = external_resource_name(&id);
 
         // Build a Knative Service manifest with env vars injected as container env blocks.
-        let _body = serde_json::json!({
+        let token = resolve_api_token(config, "GOOGLE_CLOUD_ACCESS_TOKEN", "Google Cloud")?;
+        let region = config.region.as_deref().unwrap_or(&self.region);
+
+        let body = serde_json::json!({
             "apiVersion": "serving.knative.dev/v1",
             "kind": "Service",
             "metadata": {
@@ -128,12 +133,36 @@ impl DeployProvider for GoogleCloudRunAdapter {
             }
         });
 
-        log::info!("Deploying to Google Cloud Run: service={}", service_name);
+        let url = format!(
+            "https://{region}-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/{}/services",
+            self.project_id
+        );
+
+        let resp = self
+            .client
+            .post(&url)
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Cloud Run deploy error: {e}")))?;
+
+        let http_status = resp.status();
+        let status = if http_status.is_success() || http_status.as_u16() == 409 {
+            DeploymentStatus::Pending
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Cloud Run create service failed ({http_status}): {text}"
+            )));
+        };
 
         Ok(DeploymentInfo {
             id,
-            url: format!("https://{}.a.run.app", service_name),
-            status: DeploymentStatus::Pending,
+            external_resource: Some(service_name.clone()),
+            url: format!("https://{service_name}-{region}.a.run.app"),
+            status,
+            ..Default::default()
         })
     }
 
@@ -141,9 +170,39 @@ impl DeployProvider for GoogleCloudRunAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Google Cloud Run deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let token = std::env::var("GOOGLE_CLOUD_ACCESS_TOKEN").map_err(|_| {
+            ClawzError::Auth(
+                "GOOGLE_CLOUD_ACCESS_TOKEN required to destroy Cloud Run services".into(),
+            )
+        })?;
+        let region = std::env::var("GOOGLE_CLOUD_REGION").unwrap_or_else(|_| self.region.clone());
+        let service_name = external_resource
+            .map(str::to_string)
+            .unwrap_or_else(|| external_resource_name(id));
+        let url = format!(
+            "https://{region}-run.googleapis.com/apis/serving.knative.dev/v1/namespaces/{}/services/{service_name}",
+            self.project_id
+        );
+
+        let resp = self
+            .client
+            .delete(&url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Cloud Run delete error: {e}")))?;
+
+        let status = resp.status();
+        if destroy_http_ok(status) {
+            log::info!("Cloud Run service removed: {service_name} (deployment {id})");
+            Ok(())
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Cloud Run delete failed ({status}): {text}"
+            )))
+        }
     }
 }
 

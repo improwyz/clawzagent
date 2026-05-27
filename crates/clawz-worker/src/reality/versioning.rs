@@ -30,12 +30,16 @@ pub trait ContextStore {
 #[derive(Debug, Default)]
 pub struct InMemoryContextStore {
     /// tenant_id → ordered list of (version, bundle)
-    bundles: std::sync::RwLock<HashMap<String, Vec<(u32, ContextBundle)>>>,
+    bundles: std::sync::RwLock<BundleMap>,
     /// tenant_id → list of deltas (from_version, to_version, delta)
-    deltas: std::sync::RwLock<HashMap<String, Vec<(u32, u32, ContextDelta)>>>,
+    deltas: std::sync::RwLock<DeltaMap>,
     /// tenant_id → list of conflict markers
-    conflicts: std::sync::RwLock<HashMap<String, Vec<ConflictMarker>>>,
+    conflicts: std::sync::RwLock<ConflictMap>,
 }
+
+type BundleMap = HashMap<String, Vec<(u32, ContextBundle)>>;
+type DeltaMap = HashMap<String, Vec<(u32, u32, ContextDelta)>>;
+type ConflictMap = HashMap<String, Vec<ConflictMarker>>;
 
 impl InMemoryContextStore {
     pub fn new() -> Self {

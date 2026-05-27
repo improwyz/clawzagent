@@ -3,9 +3,9 @@
 //! This crate sits at the bottom of the 3-crate architecture:
 //!   * `clawz-core`   — types, traits, config, errors, metrics (this crate)
 //!   * `clawz-worker` — runtime engine: agent scheduler, provider routing,
-//!                      tool orchestration, pipeline execution, mesh networking
+//!     tool orchestration, pipeline execution, mesh networking
 //!   * `clawz-gateway` — external API surface: REST/gRPC, webhooks, channel
-//!                       adapters, auth, rate-limiting
+//!     adapters, auth, rate-limiting
 //!
 //! Any code that needs to be visible to **both** worker and gateway lives here.
 //! That includes:

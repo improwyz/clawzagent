@@ -296,29 +296,29 @@ fn convert_content_to_parts(content: &MessageContent) -> Result<Vec<GeminiPart>,
         MessageContent::Multimodal(parts) => {
             let gemini_parts: Vec<GeminiPart> = parts
                 .iter()
-                .filter_map(|p| match p {
-                    ContentPart::Text { text } => Some(GeminiPart::Text { text: text.clone() }),
+                .map(|p| match p {
+                    ContentPart::Text { text } => GeminiPart::Text { text: text.clone() },
                     ContentPart::ImageBase64 { media_type, data } => {
-                        Some(GeminiPart::InlineData {
+                        GeminiPart::InlineData {
                             inline_data: GeminiInlineData {
                                 mime_type: media_type.clone(),
                                 data: data.clone(),
                             },
-                        })
+                        }
                     }
                     ContentPart::ImageUrl { url, .. } => {
                         // Gemini doesn't support raw URLs; treat as text annotation
-                        Some(GeminiPart::Text {
+                        GeminiPart::Text {
                             text: format!("[image: {}]", url),
-                        })
+                        }
                     }
                     ContentPart::AudioBase64 { media_type, data } => {
-                        Some(GeminiPart::InlineData {
+                        GeminiPart::InlineData {
                             inline_data: GeminiInlineData {
                                 mime_type: media_type.clone(),
                                 data: data.clone(),
                             },
-                        })
+                        }
                     }
                 })
                 .collect();
@@ -351,7 +351,7 @@ fn parse_response(raw: GeminiResponse, model: &str) -> ChatResponse {
         .map(|(i, c)| {
             let content = c
                 .content
-                .map(|gc| parse_gemini_content(gc))
+                .map(parse_gemini_content)
                 .unwrap_or(MessageContent::Text(String::new()));
 
             let finish = c.finish_reason.as_deref().map(|s| match s {

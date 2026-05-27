@@ -27,11 +27,15 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
+use clawz_services::dto::{
+    A2aInvokeRequest, FanOutRequest, OrchestrateRequest, RunTurnRequest,
+};
+
 // Dependency: AgentRecord, AgentStatus, AppState, GatewayError are defined in the crate root.
 // Dependency: ConversationRecord, MessageRecord are defined in the crate root (shared with conversations module).
 use crate::{
     AgentRecord, AgentStatus, AppState, AutonomousSessionRecord, AutonomousSessionStatus,
-    ConversationRecord, GatewayError, MessageRecord,
+    ChannelRecord, ConversationRecord, GatewayError, MessageRecord,
 };
 
 /// Assemble the agent sub-router and mount all handlers.
@@ -56,6 +60,7 @@ pub fn routes() -> Router<AppState> {
         .route("/fanout", post(fanout))
         .route("/a2a/discover", post(a2a_discover))
         .route("/a2a/invoke", post(a2a_invoke))
+        .route("/{id}/phone", post(bind_agent_phone))
 }
 
 // ─── Query / body types ───────────────────────────────────────────────────────
@@ -176,6 +181,8 @@ async fn create_agent(
     let mut agents = state.agents.write().await;
     agents.push(record.clone());
 
+    state.persist_agent_record(&record).await;
+
     Ok((StatusCode::CREATED, Json(json!(record))))
 }
 
@@ -246,43 +253,60 @@ async fn delete_agent(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `POST /agents/{id}/run` — execute one turn of the agent.
-///
-/// This is the primary interaction endpoint. It:
-/// 1. Validates the agent exists.
-/// 2. Finds or creates a `ConversationRecord` tied to the agent.
-/// 3. Appends a user message and a simulated assistant response.
-/// 4. Transitions the agent status to `Running`.
-///
-/// # Concurrency note
-/// Scoped locks are used so we never hold both `agents` and `conversations`
-/// write locks at the same time, preventing deadlock.
+/// `POST /agents/{id}/run` — execute one turn via the worker pipeline.
 async fn run_agent(
     State(state): State<AppState>,
     Path(id): Path<String>,
     Json(body): Json<RunAgentBody>,
 ) -> Result<Json<Value>, GatewayError> {
-    // Verify the agent exists before touching conversations.
-    {
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
+
+    let (model, system_prompt) = {
         let agents = state.agents.read().await;
-        agents
+        let agent = agents
             .iter()
             .find(|a| a.id == id)
             .ok_or_else(|| GatewayError::not_found("Agent", &id))?;
-    }
+        (
+            agent.model.clone(),
+            agent.system_prompt.clone(),
+        )
+    };
 
     let user_message = body.message.unwrap_or_else(|| "Hello".to_string());
     let now = Utc::now();
 
-    // Find an existing open conversation for this agent or create a new one.
-    // Dependency: uses ConversationRecord and MessageRecord from the shared crate root.
-    let mut conversations = state.conversations.write().await;
-    let conv = conversations
-        .iter_mut()
-        .find(|c| c.agent_id == id && !c.archived);
+    let existing_conv_id = {
+        let conversations = state.conversations.read().await;
+        conversations
+            .iter()
+            .find(|c| c.agent_id == id && !c.archived)
+            .map(|c| c.id.clone())
+    };
 
-    let (conv_id, response_content) = if let Some(c) = conv {
-        // Re-use existing conversation — append user + assistant messages.
+    let turn = platform
+        .execution
+        .run_turn(
+            &id,
+            RunTurnRequest {
+                message: user_message.clone(),
+                model: Some(model.clone()),
+                system_prompt: system_prompt.clone(),
+                conversation_id: existing_conv_id.clone(),
+                ..Default::default()
+            },
+        )
+        .await
+        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+
+    let response_content = turn.content;
+    let conv_id = turn.conversation_id;
+
+    let mut conversations = state.conversations.write().await;
+    if let Some(c) = conversations.iter_mut().find(|c| c.id == conv_id) {
         let user_msg = MessageRecord {
             id: Uuid::new_v4().to_string(),
             conversation_id: c.id.clone(),
@@ -294,17 +318,13 @@ async fn run_agent(
             id: Uuid::new_v4().to_string(),
             conversation_id: c.id.clone(),
             role: "assistant".to_string(),
-            content: format!("Acknowledged: {}", user_message),
+            content: response_content.clone(),
             created_at: now,
         };
-        let resp = assistant_msg.content.clone();
         c.messages.push(user_msg);
         c.messages.push(assistant_msg);
         c.updated_at = now;
-        (c.id.clone(), resp)
     } else {
-        // No open conversation — start a new thread titled with the first 60 chars of the message.
-        let conv_id = Uuid::new_v4().to_string();
         let user_msg = MessageRecord {
             id: Uuid::new_v4().to_string(),
             conversation_id: conv_id.clone(),
@@ -312,15 +332,14 @@ async fn run_agent(
             content: user_message.clone(),
             created_at: now,
         };
-        let assistant_content = format!("Acknowledged: {}", user_message);
         let assistant_msg = MessageRecord {
             id: Uuid::new_v4().to_string(),
             conversation_id: conv_id.clone(),
             role: "assistant".to_string(),
-            content: assistant_content.clone(),
+            content: response_content.clone(),
             created_at: now,
         };
-        let new_conv = ConversationRecord {
+        conversations.push(ConversationRecord {
             id: conv_id.clone(),
             agent_id: id.clone(),
             title: Some(user_message[..user_message.len().min(60)].to_string()),
@@ -328,12 +347,9 @@ async fn run_agent(
             messages: vec![user_msg, assistant_msg],
             created_at: now,
             updated_at: now,
-        };
-        conversations.push(new_conv);
-        (conv_id, assistant_content)
-    };
+        });
+    }
 
-    // Transition agent to Running now that the turn has been recorded.
     {
         let mut agents = state.agents.write().await;
         if let Some(a) = agents.iter_mut().find(|a| a.id == id) {
@@ -342,11 +358,29 @@ async fn run_agent(
         }
     }
 
+    platform.events.publish_json(
+        "agent.run",
+        json!({
+            "agent_id": id,
+            "conversation_id": conv_id,
+        }),
+    );
+
+    if let Some(ref pool) = state.db {
+        crate::postgres_store::persist_messages(
+            pool,
+            &conv_id,
+            &user_message,
+            &response_content,
+        )
+        .await;
+    }
+
     Ok(Json(json!({
         "conversation_id": conv_id,
-        "role": "assistant",
+        "role": turn.role,
         "content": response_content,
-        "model": "clawz-agent",
+        "model": model,
         "created_at": now,
     })))
 }
@@ -412,6 +446,8 @@ async fn run_autonomous(
         updated_at: now,
     };
     let session_id = session.id.clone();
+    let max_turns = session.max_turns;
+    let system_prompt = session.system_prompt.clone();
 
     {
         let mut sessions = state.autonomous_sessions.write().await;
@@ -425,6 +461,83 @@ async fn run_autonomous(
             a.status = AgentStatus::Running;
             a.updated_at = now;
         }
+    }
+
+    state.publish_event(
+        "agent.autonomous.start",
+        json!({ "session_id": session_id, "agent_id": id }),
+    );
+
+    if let Some(platform) = state.platform.clone() {
+        let state_bg = state.clone();
+        let agent_id = id.clone();
+        let sid = session_id.clone();
+        let model = {
+            let agents = state.agents.read().await;
+            agents.iter().find(|a| a.id == id).map(|a| a.model.clone())
+        };
+        tokio::spawn(async move {
+            for turn in 0..max_turns {
+                {
+                    let sessions = state_bg.autonomous_sessions.read().await;
+                    if let Some(s) = sessions.iter().find(|s| s.id == sid) {
+                        if s.status != AutonomousSessionStatus::Running {
+                            break;
+                        }
+                    }
+                }
+
+                let msg = format!("Autonomous turn {} — continue your task.", turn + 1);
+                match platform
+                    .execution
+                    .run_turn(
+                        &agent_id,
+                        RunTurnRequest {
+                            message: msg,
+                            model: model.clone(),
+                            system_prompt: system_prompt.clone(),
+                            conversation_id: None,
+                            ..Default::default()
+                        },
+                    )
+                    .await
+                {
+                    Ok(resp) => {
+                        state_bg.publish_event(
+                            "agent.autonomous.turn",
+                            json!({
+                                "session_id": sid,
+                                "agent_id": agent_id,
+                                "turn": turn,
+                                "content": resp.content,
+                            }),
+                        );
+                        let mut sessions = state_bg.autonomous_sessions.write().await;
+                        if let Some(s) = sessions.iter_mut().find(|s| s.id == sid) {
+                            s.turns_executed = turn + 1;
+                            s.updated_at = Utc::now();
+                        }
+                    }
+                    Err(e) => {
+                        state_bg.publish_event(
+                            "agent.autonomous.error",
+                            json!({ "session_id": sid, "error": e.to_string() }),
+                        );
+                        break;
+                    }
+                }
+            }
+
+            let mut sessions = state_bg.autonomous_sessions.write().await;
+            if let Some(s) = sessions.iter_mut().find(|s| s.id == sid) {
+                s.status = AutonomousSessionStatus::Completed;
+                s.updated_at = Utc::now();
+            }
+            state_bg.publish_event(
+                "agent.autonomous.end",
+                json!({ "session_id": sid, "agent_id": agent_id }),
+            );
+        });
     }
 
     Ok(Json(json!({
@@ -511,6 +624,12 @@ async fn get_personality(
         .iter()
         .find(|a| a.id == id)
         .ok_or_else(|| GatewayError::not_found("Agent", &id))?;
+
+    let personality = state.personality.read().await;
+    if let Some(prefs) = personality.get(&id) {
+        return Ok(Json(prefs.clone()));
+    }
+
     Ok(Json(json!({ "agent_id": id, "traits": [], "tone": "neutral" })))
 }
 
@@ -528,7 +647,16 @@ async fn update_personality(
         .iter()
         .find(|a| a.id == id)
         .ok_or_else(|| GatewayError::not_found("Agent", &id))?;
-    Ok(Json(json!({ "agent_id": id, "traits": body.traits.unwrap_or_default(), "tone": body.tone.unwrap_or_else(|| "neutral".to_string()), "updated": true })))
+
+    let prefs = json!({
+        "agent_id": id,
+        "traits": body.traits.unwrap_or_default(),
+        "tone": body.tone.unwrap_or_else(|| "neutral".to_string()),
+        "updated": true,
+    });
+    state.personality.write().await.insert(id.clone(), prefs.clone());
+
+    Ok(Json(prefs))
 }
 
 /// `GET /agents/{id}/identity/hash` — return the agent's current
@@ -556,24 +684,204 @@ async fn get_agent_identity_hash(
     }
 }
 
-/// `POST /agents/onboard` — legacy onboarding stub.
-async fn run_onboard() -> Json<Value> {
-    Json(json!({ "status": "onboarded", "steps_completed": ["init", "config", "test"] }))
+/// `POST /agents/onboard` — parse a goal, create an agent, and validate purpose.
+async fn run_onboard(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<(StatusCode, Json<Value>), GatewayError> {
+    use clawz_core::types::ParseOutcome;
+    use clawz_worker::purpose::GoalParser;
+
+    let goal_text = body["goal"]
+        .as_str()
+        .or_else(|| body["description"].as_str())
+        .unwrap_or("assist users with their tasks");
+
+    let parser = GoalParser::new();
+    let parsed = parser.parse(goal_text);
+
+    let (name, steps) = match parsed {
+        ParseOutcome::Parsed(goal) => (
+            goal.description.chars().take(48).collect::<String>(),
+            vec!["purpose.validate", "agent.create", "identity.init"],
+        ),
+        ParseOutcome::NeedsClarification(questions) => {
+            return Ok((
+                StatusCode::ACCEPTED,
+                Json(json!({
+                    "status": "needs_clarification",
+                    "questions": questions,
+                })),
+            ));
+        }
+        ParseOutcome::Failed(reason) => {
+            return Err(GatewayError::Unprocessable(reason));
+        }
+    };
+
+    let model = body["model"]
+        .as_str()
+        .unwrap_or("claude-sonnet-4-5")
+        .to_string();
+    let now = Utc::now();
+    let record = AgentRecord {
+        id: Uuid::new_v4().to_string(),
+        name: body["name"].as_str().unwrap_or(&name).to_string(),
+        model,
+        description: Some(goal_text.to_string()),
+        system_prompt: body["system_prompt"].as_str().map(String::from),
+        status: AgentStatus::Idle,
+        created_at: now,
+        updated_at: now,
+    };
+
+    state
+        .append_audit("system", "onboard", "agent", &record.id, None)
+        .await;
+
+    state.agents.write().await.push(record.clone());
+    state.persist_agent_record(&record).await;
+
+    if let Some(ref store) = state.identity_store {
+        if let Ok(identity) = store.load(&record.id).await {
+            let _ = store.save(&identity).await;
+        }
+    }
+
+    state.publish_event("agent.onboard", json!({ "agent_id": record.id }));
+
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({
+            "status": "onboarded",
+            "agent": record,
+            "steps_completed": steps,
+        })),
+    ))
 }
 
-/// `POST /agents/orchestrate` — legacy orchestration stub.
-async fn orchestrate() -> Json<Value> {
-    Json(json!({ "status": "queued", "orchestration_id": Uuid::new_v4().to_string() }))
+/// `POST /agents/orchestrate` — delegate a task across a team.
+async fn orchestrate(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, GatewayError> {
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
+
+    let leader = body["leader_agent_id"]
+        .as_str()
+        .or_else(|| body["agent_id"].as_str())
+        .unwrap_or("default");
+    let task = body["task"].as_str().unwrap_or("coordinate subtasks").to_string();
+    let members: Vec<String> = body["member_agent_ids"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let resp = platform
+        .execution
+        .orchestrate(OrchestrateRequest {
+            leader_agent_id: leader.to_string(),
+            task,
+            member_agent_ids: members,
+            ..Default::default()
+        })
+        .await
+        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+
+    Ok(Json(json!(resp)))
 }
 
-/// `POST /agents/batch` — legacy batch execution stub.
-async fn batch() -> Json<Value> {
-    Json(json!({ "status": "queued", "batch_id": Uuid::new_v4().to_string(), "count": 0 }))
+/// `POST /agents/batch` — run the same message against multiple agents.
+async fn batch(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, GatewayError> {
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
+
+    let message = body["message"].as_str().unwrap_or("Hello").to_string();
+    let agent_ids: Vec<String> = body["agent_ids"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut results = Vec::new();
+    for agent_id in &agent_ids {
+        let turn = platform
+            .execution
+            .run_turn(
+                agent_id,
+                RunTurnRequest {
+                    message: message.clone(),
+                    model: None,
+                    system_prompt: None,
+                    conversation_id: None,
+                    ..Default::default()
+                },
+            )
+            .await
+            .map_err(|e| GatewayError::Internal(e.to_string()))?;
+        results.push(json!({
+            "agent_id": agent_id,
+            "content": turn.content,
+        }));
+    }
+
+    Ok(Json(json!({
+        "batch_id": Uuid::new_v4().to_string(),
+        "count": results.len(),
+        "results": results,
+    })))
 }
 
-/// `POST /agents/fanout` — legacy fan-out stub.
-async fn fanout() -> Json<Value> {
-    Json(json!({ "status": "queued", "fanout_id": Uuid::new_v4().to_string() }))
+/// `POST /agents/fanout` — parallel multi-model execution.
+async fn fanout(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, GatewayError> {
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
+
+    let prompt = body["prompt"]
+        .as_str()
+        .or_else(|| body["message"].as_str())
+        .unwrap_or("")
+        .to_string();
+    let models: Vec<String> = body["models"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let resp = platform
+        .execution
+        .fan_out(FanOutRequest {
+            prompt,
+            models,
+            strategy: body["strategy"].as_str().map(String::from),
+        })
+        .await
+        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+
+    Ok(Json(json!(resp)))
 }
 
 /// `POST /agents/a2a/discover` — list all registered agent IDs for A2A discovery.
@@ -583,7 +891,155 @@ async fn a2a_discover(State(state): State<AppState>) -> Json<Value> {
     Json(json!({ "agents": ids }))
 }
 
-/// `POST /agents/a2a/invoke` — legacy A2A invocation stub.
-async fn a2a_invoke() -> Json<Value> {
-    Json(json!({ "status": "invoked", "result": null }))
+/// `POST /agents/a2a/invoke` — agent-to-agent message via worker runtime.
+async fn a2a_invoke(
+    State(state): State<AppState>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, GatewayError> {
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
+
+    let from = body["from_agent_id"]
+        .as_str()
+        .or_else(|| body["from"].as_str())
+        .unwrap_or("unknown");
+    let to = body["to_agent_id"]
+        .as_str()
+        .or_else(|| body["to"].as_str())
+        .or_else(|| body["agent_id"].as_str())
+        .ok_or_else(|| GatewayError::Unprocessable("to_agent_id required".into()))?;
+    let message = body["message"].as_str().unwrap_or("").to_string();
+
+    let resp = platform
+        .execution
+        .a2a_invoke(A2aInvokeRequest {
+            from_agent_id: from.to_string(),
+            to_agent_id: to.to_string(),
+            message,
+        })
+        .await
+        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+
+    Ok(Json(json!(resp)))
+}
+
+/// Bind a phone number provider to an agent (creates a channel + webhook URLs).
+#[derive(Debug, Deserialize)]
+pub struct BindAgentPhoneBody {
+    /// `twilio` or `google_voice`
+    pub provider: Option<String>,
+    /// E.164 phone number for this agent line
+    pub phone_number: Option<String>,
+    /// Twilio Account SID
+    pub account_sid: Option<String>,
+    /// Twilio Auth Token
+    pub auth_token: Option<String>,
+    /// Google Voice bridge HMAC secret
+    pub bridge_secret: Option<String>,
+    /// Optional default SMS recipient for tests
+    pub default_to: Option<String>,
+}
+
+/// `POST /agents/{id}/phone` — register Twilio or Google Voice for direct agent SMS/voice.
+async fn bind_agent_phone(
+    State(state): State<AppState>,
+    Path(agent_id): Path<String>,
+    Json(body): Json<BindAgentPhoneBody>,
+) -> Result<(StatusCode, Json<Value>), GatewayError> {
+    let agents = state.agents.read().await;
+    if !agents.iter().any(|a| a.id == agent_id) {
+        return Err(GatewayError::not_found("Agent", &agent_id));
+    }
+    drop(agents);
+
+    let provider = body
+        .provider
+        .ok_or_else(|| GatewayError::Unprocessable("provider is required".into()))?
+        .to_lowercase();
+    let phone_number = body
+        .phone_number
+        .ok_or_else(|| GatewayError::Unprocessable("phone_number is required".into()))?;
+
+    let channel_type = match provider.as_str() {
+        "twilio" => "twilio",
+        "google_voice" | "google-voice" | "googlevoice" => "google_voice",
+        _ => {
+            return Err(GatewayError::Unprocessable(format!(
+                "unsupported provider: {provider}"
+            )));
+        }
+    };
+
+    let mut config = json!({
+        "agent_id": agent_id,
+        "phone_number": phone_number,
+    });
+    if let Some(v) = body.account_sid {
+        config["account_sid"] = json!(v);
+    }
+    if let Some(v) = body.auth_token {
+        config["auth_token"] = json!(v);
+    }
+    if let Some(v) = body.bridge_secret {
+        config["bridge_secret"] = json!(v);
+    }
+    if let Some(v) = body.default_to {
+        config["default_to"] = json!(v);
+    }
+
+    if channel_type == "twilio"
+        && (config.get("account_sid").is_none() || config.get("auth_token").is_none())
+    {
+        return Err(GatewayError::Unprocessable(
+            "Twilio requires account_sid and auth_token".into(),
+        ));
+    }
+    if channel_type == "google_voice" && config.get("bridge_secret").is_none() {
+        return Err(GatewayError::Unprocessable(
+            "Google Voice requires bridge_secret for webhook verification".into(),
+        ));
+    }
+
+    let channel_id = Uuid::new_v4().to_string();
+    let now = Utc::now();
+    let record = ChannelRecord {
+        id: channel_id.clone(),
+        tenant_id: crate::postgres_store::default_tenant(),
+        name: format!("{provider} — {phone_number}"),
+        channel_type: channel_type.to_string(),
+        config,
+        enabled: true,
+        created_at: now,
+        updated_at: now,
+    };
+
+    state.channels.write().await.push(record);
+
+    let base =
+        std::env::var("CLAWZ_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:3000".into());
+    let base = base.trim_end_matches('/');
+
+    let webhooks = if channel_type == "twilio" {
+        json!({
+            "sms": format!("{base}/webhooks/twilio/sms/{channel_id}"),
+            "voice": format!("{base}/webhooks/twilio/voice/{channel_id}"),
+        })
+    } else {
+        json!({
+            "inbound": format!("{base}/webhooks/google-voice/{channel_id}"),
+        })
+    };
+
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({
+            "agent_id": agent_id,
+            "channel_id": channel_id,
+            "provider": channel_type,
+            "phone_number": phone_number,
+            "webhooks": webhooks,
+        })),
+    ))
 }

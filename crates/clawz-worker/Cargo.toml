@@ -8,8 +8,14 @@ rust-version = "1.87"
 [dependencies]
 clawz-core = { path = "../clawz-core", version = "1.0.0" }
 clawz-platform = { path = "../clawz-platform", version = "1.0.0" }
+clawz-services = { path = "../clawz-services", version = "1.0.0" }
 
-# HTTP client
+# Control API
+axum = { version = "0.8", features = ["json", "macros"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+
+# Logging
+log = "0.4"
 reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
 http = { workspace = true }
 
@@ -40,9 +46,6 @@ notify = "7"
 # Docker integration
 bollard = "0.18"
 
-# Logging
-log = "0.4"
-
 # Async streaming
 futures-core = "0.3"
 futures-util = "0.3"
@@ -70,6 +73,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Error handling
 anyhow = "1"
+
+[features]
+esp32 = []
 
 [dev-dependencies]
 tokio-test = "0.4"

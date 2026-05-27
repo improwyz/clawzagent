@@ -72,14 +72,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use clawz_core::{
     error::{ClawzError, Result},
     types::governance::{ApprovalRequest, ApprovalStatus},
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
-use uuid::Uuid;
 
 /// Default TTL for approval requests (1 hour).
 const DEFAULT_EXPIRY_SECS: i64 = 3600;
@@ -341,6 +340,11 @@ impl ApprovalWorkflow {
             .await
             .get(approval_id)
             .cloned()
+    }
+
+    /// Returns every approval request regardless of status.
+    pub async fn list_all(&self) -> Vec<ApprovalRequest> {
+        self.requests.read().await.values().cloned().collect()
     }
 
     /// Lists all requests that are still [`ApprovalStatus::Pending`] and have

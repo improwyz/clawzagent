@@ -133,9 +133,9 @@ impl AgentIdentity {
     pub fn compute_identity_version_hash(&self) -> String {
         let mut hasher = Sha256::new();
         hasher.update(self.core.mbti.as_str().as_bytes());
-        hasher.update(&(self.core.temperament.reactivity * 1000.0).to_bits().to_be_bytes());
-        hasher.update(&(self.core.temperament.self_regulation * 1000.0).to_bits().to_be_bytes());
-        hasher.update(&(self.core.risk_posture.risk_tolerance * 1000.0).to_bits().to_be_bytes());
+        hasher.update((self.core.temperament.reactivity * 1000.0).to_bits().to_be_bytes());
+        hasher.update((self.core.temperament.self_regulation * 1000.0).to_bits().to_be_bytes());
+        hasher.update((self.core.risk_posture.risk_tolerance * 1000.0).to_bits().to_be_bytes());
         hasher.update(format!("{:?}", self.core.processing_style).as_bytes());
         hasher.update(format!("{:?}", self.core.authority_orientation).as_bytes());
         for rule in &self.core.values.cardinal_rules {
@@ -172,8 +172,8 @@ impl AgentIdentity {
             return 0.0;
         }
         // Score based on accumulated experience and drift label presence
-        let experience_factor = (self.accumulated_experience as f64 / 100.0).min(1.0);
-        experience_factor
+        
+        (self.accumulated_experience as f64 / 100.0).min(1.0)
     }
 
     /// Emit a governance event for identity drift (stub for now).
@@ -209,6 +209,12 @@ pub trait IdentityBackend: Send + Sync {
 /// In-memory identity backend using a shared `HashMap`.
 pub struct InMemoryIdentityBackend {
     store: Arc<RwLock<HashMap<String, AgentIdentity>>>,
+}
+
+impl Default for InMemoryIdentityBackend {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InMemoryIdentityBackend {

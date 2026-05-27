@@ -87,9 +87,9 @@ pub fn run_dashboard() {
     println!("│  Channels : 4 active                 │");
     println!("│  Uptime   : 2h 34m                   │");
     println!("└─────────────────────────────────────┘");
-    println!("");
+    println!();
     println!("  Press Ctrl+C to exit.");
-    println!("");
+    println!();
     println!("  Hint: set CLAWZ_GATEWAY_URL to point at a live gateway");
     println!("  and re-run to see live metrics.");
 }

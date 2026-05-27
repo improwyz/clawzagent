@@ -25,6 +25,8 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 // Dependency: crate root types shared across fleet, agents, and governance modules.
+use clawz_core::types::orchestration::AgentSpec;
+use clawz_core::types::tenant::{TenantContext, TenantId};
 use crate::{AppState, DeploymentRecord, FleetNodeRecord, GatewayError};
 
 /// Assemble the fleet sub-router.
@@ -123,6 +125,9 @@ async fn create_fleet_node(
 
     let mut nodes = state.fleet_nodes.write().await;
     nodes.push(record.clone());
+    if let Some(ref pool) = state.db {
+        let _ = crate::postgres_store::persist_fleet_node(pool, &record).await;
+    }
     Ok((StatusCode::CREATED, Json(json!(record))))
 }
 
@@ -157,8 +162,12 @@ async fn update_fleet_node(
     if let Some(port) = body.port { record.port = port; }
     if let Some(status) = body.status { record.status = status; }
     record.updated_at = Utc::now();
-
-    Ok(Json(json!(record.clone())))
+    let snapshot = record.clone();
+    drop(nodes);
+    if let Some(ref pool) = state.db {
+        let _ = crate::postgres_store::persist_fleet_node(pool, &snapshot).await;
+    }
+    Ok(Json(json!(snapshot)))
 }
 
 /// `DELETE /fleet/{id}` — remove a node from the fleet.
@@ -172,6 +181,11 @@ async fn delete_fleet_node(
         .position(|n| n.id == id)
         .ok_or_else(|| GatewayError::not_found("FleetNode", &id))?;
     nodes.remove(pos);
+    if let Some(ref pool) = state.db {
+        if let Ok(uuid) = Uuid::parse_str(&id) {
+            let _ = clawz_core::db::FleetNodeRepo::delete(pool, uuid).await;
+        }
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -254,7 +268,7 @@ async fn fleet_deploy(
     }
 
     let now = Utc::now();
-    let deployment = DeploymentRecord {
+    let mut deployment = DeploymentRecord {
         id: Uuid::new_v4().to_string(),
         agent_id: agent_id.clone(),
         node_id: node_id.clone(),
@@ -262,6 +276,39 @@ async fn fleet_deploy(
         created_at: now,
         updated_at: now,
     };
+
+    // Schedule on the orchestration backend when configured (standalone or Docker).
+    if let Some(ref scheduler) = state.agent_scheduler {
+        let agent_model = {
+            let agents = state.agents.read().await;
+            agents
+                .iter()
+                .find(|a| a.id == agent_id)
+                .map(|a| a.model.clone())
+                .unwrap_or_else(|| "claude-sonnet-4-5".to_string())
+        };
+        let ctx = TenantContext::new(TenantId::new("default"), clawz_core::types::tenant::Role::Operator);
+        let spec = AgentSpec {
+            image: format!("clawz/agent:{}", agent_model.replace('/', "-")),
+            capabilities: vec!["chat".into(), "tools".into()],
+            ..AgentSpec::default()
+        };
+        match scheduler.spawn_agent(&ctx, spec).await {
+            Ok(handle) => {
+                deployment.status = "running".to_string();
+                tracing::info!(
+                    agent_id = %agent_id,
+                    handle_id = %handle.id,
+                    mesh_ip = %handle.mesh_ip,
+                    "fleet deploy scheduled via AgentScheduler"
+                );
+            }
+            Err(e) => {
+                deployment.status = "failed".to_string();
+                tracing::warn!("fleet deploy scheduler failed: {e}");
+            }
+        }
+    }
 
     // Append the agent to the node's local list so mesh queries can report
     // per-node agent counts without a secondary lookup.
@@ -271,10 +318,34 @@ async fn fleet_deploy(
             if !node.agent_ids.contains(&agent_id) {
                 node.agent_ids.push(agent_id.clone());
             }
+            if let Some(ref pool) = state.db {
+                let snapshot = node.clone();
+                drop(nodes);
+                let _ = crate::postgres_store::persist_fleet_node(pool, &snapshot).await;
+            }
         }
     }
 
     state.deployments.write().await.push(deployment.clone());
+
+    if let Some(ref pool) = state.db {
+        use clawz_core::db::{DbDeployment, DeploymentRepo};
+        let dep_id = Uuid::parse_str(&deployment.id).unwrap_or_else(|_| Uuid::new_v4());
+        let db_dep = DbDeployment {
+            id: dep_id,
+            provider: "fleet".into(),
+            config: json!({
+                "agent_id": deployment.agent_id,
+                "node_id": deployment.node_id,
+                "status": deployment.status,
+            }),
+            status: deployment.status.clone(),
+            url: None,
+            created_at: deployment.created_at,
+            updated_at: deployment.updated_at,
+        };
+        let _ = DeploymentRepo::insert(pool, &db_dep).await;
+    }
 
     Ok((StatusCode::CREATED, Json(json!(deployment))))
 }
@@ -317,17 +388,17 @@ async fn fleet_metrics(State(state): State<AppState>) -> Json<Value> {
 
 // ─── Per-node extra endpoints ─────────────────────────────────────────────────
 
-/// `POST /fleet/{id}/deploy` — legacy per-node deploy stub.
+/// `POST /fleet/{id}/deploy` — deploy an agent onto this fleet node (alias of `/fleet/deploy`).
 async fn deploy_to_node(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<Value>, GatewayError> {
-    let nodes = state.fleet_nodes.read().await;
-    nodes
-        .iter()
-        .find(|n| n.id == id)
-        .ok_or_else(|| GatewayError::not_found("FleetNode", &id))?;
-    Ok(Json(json!({ "node_id": id, "status": "deploying", "deployment_id": Uuid::new_v4().to_string() })))
+    Json(body): Json<FleetDeployBody>,
+) -> Result<(StatusCode, Json<Value>), GatewayError> {
+    let deploy_body = FleetDeployBody {
+        agent_id: body.agent_id,
+        node_id: Some(body.node_id.unwrap_or(id)),
+    };
+    fleet_deploy(State(state), Json(deploy_body)).await
 }
 
 /// `GET /fleet/{id}/logs` — synthetic node log stream.
@@ -352,18 +423,61 @@ async fn node_logs(
 
 // ─── Kanban (legacy compat) ───────────────────────────────────────────────────
 
-/// `GET /fleet/kanban` — legacy kanban board stub.
-async fn kanban_board() -> Json<Value> {
+/// `GET /fleet/kanban` — deployment board derived from live fleet state.
+async fn kanban_board(State(state): State<AppState>) -> Json<Value> {
+    let agents = state.agents.read().await;
+    let deployments = state.deployments.read().await;
+
+    let deployed_agent_ids: std::collections::HashSet<_> =
+        deployments.iter().map(|d| d.agent_id.as_str()).collect();
+
+    let backlog: Vec<Value> = agents
+        .iter()
+        .filter(|a| !deployed_agent_ids.contains(a.id.as_str()))
+        .map(|a| json!({ "id": a.id, "name": a.name, "status": a.status }))
+        .collect();
+
+    let in_progress: Vec<Value> = deployments
+        .iter()
+        .filter(|d| d.status == "running" || d.status == "pending")
+        .map(|d| json!({ "id": d.id, "agent_id": d.agent_id, "node_id": d.node_id, "status": d.status }))
+        .collect();
+
+    let done: Vec<Value> = deployments
+        .iter()
+        .filter(|d| d.status == "complete" || d.status == "failed" || d.status == "stopped")
+        .map(|d| json!({ "id": d.id, "agent_id": d.agent_id, "status": d.status }))
+        .collect();
+
     Json(json!({
         "columns": [
-            { "id": "col-1", "name": "Backlog", "tasks": [] },
-            { "id": "col-2", "name": "In Progress", "tasks": [] },
-            { "id": "col-3", "name": "Done", "tasks": [] },
+            { "id": "col-backlog", "name": "Backlog", "tasks": backlog },
+            { "id": "col-progress", "name": "In Progress", "tasks": in_progress },
+            { "id": "col-done", "name": "Done", "tasks": done },
         ]
     }))
 }
 
-/// `POST /fleet/kanban/{id}/move` — legacy kanban move stub.
-async fn kanban_move(Path(id): Path<String>) -> Json<Value> {
-    Json(json!({ "id": id, "moved": true }))
+/// `POST /fleet/kanban/{id}/move` — update deployment status for kanban drag-drop.
+async fn kanban_move(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, GatewayError> {
+    let target_column = body["column"].as_str().unwrap_or("done");
+    let new_status = match target_column {
+        "backlog" => "pending",
+        "progress" | "in_progress" => "running",
+        _ => "complete",
+    };
+
+    let mut deployments = state.deployments.write().await;
+    let deployment = deployments
+        .iter_mut()
+        .find(|d| d.id == id)
+        .ok_or_else(|| GatewayError::not_found("Deployment", &id))?;
+    deployment.status = new_status.to_string();
+    deployment.updated_at = Utc::now();
+
+    Ok(Json(json!({ "id": id, "status": new_status, "moved": true })))
 }

@@ -1,5 +1,9 @@
 # ClawZ
 
+<p align="center">
+  <img src="web/public/branding/clawz-logo-dark.png" alt="ClawZ" width="320" />
+</p>
+
 > A governed swarm of containerized AI agents — the reference implementation of the PRISM-G framework, in Rust.
 
 [![License](https://img.shields.io/badge/License-ELv2-blue.svg)](LICENSE)
@@ -28,6 +32,8 @@ Designed with compliance and security as first-class concerns, ClawZ embeds the 
 | **Tools Ecosystem** | Extensible tool registry with built-in capabilities: file I/O, HTTP, bash execution (sandboxed), Docker automation, browser automation (CDP), and MCP servers. |
 | **Observability** | Prometheus metrics export, OpenTelemetry tracing, structured logging, and circuit-breaker health dashboards. |
 | **Multi-Tenant Security** | API-key-based tenant isolation, RBAC, budget sub-leasing, and SHA-256 audit hash chains for tamper detection. |
+| **Agent Rooms** | Multi-participant rooms (1-many, many-1 hybrid), sequenced messages, async agent turns, side-threads, orchestration binding. |
+| **Channels & users** | Tenant-scoped channel registry, user registration, API keys persisted to Postgres. |
 | **Cloud Deployment** | 15 cloud adapters including AWS, Azure, GCP, Cloudflare Workers, Vercel, Fly.io, and more. |
 
 ---
@@ -73,40 +79,177 @@ Designed with compliance and security as first-class concerns, ClawZ embeds the 
 
 ## Quick Start
 
-### 1. Clone the repository
+### One-click install
+
+Pick your platform — the installer clones (or uses) the repo, creates `.env`, starts **gateway + worker + Postgres (pgvector)**, and waits for health checks.
+
+| Platform | Command |
+|----------|---------|
+| **Linux / macOS** | `curl -fsSL https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.sh \| bash` |
+| **Linux / macOS** (from clone) | `./install.sh` or `./scripts/install.sh` |
+| **Windows (PowerShell)** | `irm https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.ps1 \| iex` |
+| **Windows** (from clone) | `.\install.ps1` or `.\scripts\install.ps1` |
+
+**Options**
+
+| Flag | Description |
+|------|-------------|
+| `--docker` / `-Docker` | Force Docker Compose (default when Docker is running) |
+| `--source` / `-Source` | Build with `cargo` and run local binaries (no Docker) |
+| `--with-web` / `-WithWeb` | Build the React dashboard in `web/` |
+| `--dir PATH` / `-InstallDir PATH` | Clone/install location (default: `~/clawz` or `%USERPROFILE%\clawz`) |
+
+After install, open **http://localhost:3000** and run:
 
 ```bash
-git clone https://github.com/enterpryz/clawz.git
-cd clawz
+curl http://localhost:3000/api/v1/system/health
 ```
 
-### 2. Set required environment variables
+**Stop / logs**
+
+```bash
+docker compose down          # Docker install
+docker compose logs -f gateway worker
+```
+
+Copy `.env.example` to `.env` before production and set real secrets (`CLAWZ_JWT_SECRET`, `CLAWZ_WORKER_TOKEN`, disable `CLAWZ_DISABLE_AUTH`).
+
+Full install guide: **[INSTALL.md](INSTALL.md)** (all platforms, production checklist, troubleshooting).
+
+---
+
+### Manual setup (developers)
+
+#### 1. Clone the repository
+
+```bash
+git clone https://github.com/improwyz/clawz.git
+cd clawz
+cp .env.example .env
+```
+
+#### 2. Docker Compose (recommended)
+
+```bash
+docker compose up -d --build
+curl http://localhost:3000/health
+```
+
+#### 3. Or build from source
 
 ```bash
 export CLAWZ_MODE=standalone
-export VALID_API_KEYS="dev-key-123,dev-key-456"
+export CLAWZ_DISABLE_AUTH=1
+export CLAWZ_STUB_PROVIDER=1
+export CLAWZ_JWT_SECRET=dev-secret
+export CLAWZ_WORKER_TOKEN=dev-worker-token
+
+cargo build --release -p clawz-worker -p clawz-gateway
+./target/release/clawz-worker &
+WORKER_URL=http://127.0.0.1:50051 ./target/release/clawz-gateway
 ```
 
-### 3. Build and run the gateway
+#### 4. Create your first agent
 
 ```bash
-cargo run -p clawz-gateway
-```
-
-The server will start on `http://localhost:3000`.
-
-### 4. Create your first agent
-
-```bash
-curl -X POST http://localhost:3000/agents \
-  -H "Authorization: Bearer dev-key-123" \
+curl -X POST http://localhost:3000/api/v1/agents \
   -H "Content-Type: application/json" \
   -d '{
     "name": "hello-agent",
-    "provider": "openai",
-    "model": "gpt-4",
-    "max_cost": 1.00
+    "model": "stub",
+    "system_prompt": "You are a helpful assistant."
   }'
+```
+
+---
+
+## New features setup
+
+Recent platform capabilities and how to enable them locally.
+
+### Multi-participant agent rooms
+
+Rooms support **1-many** (one user, agent team) and **many-1 hybrid** (shared team room + private side-threads).
+
+```bash
+# Create a room with an agent leader
+curl -X POST http://localhost:3000/api/v1/rooms \
+  -H "Content-Type: application/json" \
+  -d '{
+    "room_type": "one_many",
+    "participants": [{ "agent_id": "<AGENT_ID>", "role": "leader" }]
+  }'
+
+# Send a message (returns 202 — agent turn runs async)
+curl -X POST http://localhost:3000/api/v1/rooms/<ROOM_ID>/messages \
+  -H "Content-Type: application/json" \
+  -d '{ "content": "Hello team" }'
+
+# Stream events
+# ws://localhost:3000/ws/rooms/<ROOM_ID>
+```
+
+Requires `WORKER_URL` pointing at a running worker (set automatically in Docker Compose).
+
+### Conversations ↔ rooms bridge
+
+Legacy `POST /api/v1/conversations` still works; each conversation gets a **direct room** with the same ID. Messages use the room pipeline (Postgres `seq`, async turns).
+
+```bash
+curl -X POST http://localhost:3000/api/v1/conversations \
+  -H "Content-Type: application/json" \
+  -d '{ "agent_id": "<AGENT_ID>", "title": "Support chat" }'
+# Response includes "room_id" (same as conversation id)
+```
+
+### Multi-tenant isolation
+
+Set `CLAWZ_TENANT_ID` on the gateway. API keys support an optional fourth field: `sha256_hash:user_id:role:tenant_id`.
+
+```bash
+export CLAWZ_TENANT_ID=acme-corp
+export VALID_API_KEYS="<hash>:alice:owner:acme-corp,<hash>:bob:agent:acme-corp"
+# Disable CLAWZ_DISABLE_AUTH in production
+```
+
+Rooms, channels, and JWTs are scoped to the caller's tenant.
+
+### Postgres persistence
+
+With `DATABASE_URL` set (Docker Compose includes pgvector Postgres):
+
+- Rooms, messages (server-assigned `seq`), users, API keys, and channels survive restarts
+- Gateway hydrates state on startup
+- Login falls back to Postgres when the in-memory user cache is cold
+
+### Worker authentication
+
+Gateway → worker calls require a shared secret:
+
+```bash
+export CLAWZ_WORKER_TOKEN=<random-secret>
+# Same value on gateway and worker
+export WORKER_URL=http://worker:50051   # or http://127.0.0.1:50051 locally
+```
+
+### Web dashboard (optional)
+
+```bash
+./scripts/install.sh --with-web
+cd web && npm run preview   # http://localhost:4173
+```
+
+Configure `web/vite.config.ts` proxy to `http://localhost:3000` for API/WS.
+
+### Agent telephony (Twilio & Google Voice)
+
+See **[TELEPHONY.md](TELEPHONY.md)**. Set `CLAWZ_PUBLIC_URL` to your public HTTPS base URL.
+
+```bash
+export CLAWZ_PUBLIC_URL=https://your-gateway.example.com
+curl -X POST http://localhost:3000/api/v1/agents/<AGENT_ID>/phone \
+  -H "Content-Type: application/json" \
+  -d '{ "provider": "twilio", "phone_number": "+15551234567" }'
 ```
 
 ---
@@ -348,9 +491,64 @@ clawz/
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `CLAWZ_MODE` | **Yes** | Deployment mode: `standalone`, `micro`, or `elastic`. |
-| `VALID_API_KEYS` | **Yes** | Comma-separated API keys for authentication. |
-| `DATABASE_URL` | For `micro`/`elastic` | PostgreSQL connection string. |
+| `VALID_API_KEYS` | **Yes** (prod) | Comma-separated API keys: `hash:user_id:role:tenant_id`. Optional when `CLAWZ_DISABLE_AUTH=1` (dev only). |
+| `DATABASE_URL` | For `micro`/`elastic` | PostgreSQL connection string (gateway persistence + worker memory). |
 | `CLAWZ_CONFIG` | No | Path to TOML configuration file. |
+| `CLAWZ_TENANT_ID` | No | Default tenant for dev auth and unscoped records (default `default`). |
+| `CLAWZ_WORKER_TOKEN` | Prod recommended | Shared secret for gateway → worker control API. |
+| `CLAWZ_PUBLIC_URL` | Telephony/webhooks | Public HTTPS base URL for Twilio and channel webhooks. |
+| `CLAWZ_SECRETS_KEY` | Prod recommended | AES-256-GCM key for provider API keys and sensitive tool config at rest. Without it, secrets are stored with a `plain:` prefix (dev only). |
+| `CLAWZ_JWT_SECRET` / `JWT_SECRET` | Prod recommended | Signs gateway JWT access tokens. |
+| `CLAWZ_LISTEN_ADDR` | No | Gateway bind address (default `0.0.0.0:3000`). |
+| `WORKER_URL` | No | When set, gateway delegates execution to remote worker control API (e.g. `http://127.0.0.1:50051`). |
+| `CLAWZ_DISABLE_AUTH` | Dev only | Set to `1` to bypass auth (never use in production). |
+| `CLAWZ_STUB_PROVIDER` | Dev only | Stub LLM responses without provider API keys. |
+
+### Cloud deploy provider tokens
+
+Set on the gateway host for `POST /api/v1/cloud/deploy` and `DELETE .../deployments/...` (or pass `credentials` in the deploy body).
+
+| Provider | Environment variables |
+|----------|----------------------|
+| Fly.io | `FLY_API_TOKEN` |
+| Railway | `RAILWAY_TOKEN` |
+| AWS Lambda | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| Azure Functions | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` (destroy); deploy may use `credentials` in body |
+| Google Cloud Run | `GOOGLE_CLOUD_ACCESS_TOKEN`, `GOOGLE_CLOUD_REGION` (optional) |
+| Kubernetes | `KUBERNETES_TOKEN`, API server URL configured on adapter |
+| Cloudflare Workers | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+| Fastly Compute | `FASTLY_API_TOKEN` |
+| Vercel | `VERCEL_TOKEN` |
+| Hetzner | `HETZNER_API_TOKEN` |
+| Northflank | `NORTHFLANK_API_TOKEN` |
+| Sliplane | `SLIPLANE_API_TOKEN` |
+| MassiveGrid (Jelastic) | `MASSIVEGRID_SESSION` |
+| OpenTofu | `tofu` CLI on `PATH`; workdir via `CLAWZ_TOFU_WORKDIR` |
+
+LLM provider keys for the worker (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.) are separate from cloud deploy tokens.
+
+### Voice WebSocket (`/ws/voice`)
+
+| Variable | Description |
+|----------|-------------|
+| `CLAWZ_VOICE_PROVIDER` | Set to `openai` to enable Whisper STT + optional TTS (requires `OPENAI_API_KEY`). |
+| `CLAWZ_VOICE_AUDIO_NAME` | Filename hint for binary frames (default `audio.webm`). |
+| `CLAWZ_VOICE_TTS_MODEL` | OpenAI speech model (default `tts-1`). |
+| `CLAWZ_VOICE_TTS_VOICE` | OpenAI voice name (default `alloy`). |
+
+Text control messages: `{"type":"config","agent_id":"…"}`, `{"type":"run_turn","agent_id":"…","message":"…","tts":true}`, `{"type":"transcribe","audio_b64":"…","filename":"audio.webm","auto_turn":true}`.
+
+Set `CLAWZ_VOICE_AUTO_TURN=true` to run an agent turn automatically after each successful binary STT frame. Optional `CLAWZ_VOICE_AUTO_TTS=true` returns MP3 audio for that turn.
+
+### Agent telephony (Twilio & Google Voice)
+
+Bind SMS/voice to an agent with `POST /api/v1/agents/{id}/phone`, then point Twilio or a Google Voice bridge at the returned webhook URLs. Set **`CLAWZ_PUBLIC_URL`** to your gateway’s public HTTPS base URL. See **[TELEPHONY.md](TELEPHONY.md)** for bind fields, webhook paths, and channel config.
+
+### Cursor: Superpowers plugin
+
+Install the [Superpowers](https://github.com/obra/superpowers) plugin in **Agent chat** with `/add-plugin superpowers` (or `/plugin-add superpowers`). See [AGENTS.md](AGENTS.md) for architecture and development conventions.
+
+Oracle Cloud deploy/destroy also accepts `OCI_API_KEY`, `OCI_API_SECRET`, and `OCI_COMPARTMENT_ID`.
 
 ### Example
 
@@ -359,6 +557,7 @@ export CLAWZ_MODE=micro
 export VALID_API_KEYS="prod-key-alpha,prod-key-beta"
 export DATABASE_URL="postgresql://clawz:secret@db.internal:5432/clawz"
 export CLAWZ_CONFIG="/etc/clawz/production.toml"
+export CLAWZ_SECRETS_KEY="change-me-in-production"
 ```
 
 ---
@@ -378,6 +577,14 @@ export CLAWZ_CONFIG="/etc/clawz/production.toml"
 | **Transports** | gRPC, QUIC, WebSocket (WSS), in-process IPC |
 | **Observability** | Prometheus, OpenTelemetry W3C context propagation |
 | **TLS** | rustls / system-native TLS |
+
+---
+
+## Branding
+
+Logo assets live in **`web/public/branding/`** and **`crates/clawz-tauri/src-ui/assets/branding/`**. Use **silver** (`clawz-logo-dark.png`, `clawz-mark-dark.png`) on dark backgrounds and **copper** on light.
+
+Colors, typography, and UI tokens: **[crates/clawz-tauri/design/design-system.md](crates/clawz-tauri/design/design-system.md)**.
 
 ---
 

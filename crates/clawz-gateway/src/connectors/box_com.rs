@@ -138,6 +138,33 @@ impl SaaSConnector for BoxConnector {
     async fn create_object(&self, obj: &str, data: Value) -> Result<Value> {
         let token = self.token()?;
         match obj {
+            "file" => {
+                let name = data["name"].as_str().unwrap_or("upload.txt");
+                let parent_id = data["parent_id"].as_str().unwrap_or("0");
+                let content = data["content"].as_str().unwrap_or("");
+                let attributes = serde_json::json!({
+                    "name": name,
+                    "parent": { "id": parent_id }
+                });
+                let form = reqwest::multipart::Form::new()
+                    .text("attributes", attributes.to_string())
+                    .part(
+                        "file",
+                        reqwest::multipart::Part::text(content.to_string())
+                            .file_name(name.to_string())
+                            .mime_str("text/plain")
+                            .map_err(|e| ClawzError::Provider(format!("Box upload mime: {e}")))?,
+                    );
+                let resp = self
+                    .client()
+                    .post(format!("{}/files/content", self.upload_url()))
+                    .bearer_auth(&token)
+                    .multipart(form)
+                    .send()
+                    .await
+                    .map_err(|e| ClawzError::Provider(format!("Box file upload failed: {e}")))?;
+                crate::connectors::common::parse_json(resp).await
+            }
             "folder" => {
                 let name = data["name"].as_str().unwrap_or("New Folder");
                 let parent_id = data["parent_id"].as_str().unwrap_or("0");

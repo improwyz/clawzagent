@@ -46,7 +46,7 @@ pub async fn save_provider_config(
 
     tokio::fs::write(path, content)
         .await
-        .map_err(|e| ClawzError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))
+        .map_err(|e| ClawzError::Io(std::io::Error::other(e.to_string())))
 }
 
 /// Build a `ProviderRouterConfig` from environment variables only.

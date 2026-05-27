@@ -1,6 +1,12 @@
 # ClawZ
 
+<p align="center">
+  <img src="web/public/branding/clawz-logo-dark.png" alt="ClawZ" width="320" />
+</p>
+
 > A governed swarm of containerized AI agents — the reference implementation of the PRISM-G framework, in Rust.
+
+**Brand assets:** `web/public/branding/` — use **silver** variants on dark backgrounds, **copper** on light. See [design system](crates/clawz-tauri/design/design-system.md).
 
 [![License](https://img.shields.io/badge/License-ELv2-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/Rust-2024-orange.svg)](https://www.rust-lang.org/)
@@ -73,39 +79,30 @@ Designed with compliance and security as first-class concerns, ClawZ embeds the 
 
 ## Quick Start
 
-### 1. Clone the repository
+### One-click install
+
+| Platform | Command |
+|----------|---------|
+| **Linux / macOS** | `curl -fsSL https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.sh \| bash` |
+| **Linux / macOS** (from clone) | `./install.sh` or `./scripts/install.sh` |
+| **Windows (PowerShell)** | `irm https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.ps1 \| iex` |
+| **Windows** (from clone) | `.\install.ps1` or `.\scripts\install.ps1` |
+
+Options: `--docker` / `-Docker`, `--source` / `-Source`, `--with-web` / `-WithWeb`, `--dir PATH` / `-InstallDir PATH`.
+
+After install, verify: `curl http://localhost:3000/api/v1/system/health`
+
+Full install guide (Docker vs source, web dashboard, production, troubleshooting): **[INSTALL.md](INSTALL.md)**.
+
+### Create your first agent
 
 ```bash
-git clone https://github.com/enterpryz/clawz.git
-cd clawz
-```
-
-### 2. Set required environment variables
-
-```bash
-export CLAWZ_MODE=standalone
-export VALID_API_KEYS="dev-key-123,dev-key-456"
-```
-
-### 3. Build and run the gateway
-
-```bash
-cargo run -p clawz-gateway
-```
-
-The server will start on `http://localhost:3000`.
-
-### 4. Create your first agent
-
-```bash
-curl -X POST http://localhost:3000/agents \
-  -H "Authorization: Bearer dev-key-123" \
+curl -X POST http://localhost:3000/api/v1/agents \
   -H "Content-Type: application/json" \
   -d '{
     "name": "hello-agent",
-    "provider": "openai",
-    "model": "gpt-4",
-    "max_cost": 1.00
+    "model": "stub",
+    "system_prompt": "You are a helpful assistant."
   }'
 ```
 

@@ -40,13 +40,13 @@ mod tests {
     #[tokio::test]
     async fn test_spawn_and_sleep() {
         let backend = TokioBackend::new();
-        let handled = std::sync::atomic::AtomicBool::new(false);
+        let handled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let flag = handled.clone();
         backend.spawn(async move {
             flag.store(true, std::sync::atomic::Ordering::SeqCst);
         }).await;
-        assert!(handled.load(std::sync::atomic::Ordering::SeqCst));
         backend.sleep(Duration::from_millis(1)).await;
+        assert!(handled.load(std::sync::atomic::Ordering::SeqCst));
     }
 
     #[tokio::test]

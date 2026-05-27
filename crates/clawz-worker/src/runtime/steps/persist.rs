@@ -26,7 +26,7 @@ use clawz_core::{
     error::{ClawzError, Result},
     traits::{MemoryBackend, PipelineContext, PipelineStep, StepOutcome},
     types::{
-        agent::{AgentState, AgentStatus},
+        agent::AgentStatus,
         message::Role,
     },
 };

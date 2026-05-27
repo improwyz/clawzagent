@@ -45,6 +45,7 @@ pub mod spawner;
 pub mod steps;
 pub mod subagent;
 pub mod team;
+pub mod turn_coordinator;
 pub mod swarm;
 
 /// Re-export the primary runtime entry point and its dependency bag.
@@ -55,3 +56,5 @@ pub use pipeline::Pipeline;
 pub use spawner::{AgentTreeSpawner, ScaleDecision, ScalePolicy};
 /// Re-export the complexity analyzer for consumers that need to size sub-agent teams.
 pub use complexity::{ComplexityScore, TaskComplexity, TaskComplexityAnalyzer};
+/// Re-export room turn coordination for multi-participant agent rooms.
+pub use turn_coordinator::{RoomRuntimeProvider, TurnCoordinator};

@@ -9,7 +9,7 @@
 //! - No direct dependency on other route modules; operates only on `AppState.channels`.
 
 use axum::{
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -20,6 +20,9 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 // Dependency: AppState, ChannelRecord, GatewayError defined in crate root.
+use clawz_services::dto::TestChannelRequest;
+
+use crate::auth::AuthContext;
 use crate::{AppState, ChannelRecord, GatewayError};
 
 /// Assemble the channel sub-router.
@@ -30,6 +33,20 @@ pub fn routes() -> Router<AppState> {
         .route("/", get(list_channels).post(create_channel))
         .route("/{id}", get(get_channel).put(update_channel).delete(delete_channel))
         .route("/{id}/test", post(test_channel))
+}
+
+fn caller_tenant(auth: Option<Extension<AuthContext>>) -> Result<String, GatewayError> {
+    auth.map(|Extension(ctx)| ctx.tenant_id.clone()).ok_or_else(|| {
+        GatewayError::Unauthorized("authentication required".to_string())
+    })
+}
+
+fn require_tenant_channel(channel: &ChannelRecord, tenant_id: &str) -> Result<(), GatewayError> {
+    if channel.tenant_id == tenant_id {
+        Ok(())
+    } else {
+        Err(GatewayError::not_found("Channel", &channel.id))
+    }
 }
 
 // ─── Body types ───────────────────────────────────────────────────────────────
@@ -62,10 +79,18 @@ pub struct UpdateChannelBody {
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
-/// `GET /channels` — list every registered channel.
-async fn list_channels(State(state): State<AppState>) -> Json<Value> {
+/// `GET /channels` — list channels owned by the caller's tenant.
+async fn list_channels(
+    State(state): State<AppState>,
+    auth: Option<Extension<AuthContext>>,
+) -> Result<Json<Value>, GatewayError> {
+    let tenant_id = caller_tenant(auth)?;
     let channels = state.channels.read().await;
-    Json(json!({ "data": *channels, "total": channels.len() }))
+    let visible: Vec<&ChannelRecord> = channels
+        .iter()
+        .filter(|c| c.tenant_id == tenant_id)
+        .collect();
+    Ok(Json(json!({ "data": visible, "total": visible.len() })))
 }
 
 /// `POST /channels` — register a new channel.
@@ -74,8 +99,10 @@ async fn list_channels(State(state): State<AppState>) -> Json<Value> {
 /// and `enabled` defaults to `true` so the channel is usable immediately.
 async fn create_channel(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthContext>>,
     Json(body): Json<CreateChannelBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
+    let tenant_id = caller_tenant(auth)?;
     let name = body.name.ok_or_else(|| {
         GatewayError::Unprocessable("field 'name' is required".to_string())
     })?;
@@ -86,6 +113,7 @@ async fn create_channel(
     let now = Utc::now();
     let record = ChannelRecord {
         id: Uuid::new_v4().to_string(),
+        tenant_id,
         name,
         channel_type,
         config: body.config.unwrap_or(json!({})),
@@ -96,19 +124,30 @@ async fn create_channel(
 
     let mut channels = state.channels.write().await;
     channels.push(record.clone());
+    drop(channels);
+
+    if let Some(ref pool) = state.db {
+        crate::postgres_store::persist_channel(pool, &record)
+            .await
+            .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    }
+
     Ok((StatusCode::CREATED, Json(json!(record))))
 }
 
 /// `GET /channels/{id}` — fetch a single channel.
 async fn get_channel(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthContext>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, GatewayError> {
+    let tenant_id = caller_tenant(auth)?;
     let channels = state.channels.read().await;
     let record = channels
         .iter()
         .find(|c| c.id == id)
         .ok_or_else(|| GatewayError::not_found("Channel", &id))?;
+    require_tenant_channel(record, &tenant_id)?;
     Ok(Json(json!(record)))
 }
 
@@ -117,35 +156,65 @@ async fn get_channel(
 /// Only supplied fields are overwritten; omitted fields keep their current values.
 async fn update_channel(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthContext>>,
     Path(id): Path<String>,
     Json(body): Json<UpdateChannelBody>,
 ) -> Result<Json<Value>, GatewayError> {
+    let tenant_id = caller_tenant(auth)?;
     let mut channels = state.channels.write().await;
     let record = channels
         .iter_mut()
         .find(|c| c.id == id)
         .ok_or_else(|| GatewayError::not_found("Channel", &id))?;
+    require_tenant_channel(record, &tenant_id)?;
 
-    if let Some(name) = body.name { record.name = name; }
-    if let Some(ct) = body.channel_type { record.channel_type = ct; }
-    if let Some(cfg) = body.config { record.config = cfg; }
-    if let Some(enabled) = body.enabled { record.enabled = enabled; }
+    if let Some(name) = body.name {
+        record.name = name;
+    }
+    if let Some(ct) = body.channel_type {
+        record.channel_type = ct;
+    }
+    if let Some(cfg) = body.config {
+        record.config = cfg;
+    }
+    if let Some(enabled) = body.enabled {
+        record.enabled = enabled;
+    }
     record.updated_at = Utc::now();
+    let updated = record.clone();
+    drop(channels);
 
-    Ok(Json(json!(record.clone())))
+    if let Some(ref pool) = state.db {
+        crate::postgres_store::persist_channel(pool, &updated)
+            .await
+            .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    }
+
+    Ok(Json(json!(updated)))
 }
 
 /// `DELETE /channels/{id}` — unregister a channel.
 async fn delete_channel(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthContext>>,
     Path(id): Path<String>,
 ) -> Result<StatusCode, GatewayError> {
+    let tenant_id = caller_tenant(auth)?;
     let mut channels = state.channels.write().await;
     let pos = channels
         .iter()
         .position(|c| c.id == id)
         .ok_or_else(|| GatewayError::not_found("Channel", &id))?;
+    require_tenant_channel(&channels[pos], &tenant_id)?;
     channels.remove(pos);
+    drop(channels);
+
+    if let Some(ref pool) = state.db {
+        crate::postgres_store::delete_channel(pool, &id)
+            .await
+            .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    }
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -155,13 +224,16 @@ async fn delete_channel(
 /// waste time debugging a known-bad configuration.
 async fn test_channel(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthContext>>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, GatewayError> {
+    let tenant_id = caller_tenant(auth)?;
     let channels = state.channels.read().await;
     let record = channels
         .iter()
         .find(|c| c.id == id)
         .ok_or_else(|| GatewayError::not_found("Channel", &id))?;
+    require_tenant_channel(record, &tenant_id)?;
 
     if !record.enabled {
         return Ok(Json(json!({
@@ -171,13 +243,26 @@ async fn test_channel(
         })));
     }
 
-    // Simulate a test message send — in production this would delegate to the
-    // channel adapter identified by `channel_type`.
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
+
+    let result = platform
+        .execution
+        .test_channel(TestChannelRequest {
+            channel_type: record.channel_type.clone(),
+            config: record.config.clone(),
+            agent_id: None,
+        })
+        .await
+        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+
     Ok(Json(json!({
         "id": id,
         "channel_type": record.channel_type,
-        "success": true,
-        "message": format!("Test message sent via {} channel '{}'", record.channel_type, record.name),
+        "success": result.success,
+        "message": result.message,
         "tested_at": Utc::now(),
     })))
 }

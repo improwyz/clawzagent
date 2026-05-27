@@ -181,10 +181,10 @@ impl TransportSelector {
             IpAddr::V4(peer_v4) => {
                 let octets = peer_v4.octets();
                 // RFC-1918 ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
-                let is_private = octets[0] == 10
+                
+                octets[0] == 10
                     || (octets[0] == 172 && (16..=31).contains(&octets[1]))
-                    || (octets[0] == 192 && octets[1] == 168);
-                is_private
+                    || (octets[0] == 192 && octets[1] == 168)
             }
             IpAddr::V6(_) => false, // conservative: don't assume LAN for IPv6
         }

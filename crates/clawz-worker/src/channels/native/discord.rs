@@ -68,7 +68,7 @@ impl DiscordChannel {
     ///
     /// # Errors
     /// Returns [`ClawzError::Config`] if `bot_token` is missing.
-    fn auth_header<'a>(&self, ctx: &'a ChannelContext) -> Result<String> {
+    fn auth_header(&self, ctx: &ChannelContext) -> Result<String> {
         let token = cred_str(&ctx.config.credentials, "bot_token")?;
         Ok(format!("Bot {token}"))
     }
@@ -137,34 +137,31 @@ impl DiscordChannel {
 
         Some(im)
     }
+}
 
-    /// Verify Ed25519 signature for Discord interactions.
-    ///
-    /// Discord signs: `timestamp + body`
-    ///
-    /// # Note
-    /// This function currently **skips** the actual cryptographic check because
-    /// `ed25519-dalek` is not in the dependency tree. A warning is emitted;
-    /// add the crate to `Cargo.toml` and uncomment the verify call for production.
-    ///
-    /// # Errors
-    /// Returns [`ClawzError::Auth`] if headers are malformed or key lengths are wrong.
-    fn verify_ed25519(&self, ctx: &ChannelContext, headers: &HeaderMap, payload: &[u8]) -> Result<()> {
+// Signing is optional until secrets are configured.
+#[allow(dead_code)]
+impl DiscordChannel {
+    fn verify_ed25519(
+        &self,
+        ctx: &ChannelContext,
+        _headers: &HeaderMap,
+        _payload: &[u8],
+    ) -> Result<()> {
         let public_key = match cred_str(&ctx.config.credentials, "public_key") {
             Ok(k) => k,
             Err(_) => return Ok(()), // skip if not configured
         };
 
-        let timestamp = headers
+        let timestamp = _headers
             .get("X-Signature-Timestamp")
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| ClawzError::Auth("missing X-Signature-Timestamp".to_string()))?;
-        let signature = headers
+        let signature = _headers
             .get("X-Signature-Ed25519")
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| ClawzError::Auth("missing X-Signature-Ed25519".to_string()))?;
 
-        // Decode hex public key and signature
         let pk_bytes = hex::decode(public_key)
             .map_err(|e| ClawzError::Auth(format!("invalid public key hex: {e}")))?;
         let sig_bytes = hex::decode(signature)
@@ -174,14 +171,9 @@ impl DiscordChannel {
             return Err(ClawzError::Auth("Discord Ed25519: wrong key/sig length".to_string()));
         }
 
-        // Build message: timestamp bytes || payload bytes
         let mut message = timestamp.as_bytes().to_vec();
-        message.extend_from_slice(payload);
+        message.extend_from_slice(_payload);
 
-        // We perform a manual Ed25519 verify using only the std library approach.
-        // Since we don't have ed25519-dalek in Cargo.toml, we use a simple trick:
-        // reject if we can't verify — callers should add ed25519-dalek if needed.
-        // For now we log a warning and pass through.
         log::warn!("Discord Ed25519 signature verification skipped (ed25519-dalek not in deps). Add it to Cargo.toml for production.");
         let _ = (pk_bytes, sig_bytes, message);
 
@@ -369,7 +361,7 @@ impl ChannelPlugin for DiscordChannel {
     ///
     /// # Errors
     /// - [`ClawzError::Serialization`] if the payload is not valid JSON.
-    async fn webhook(&self, payload: &[u8], headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
+    async fn webhook(&self, payload: &[u8], _headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
         // Note: Ed25519 verification would need ctx; we do it if public_key
         // header is embedded, otherwise callers handle it at the gateway level.
 

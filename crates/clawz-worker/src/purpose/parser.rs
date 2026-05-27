@@ -4,7 +4,7 @@
 //! to turn vague human intent into machine-readable goals.
 
 use clawz_core::types::{
-    ClarificationQuestion, Comparator, Constraint, ConstraintKind, GoalObject, GoalType,
+    ClarificationQuestion, Comparator, Constraint, ConstraintKind, GoalObject,
     Milestone, ParseOutcome, SuccessCriterion,
 };
 

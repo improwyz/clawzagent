@@ -22,8 +22,6 @@
 //! - `FanOut` uses `SubAgentPool` internally for parallel Mixture-of-Agents
 //!   execution.
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 
 // Dependency: core error types and agent/message primitives.
@@ -31,11 +29,11 @@ use clawz_core::{
     error::{ClawzError, Result},
     types::{
         agent::{AgentConfig, AgentStatus},
-        message::{Message, Role},
+        message::Message,
     },
 };
 // Dependency: tokio async channels for parent-child result communication.
-use tokio::sync::{mpsc, oneshot, RwLock};
+use tokio::sync::oneshot;
 use uuid::Uuid;
 
 // ── SubAgentHandle ─────────────────────────────────────────────────────────────
@@ -174,7 +172,7 @@ impl SubAgent {
     ) -> SubAgentHandle {
         let response = Message::assistant(response_text.into());
         let task_str = task.into();
-        let config = self.config.clone();
+        let _config = self.config.clone();
         self.spawn(task_str, move |_cfg, _task| {
             let msg = response;
             async move { Ok(msg) }

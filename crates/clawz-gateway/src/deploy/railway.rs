@@ -20,7 +20,9 @@
 //! * `clawz_core::error` — error types.
 
 // Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{
+    destroy_http_ok, external_resource_name, generate_deployment_id, resolve_api_token,
+};
 // Dependency: provider trait and shared vocabulary.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -98,10 +100,9 @@ impl DeployProvider for RailwayAdapter {
     }
 
     async fn deploy(&self, config: &DeployConfig) -> Result<DeploymentInfo> {
-        let source = match &config.mode {
-            DeployMode::Docker { image } => image.clone(),
-            // Nixpacks auto-detects the language and builds the binary.
-            DeployMode::NativeBinary => "nixpacks".into(),
+        let _source = match &config.mode {
+            DeployMode::Docker { image: _ } => {}
+            DeployMode::NativeBinary => {}
             _ => {
                 return Err(ClawzError::Validation(
                     "Railway does not support Wasm mode".into(),
@@ -109,14 +110,47 @@ impl DeployProvider for RailwayAdapter {
             }
         };
 
+        let token = resolve_api_token(config, "RAILWAY_TOKEN", "Railway")?;
         let id = generate_deployment_id("railway");
+        let project_name = external_resource_name(&id);
 
-        log::info!("Deploying to Railway: source={}", source);
+        let query = serde_json::json!({
+            "query": format!(
+                "mutation {{ projectCreate(input: {{ name: \"{project_name}\" }}) {{ id }} }}"
+            )
+        });
+
+        let resp = self
+            .client
+            .post(self.graphql_url())
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&query)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Railway deploy error: {e}")))?;
+
+        let http_status = resp.status();
+        let body: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Railway deploy parse error: {e}")))?;
+
+        if !http_status.is_success() {
+            return Err(ClawzError::Provider(format!(
+                "Railway projectCreate failed ({http_status}): {body}"
+            )));
+        }
+
+        let project_id = body["data"]["projectCreate"]["id"]
+            .as_str()
+            .unwrap_or("unknown");
 
         Ok(DeploymentInfo {
             id,
-            url: "https://railway.app".into(),
+            external_resource: Some(project_id.to_string()),
+            url: format!("https://railway.app/project/{project_id}"),
             status: DeploymentStatus::Pending,
+            ..Default::default()
         })
     }
 
@@ -124,9 +158,70 @@ impl DeployProvider for RailwayAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Railway deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let token = std::env::var("RAILWAY_TOKEN").map_err(|_| {
+            ClawzError::Auth("RAILWAY_TOKEN required to destroy Railway projects".into())
+        })?;
+
+        let project_id = if let Some(pid) = external_resource {
+            pid.to_string()
+        } else {
+            let project_name = external_resource_name(id);
+            let list_query = serde_json::json!({
+                "query": "query { projects { edges { node { id name } } } } }"
+            });
+            let list_resp = self
+                .client
+                .post(self.graphql_url())
+                .header("Authorization", format!("Bearer {token}"))
+                .json(&list_query)
+                .send()
+                .await
+                .map_err(|e| ClawzError::Provider(format!("Railway list projects error: {e}")))?;
+
+            let list_body: serde_json::Value = list_resp.json().await.map_err(|e| {
+                ClawzError::Provider(format!("Railway list parse error: {e}"))
+            })?;
+
+            list_body["data"]["projects"]["edges"]
+                .as_array()
+                .and_then(|edges| {
+                    edges.iter().find_map(|edge| {
+                        let node = &edge["node"];
+                        if node["name"].as_str() == Some(project_name.as_str()) {
+                            node["id"].as_str().map(str::to_string)
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .ok_or_else(|| ClawzError::NotFound {
+                    entity: "railway_project".into(),
+                    id: project_name.clone(),
+                })?
+        };
+
+        let delete_query = serde_json::json!({
+            "query": format!("mutation {{ projectDelete(id: \"{project_id}\") }}")
+        });
+        let del_resp = self
+            .client
+            .post(self.graphql_url())
+            .header("Authorization", format!("Bearer {token}"))
+            .json(&delete_query)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Railway delete project error: {e}")))?;
+
+        if destroy_http_ok(del_resp.status()) {
+            log::info!("Railway project removed: {project_id} (deployment {id})");
+            Ok(())
+        } else {
+            let text = del_resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Railway projectDelete failed: {text}"
+            )))
+        }
     }
 }
 

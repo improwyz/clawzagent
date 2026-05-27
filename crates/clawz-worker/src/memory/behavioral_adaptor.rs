@@ -6,10 +6,9 @@
 
 use std::sync::Arc;
 
-use clawz_core::metrics::PerfDimension;
 use uuid::Uuid;
 
-use crate::governance::skill_repository::{SkillBundle, SkillRepository};
+use crate::governance::skill_repository::SkillRepository;
 use crate::memory::improvement::ImprovementProposal;
 
 /// A single concrete change applied to the runtime.
@@ -33,6 +32,7 @@ pub enum ChangeType {
 
 /// Maps approved [`ImprovementProposal`]s to runtime changes.
 pub struct BehavioralAdaptor {
+    #[allow(dead_code)]
     skill_repo: Arc<dyn SkillRepository>,
 }
 
@@ -62,8 +62,7 @@ impl BehavioralAdaptor {
         let suggestion = suggestion.trim();
 
         // Format: "set <target> <value>"
-        if suggestion.starts_with("set ") {
-            let rest = &suggestion[4..];
+        if let Some(rest) = suggestion.strip_prefix("set ") {
             if let Some(space_idx) = rest.find(' ') {
                 let target = rest[..space_idx].trim();
                 let value = rest[space_idx + 1..].trim();
@@ -189,6 +188,8 @@ impl BehavioralAdaptor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clawz_core::metrics::PerfDimension;
+    use crate::governance::skill_repository::SkillBundle;
 
     struct DummySkillRepo;
     #[async_trait::async_trait]

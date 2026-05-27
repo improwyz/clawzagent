@@ -203,12 +203,16 @@ impl TrustScore {
 /// | 600–799   | Trusted    |
 /// | 800–1000  | Full       |
 fn tier_from_score(score: u16) -> TrustTier {
-    match score {
-        0..=199 => TrustTier::Untrusted,
-        200..=399 => TrustTier::Limited,
-        400..=599 => TrustTier::Standard,
-        600..=799 => TrustTier::Trusted,
-        _ => TrustTier::Full,
+    if score <= TIER_UNTRUSTED_MAX {
+        TrustTier::Untrusted
+    } else if score <= TIER_LIMITED_MAX {
+        TrustTier::Limited
+    } else if score <= TIER_STANDARD_MAX {
+        TrustTier::Standard
+    } else if score <= TIER_TRUSTED_MAX {
+        TrustTier::Trusted
+    } else {
+        TrustTier::Full
     }
 }
 

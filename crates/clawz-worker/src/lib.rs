@@ -206,3 +206,12 @@ pub mod transport;
 ///
 /// Wire into agent scheduler via [`self_healing::run_with_supervisor()`].
 pub mod self_healing;
+
+/// Shared worker platform service (runtimes, governance, tools).
+pub mod service;
+
+/// HTTP control plane for gateway ↔ worker delegation.
+pub mod control_api;
+
+/// In-process execution client for standalone gateway mode.
+pub mod client;

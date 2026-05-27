@@ -5,7 +5,15 @@ import { Badge, statusVariant } from '../components/shared/Badge';
 import { Modal, ConfirmModal } from '../components/shared/Modal';
 import { EmptyState } from '../components/shared/EmptyState';
 import { ChatPanel } from '../components/chat/ChatPanel';
-import { fetchAgents, createAgent, deleteAgent, type Agent } from '../lib/api';
+import {
+  fetchAgents,
+  createAgent,
+  deleteAgent,
+  createRoom,
+  fetchRooms,
+  type Agent,
+  type Room,
+} from '../lib/api';
 
 const MODELS = [
   'claude-opus-4-5',
@@ -143,10 +151,12 @@ function CreateAgentModal({ open, onClose }: { open: boolean; onClose: () => voi
   );
 }
 
-function AgentRow({ agent, onDelete, onChat }: {
+function AgentRow({ agent, onDelete, onChat, onTeamRoom, selected }: {
   agent: Agent;
   onDelete: (id: string) => void;
   onChat: (agent: Agent) => void;
+  onTeamRoom: (agent: Agent) => void;
+  selected: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -173,9 +183,20 @@ function AgentRow({ agent, onDelete, onChat }: {
           <div className="flex items-center gap-1">
             <button
               onClick={(e) => { e.stopPropagation(); onChat(agent); }}
-              className="px-2 py-1 text-xs rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors"
+              className={`px-2 py-1 text-xs rounded transition-colors ${
+                selected
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
+              }`}
             >
               Run
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onTeamRoom(agent); }}
+              className="px-2 py-1 text-xs rounded bg-purple-600/20 text-purple-400 hover:bg-purple-600/30 transition-colors"
+              title="Open agent team room"
+            >
+              Team
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(agent.id); }}
@@ -236,6 +257,8 @@ export function Agents() {
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [chatAgent, setChatAgent] = useState<Agent | null>(null);
+  const [chatRoom, setChatRoom] = useState<Room | null>(null);
+  const [roomLoading, setRoomLoading] = useState(false);
 
   const { data: agents = [], isLoading, error } = useQuery({
     queryKey: ['agents'],
@@ -243,10 +266,46 @@ export function Agents() {
     refetchInterval: 15_000,
   });
 
+  const { data: rooms = [] } = useQuery({
+    queryKey: ['rooms'],
+    queryFn: fetchRooms,
+    refetchInterval: 30_000,
+  });
+
   const deleteMutation = useMutation({
     mutationFn: deleteAgent,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
   });
+
+  const openTeamRoom = async (leader: Agent) => {
+    setRoomLoading(true);
+    try {
+      const otherAgents = agents.filter((a) => a.id !== leader.id).slice(0, 2);
+      const room = await createRoom({
+        title: `${leader.name} team`,
+        room_type: 'agent_team',
+        orchestration_mode: 'team',
+        primary_agent_id: leader.id,
+        participants: [
+          { participant_type: 'agent', participant_id: leader.id, role: 'leader' },
+          ...otherAgents.map((a) => ({
+            participant_type: 'agent' as const,
+            participant_id: a.id,
+            role: 'member' as const,
+          })),
+        ],
+      });
+      qc.invalidateQueries({ queryKey: ['rooms'] });
+      setChatAgent(null);
+      setChatRoom(room);
+    } catch (err) {
+      console.error('Failed to create team room:', err);
+    } finally {
+      setRoomLoading(false);
+    }
+  };
+
+  const chatOpen = Boolean(chatAgent || chatRoom);
 
   const idle = agents.filter((a) => a.status === 'idle').length;
   const running = agents.filter((a) => a.status === 'running').length;
@@ -254,7 +313,7 @@ export function Agents() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <div className={`flex flex-col flex-1 min-w-0 overflow-y-auto p-4 gap-4 ${chatAgent ? 'border-r border-zinc-800' : ''}`}>
+      <div className={`flex flex-col flex-1 min-w-0 overflow-y-auto p-4 gap-4 ${chatOpen ? 'border-r border-zinc-800' : ''}`}>
         {/* Header */}
         <div className="flex items-center justify-between">
           <h2 className="text-zinc-100 font-semibold">Agents</h2>
@@ -265,6 +324,31 @@ export function Agents() {
             + Create Agent
           </button>
         </div>
+
+        {rooms.length > 0 && (
+          <div className="widget-3d rounded-xl bg-zinc-900 border border-zinc-800 p-3">
+            <div className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Rooms</div>
+            <div className="flex flex-wrap gap-2">
+              {rooms.map((room) => (
+                <button
+                  key={room.id}
+                  onClick={() => {
+                    setChatAgent(null);
+                    setChatRoom(chatRoom?.id === room.id ? null : room);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs border transition-colors ${
+                    chatRoom?.id === room.id
+                      ? 'bg-purple-600/30 border-purple-500 text-purple-300'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                  }`}
+                >
+                  {room.title ?? room.id.slice(0, 8)}
+                  <span className="ml-1 opacity-60">{room.room_type}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3">
@@ -327,7 +411,12 @@ export function Agents() {
                       key={agent.id}
                       agent={agent}
                       onDelete={(id) => setDeleteTarget(id)}
-                      onChat={(a) => setChatAgent(chatAgent?.id === a.id ? null : a)}
+                      onChat={(a) => {
+                        setChatRoom(null);
+                        setChatAgent(chatAgent?.id === a.id ? null : a);
+                      }}
+                      onTeamRoom={openTeamRoom}
+                      selected={chatAgent?.id === agent.id}
                     />
                   ))}
               </tbody>
@@ -337,19 +426,34 @@ export function Agents() {
       </div>
 
       {/* Chat panel */}
-      {chatAgent && (
-        <div className="w-80 flex flex-col flex-shrink-0 bg-zinc-900">
+      {chatOpen && (
+        <div className="w-96 flex flex-col flex-shrink-0 bg-zinc-900">
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800">
-            <div className="text-zinc-200 text-sm font-medium">{chatAgent.name}</div>
+            <div className="text-zinc-200 text-sm font-medium truncate">
+              {chatRoom
+                ? (chatRoom.title ?? `Room ${chatRoom.id.slice(0, 8)}`)
+                : chatAgent?.name}
+            </div>
             <button
-              onClick={() => setChatAgent(null)}
-              className="text-zinc-500 hover:text-zinc-300 text-xs"
+              onClick={() => {
+                setChatAgent(null);
+                setChatRoom(null);
+              }}
+              className="text-zinc-500 hover:text-zinc-300 text-xs flex-shrink-0"
             >
               ✕
             </button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <ChatPanel agentId={chatAgent.id} agentName={chatAgent.name} />
+            {roomLoading ? (
+              <div className="p-4 text-zinc-500 text-sm">Creating room…</div>
+            ) : chatRoom ? (
+              <ChatPanel
+                roomId={chatRoom.id}
+              />
+            ) : chatAgent ? (
+              <ChatPanel agentId={chatAgent.id} agentName={chatAgent.name} />
+            ) : null}
           </div>
         </div>
       )}

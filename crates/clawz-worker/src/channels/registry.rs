@@ -145,7 +145,7 @@ impl ChannelRegistry {
             .find(|id| {
                 self.by_id
                     .get(id)
-                    .map_or(false, |e| e.status == ChannelStatus::Ready)
+                    .is_some_and(|e| e.status == ChannelStatus::Ready)
             })
             .and_then(|id| self.by_id.get(id))
             .map(|e| e.plugin.as_ref())

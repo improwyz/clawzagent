@@ -1,0 +1,29 @@
+{
+  "name": "ClawZ Platform",
+  "short_name": "ClawZ",
+  "description": "Multi-tenant AI agent orchestration dashboard for the ClawZ platform.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0D0F12",
+  "theme_color": "#0D0F12",
+  "icons": [
+    {
+      "src": "/branding/clawz-mark-dark.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/branding/clawz-mark-light.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/branding/clawz-logo-dark.png",
+      "sizes": "1024x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

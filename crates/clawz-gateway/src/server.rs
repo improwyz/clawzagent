@@ -13,7 +13,7 @@
 //! - [`crate::ws`] — WebSocket upgrade handlers for streaming and real-time events.
 //! - [`crate::AppState`] — Shared in-memory state and broadcast channel.
 
-use axum::{routing::get, Router};
+use axum::{middleware, routing::{get, post}, Router};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
@@ -64,8 +64,9 @@ impl GatewayServer {
         Router::new()
             .route("/health", get(health))
             .route("/api/docs", get(swagger_ui))
+            .nest("/webhooks", crate::routes::telephony::routes())
             .nest("/api/v1", Self::api_routes())
-            .nest("/ws", Self::ws_routes())
+            .nest("/ws", crate::ws::ws_routes())
             .layer(TraceLayer::new_for_http())
             .layer(cors)
             .with_state(state)
@@ -78,31 +79,17 @@ impl GatewayServer {
         Router::new()
             .nest("/agents", crate::routes::agents::routes())
             .nest("/conversations", crate::routes::conversations::routes())
+            .nest("/rooms", crate::routes::rooms::routes())
             .nest("/channels", crate::routes::channels::routes())
             .nest("/providers", crate::routes::providers::routes())
             .nest("/tools", crate::routes::tools::routes())
             .nest("/governance", crate::routes::governance::routes())
             .nest("/fleet", crate::routes::fleet::routes())
+            .nest("/cloud", crate::routes::cloud_deploy::routes())
             .nest("/system", crate::routes::system::routes())
-    }
-
-    /// Assemble the `/ws/*` WebSocket upgrade route tree.
-    ///
-    /// These endpoints upgrade HTTP connections to WebSocket for real-time
-    /// streaming of agent output, system events, metrics, approval queues, logs,
-    /// and voice channel data.
-    fn ws_routes() -> Router<AppState> {
-        Router::new()
-            .route("/agent/{id}/stream", get(crate::ws::handlers::agent_stream))
-            .route(
-                "/agents/{id}/stream",
-                get(crate::ws::handlers::autonomous_stream),
-            )
-            .route("/events", get(crate::ws::handlers::events))
-            .route("/metrics", get(crate::ws::handlers::metrics))
-            .route("/approvals", get(crate::ws::handlers::approvals))
-            .route("/logs", get(crate::ws::handlers::logs))
-            .route("/voice", get(crate::ws::handlers::voice))
+            .nest("/dashboard", crate::routes::dashboard::routes())
+            .route("/mcp", post(crate::mcp::handle_mcp_request))
+            .layer(middleware::from_fn(crate::auth::auth_middleware))
     }
 
     /// Bind and serve the gateway on the given address.
@@ -146,5 +133,5 @@ async fn health() -> &'static str {
 /// spec (e.g., via `utoipa` or `rapidoc`). For now it returns plain text so
 /// that the `/api/docs` route does not 404 during early development.
 async fn swagger_ui() -> impl axum::response::IntoResponse {
-    "Swagger UI placeholder"
+    axum::response::Redirect::temporary("/api/v1/system/openapi")
 }

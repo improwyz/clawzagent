@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Holds the global master switch plus per-service sub-configs and the
 /// shared account credentials used by every client.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CloudflareConfig {
     /// Master kill-switch: when false, no Cloudflare service will be used
     /// regardless of individual sub-service flags.
@@ -41,7 +41,7 @@ pub struct CloudflareConfig {
 ///
 /// Controls whether LLM requests are proxied through Cloudflare's AI Gateway
 /// for caching, logging, and rate-limiting.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CloudflareAiGatewayConfig {
     /// Enable AI Gateway integration.
     pub enabled: bool,
@@ -53,7 +53,7 @@ pub struct CloudflareAiGatewayConfig {
 ///
 /// R2 is an S3-compatible store used for persisting agent artifacts,
 /// logs, and large binary payloads.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CloudflareR2Config {
     /// Enable R2 integration.
     pub enabled: bool,
@@ -65,7 +65,7 @@ pub struct CloudflareR2Config {
 ///
 /// KV provides low-latency key-value storage ideal for configuration,
 /// routing tables, and lightweight runtime state.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CloudflareKvConfig {
     /// Enable Workers KV integration.
     pub enabled: bool,
@@ -77,7 +77,7 @@ pub struct CloudflareKvConfig {
 ///
 /// Tunnels expose local gateway services to the public internet through
 /// Cloudflare's edge without opening firewall ports.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CloudflareTunnelConfig {
     /// Enable Cloudflare Tunnel integration.
     pub enabled: bool,
@@ -89,7 +89,7 @@ pub struct CloudflareTunnelConfig {
 ///
 /// Controls edge container deployments for running isolated workloads
 /// close to users.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CloudflareContainersConfig {
     /// Enable Cloudflare Containers integration.
     pub enabled: bool,
@@ -99,64 +99,8 @@ pub struct CloudflareContainersConfig {
 ///
 /// Workers are edge functions that can handle HTTP traffic, cron triggers,
 /// and Durable Object state.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CloudflareWorkersConfig {
     /// Enable Cloudflare Workers integration.
     pub enabled: bool,
-}
-
-// ── Defaults ─────────────────────────────────────────────────────────────────
-
-impl Default for CloudflareConfig {
-    fn default() -> Self {
-        Self {
-            // Safe default: every integration starts disabled so that a missing
-            // config file doesn't accidentally send traffic to Cloudflare.
-            enabled: false,
-            account_id: String::new(),
-            api_token: String::new(),
-            ai_gateway: CloudflareAiGatewayConfig::default(),
-            r2: CloudflareR2Config::default(),
-            kv: CloudflareKvConfig::default(),
-            tunnel: CloudflareTunnelConfig::default(),
-            containers: CloudflareContainersConfig::default(),
-            workers: CloudflareWorkersConfig::default(),
-        }
-    }
-}
-
-impl Default for CloudflareAiGatewayConfig {
-    fn default() -> Self {
-        Self { enabled: false, gateway_id: None }
-    }
-}
-
-impl Default for CloudflareR2Config {
-    fn default() -> Self {
-        Self { enabled: false, bucket_name: None }
-    }
-}
-
-impl Default for CloudflareKvConfig {
-    fn default() -> Self {
-        Self { enabled: false, namespace_id: None }
-    }
-}
-
-impl Default for CloudflareTunnelConfig {
-    fn default() -> Self {
-        Self { enabled: false, tunnel_id: None }
-    }
-}
-
-impl Default for CloudflareContainersConfig {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
-}
-
-impl Default for CloudflareWorkersConfig {
-    fn default() -> Self {
-        Self { enabled: false }
-    }
 }

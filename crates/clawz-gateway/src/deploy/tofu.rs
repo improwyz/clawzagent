@@ -1,3 +1,8 @@
+use crate::deploy::common::generate_deployment_id;
+use crate::deploy::provider::{
+    DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
+};
+use async_trait::async_trait;
 use clawz_core::error::{ClawzError, Result};
 use std::path::PathBuf;
 use std::process::Command;
@@ -225,6 +230,101 @@ resource "docker_container" "app" {{
         port,
         port
     )
+}
+
+/// OpenTofu-backed deploy provider (local `tofu` CLI).
+pub struct TofuDeployAdapter {
+    base_work_dir: PathBuf,
+}
+
+impl TofuDeployAdapter {
+    pub fn new(base_work_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            base_work_dir: base_work_dir.into(),
+        }
+    }
+}
+
+#[async_trait]
+impl DeployProvider for TofuDeployAdapter {
+    fn provider_id(&self) -> &str {
+        "opentofu"
+    }
+
+    fn display_name(&self) -> &str {
+        "OpenTofu"
+    }
+
+    fn supported_modes(&self) -> Vec<DeployMode> {
+        vec![
+            DeployMode::Docker { image: String::new() },
+            DeployMode::NativeBinary,
+        ]
+    }
+
+    async fn validate_credentials(&self, _creds: &ProviderCredentials) -> Result<()> {
+        let output = Command::new("tofu").arg("version").output().map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                ClawzError::Internal(
+                    "OpenTofu (tofu) not found in PATH. Install from https://opentofu.org".into(),
+                )
+            } else {
+                ClawzError::Io(e)
+            }
+        })?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(ClawzError::Internal("tofu version check failed".into()))
+        }
+    }
+
+    async fn deploy(&self, config: &DeployConfig) -> Result<DeploymentInfo> {
+        let id = generate_deployment_id("tofu");
+        let work_dir = self.base_work_dir.join(id.replace('/', "_"));
+        fs::create_dir_all(&work_dir).await.map_err(ClawzError::Io)?;
+
+        let runner = TofuRunner::new(&work_dir);
+        let main_tf = if let Some(custom) = config.env_vars.get("__MAIN_TF") {
+            custom.clone()
+        } else {
+            let image = match &config.mode {
+                DeployMode::Docker { image } => image.clone(),
+                DeployMode::NativeBinary => "debian:bullseye-slim".into(),
+                DeployMode::Wasm => {
+                    return Err(ClawzError::Validation(
+                        "OpenTofu adapter does not support Wasm; use Fastly or Cloudflare".into(),
+                    ))
+                }
+            };
+            generate_docker_service_tf(&image, 8080, config.replicas.max(1))
+        };
+
+        runner.write_main_tf(&main_tf).await?;
+        runner.init().await?;
+        runner.apply(true).await?;
+
+        Ok(DeploymentInfo {
+            id,
+            url: format!("file://{}", work_dir.display()),
+            status: DeploymentStatus::Pending,
+            ..Default::default()
+        })
+    }
+
+    async fn status(&self, _id: &str) -> Result<DeploymentStatus> {
+        Ok(DeploymentStatus::Running)
+    }
+
+    async fn destroy(&self, id: &str, _external_resource: Option<&str>) -> Result<()> {
+        let work_dir = self.base_work_dir.join(id.replace('/', "_"));
+        if work_dir.exists() {
+            let runner = TofuRunner::new(&work_dir);
+            let _ = runner.destroy(true).await;
+            let _ = fs::remove_dir_all(&work_dir).await;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]

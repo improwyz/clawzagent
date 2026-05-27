@@ -15,6 +15,7 @@
 //! - None directly; providers are consumed by the agent execution layer (not yet
 //!   fully wired in the route handlers below).
 
+use clawz_services::dto::ProviderHealthRequest;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -123,6 +124,9 @@ async fn create_provider(
 
     let mut providers = state.providers.write().await;
     providers.push(record.clone());
+    if let Some(ref pool) = state.db {
+        let _ = crate::postgres_store::persist_provider(pool, &record).await;
+    }
 
     Ok((StatusCode::CREATED, Json(json!({
         "id": record.id,
@@ -177,15 +181,20 @@ async fn update_provider(
     if let Some(url) = body.base_url { record.base_url = Some(url); }
     if let Some(enabled) = body.enabled { record.enabled = enabled; }
     record.updated_at = Utc::now();
+    let snapshot = record.clone();
+    drop(providers);
+    if let Some(ref pool) = state.db {
+        let _ = crate::postgres_store::persist_provider(pool, &snapshot).await;
+    }
 
     Ok(Json(json!({
-        "id": record.id,
-        "name": record.name,
-        "provider_type": record.provider_type,
-        "base_url": record.base_url,
-        "enabled": record.enabled,
-        "created_at": record.created_at,
-        "updated_at": record.updated_at,
+        "id": snapshot.id,
+        "name": snapshot.name,
+        "provider_type": snapshot.provider_type,
+        "base_url": snapshot.base_url,
+        "enabled": snapshot.enabled,
+        "created_at": snapshot.created_at,
+        "updated_at": snapshot.updated_at,
     })))
 }
 
@@ -200,6 +209,9 @@ async fn delete_provider(
         .position(|p| p.id == id)
         .ok_or_else(|| GatewayError::not_found("Provider", &id))?;
     providers.remove(pos);
+    if let Some(ref pool) = state.db {
+        crate::postgres_store::delete_provider(pool, &id).await;
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -226,14 +238,27 @@ async fn test_provider(
         })));
     }
 
-    // Simulate a health check — in production this would issue a lightweight
-    // HTTP probe to the provider's base_url and measure actual latency.
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
+
+    let health = platform
+        .execution
+        .test_provider(ProviderHealthRequest {
+            provider_id: record.provider_type.clone(),
+            endpoint: record.base_url.clone(),
+            api_key: record.api_key.clone(),
+        })
+        .await
+        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+
     Ok(Json(json!({
         "id": id,
         "provider_type": record.provider_type,
-        "healthy": true,
-        "latency_ms": 45,
-        "message": format!("Provider '{}' responded successfully", record.name),
+        "healthy": health.ok,
+        "latency_ms": health.latency_ms,
+        "message": health.message,
         "tested_at": Utc::now(),
     })))
 }

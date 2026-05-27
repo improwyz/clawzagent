@@ -51,7 +51,7 @@ impl DeploymentElasticity {
     }
 
     pub async fn evaluate(&self, metrics: &SystemMetrics) -> Option<DeploymentTransition> {
-        let current = self.mode.read().await.clone();
+        let current = *self.mode.read().await;
         let last_dir = self.last_direction.read().await.clone();
 
         let (new_mode, direction) = self.evaluate_transition(&current, metrics)?;
@@ -65,7 +65,7 @@ impl DeploymentElasticity {
                 }
             }
 
-            *self.mode.write().await = new_mode.clone();
+            *self.mode.write().await = new_mode;
             *self.last_transition.write().await = Utc::now();
             *self.last_direction.write().await = Some(direction.clone());
             Some(DeploymentTransition {

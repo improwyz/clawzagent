@@ -46,7 +46,8 @@ use serde_json::{json, Value};
 // Dependency: helper utilities from the parent plugin module (worker-internal)
 use crate::channels::plugin::{cred_str, map_http_error, markdown_to_slack_mrkdwn};
 
-/// Type alias for HMAC-SHA256 used in Slack signature verification.
+// Signing is optional until secrets are configured.
+#[allow(dead_code)]
 type HmacSha256 = Hmac<Sha256>;
 
 /// Base URL for the Slack Web API.
@@ -77,57 +78,12 @@ impl SlackChannel {
         cred_str(&ctx.config.credentials, "bot_token")
     }
 
-    /// Extract the optional Slack signing secret from channel credentials.
-    ///
-    /// Returns `None` if not configured; webhook verification will be skipped.
-    fn signing_secret<'a>(&self, ctx: &'a ChannelContext) -> Option<&'a str> {
-        ctx.config.credentials.get("signing_secret")?.as_str()
-    }
-
     /// Extract the target channel ID from channel credentials.
     ///
     /// # Errors
     /// Returns [`ClawzError::Config`] if `channel_id` is missing.
     fn channel_id<'a>(&self, ctx: &'a ChannelContext) -> Result<&'a str> {
         cred_str(&ctx.config.credentials, "channel_id")
-    }
-
-    /// Verify Slack request signature.
-    ///
-    /// See: <https://api.slack.com/authentication/verifying-requests-from-slack>
-    ///
-    /// Slack builds the signature base string as `v0:{timestamp}:{body}` and
-    /// signs it with HMAC-SHA256 using the app's `signing_secret`.
-    ///
-    /// # Errors
-    /// Returns [`ClawzError::Auth`] if headers are missing or the signature does not match.
-    fn verify_signature(
-        &self,
-        signing_secret: &str,
-        headers: &HeaderMap,
-        payload: &[u8],
-    ) -> Result<()> {
-        let timestamp = headers
-            .get("X-Slack-Request-Timestamp")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| ClawzError::Auth("missing X-Slack-Request-Timestamp".to_string()))?;
-
-        let expected_sig = headers
-            .get("X-Slack-Signature")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| ClawzError::Auth("missing X-Slack-Signature".to_string()))?;
-
-        let sig_base = format!("v0:{}:{}", timestamp, std::str::from_utf8(payload).unwrap_or(""));
-
-        let mut mac = HmacSha256::new_from_slice(signing_secret.as_bytes())
-            .map_err(|e| ClawzError::Auth(format!("HMAC init: {e}")))?;
-        mac.update(sig_base.as_bytes());
-        let computed = format!("v0={}", hex::encode(mac.finalize().into_bytes()));
-
-        if computed != expected_sig {
-            return Err(ClawzError::Auth("Slack signature mismatch".to_string()));
-        }
-        Ok(())
     }
 
     /// Convert a raw Slack message object into an [`IncomingMessage`].
@@ -176,6 +132,47 @@ impl SlackChannel {
         }
 
         Some(im)
+    }
+}
+
+// Signing is optional until secrets are configured.
+#[allow(dead_code)]
+impl SlackChannel {
+    fn signing_secret<'a>(&self, ctx: &'a ChannelContext) -> Option<&'a str> {
+        ctx.config.credentials.get("signing_secret")?.as_str()
+    }
+
+    fn verify_signature(
+        &self,
+        signing_secret: &str,
+        _headers: &HeaderMap,
+        _payload: &[u8],
+    ) -> Result<()> {
+        let timestamp = _headers
+            .get("X-Slack-Request-Timestamp")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| ClawzError::Auth("missing X-Slack-Request-Timestamp".to_string()))?;
+
+        let expected_sig = _headers
+            .get("X-Slack-Signature")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| ClawzError::Auth("missing X-Slack-Signature".to_string()))?;
+
+        let sig_base = format!(
+            "v0:{}:{}",
+            timestamp,
+            std::str::from_utf8(_payload).unwrap_or("")
+        );
+
+        let mut mac = HmacSha256::new_from_slice(signing_secret.as_bytes())
+            .map_err(|e| ClawzError::Auth(format!("HMAC init: {e}")))?;
+        mac.update(sig_base.as_bytes());
+        let computed = format!("v0={}", hex::encode(mac.finalize().into_bytes()));
+
+        if computed != expected_sig {
+            return Err(ClawzError::Auth("Slack signature mismatch".to_string()));
+        }
+        Ok(())
     }
 }
 
@@ -371,7 +368,7 @@ impl ChannelPlugin for SlackChannel {
     ///
     /// # Errors
     /// - [`ClawzError::Serialization`] if the payload is not valid JSON.
-    async fn webhook(&self, payload: &[u8], headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
+    async fn webhook(&self, payload: &[u8], _headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
         // Verify signature if signing_secret is configured.
         // We need a ctx for that but webhook() doesn't have one — instead we
         // create a minimal context from what we have.  The signing secret is

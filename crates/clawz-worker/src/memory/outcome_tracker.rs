@@ -59,6 +59,7 @@ impl TaskOutcome {
 
 /// Snapshot of the tracker's live state.
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct OutcomeState {
     pub task_count: usize,
     pub success_count: usize,
@@ -74,20 +75,6 @@ pub struct OutcomeState {
     pub consecutive_failures: usize,
 }
 
-impl Default for OutcomeState {
-    fn default() -> Self {
-        Self {
-            task_count: 0,
-            success_count: 0,
-            failure_count: 0,
-            timeout_count: 0,
-            alert_triggered: false,
-            last_outcome: None,
-            avg_duration_ms: None,
-            consecutive_failures: 0,
-        }
-    }
-}
 
 /// Records task outcomes, observes consecutive-failure spikes, and
 /// produces [`PerfDimension`] metrics for the self-improvement loop.

@@ -21,7 +21,7 @@
 //! * `clawz_core::error` — error types.
 
 // Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{generate_deployment_id, k8s_resource_name, resolve_api_token};
 // Dependency: provider trait and shared vocabulary.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -186,7 +186,7 @@ impl DeployProvider for KubernetesAdapter {
         };
 
         let id = generate_deployment_id("k8s");
-        let deploy_name = format!("clawz-{}", &id[4..12]);
+        let deploy_name = k8s_resource_name(&id);
 
         let deployment = self.deployment_manifest(
             &deploy_name,
@@ -196,26 +196,50 @@ impl DeployProvider for KubernetesAdapter {
         );
         let service = self.service_manifest(&deploy_name);
 
-        log::info!(
-            "Applying Kubernetes manifests: deployment={}, namespace={}, deployments_url={}",
-            deploy_name,
-            self.namespace,
-            self.deployments_url()
-        );
-        // Log service manifest URL for completeness (useful when debugging API paths).
-        log::debug!("Services URL: {}", self.services_url());
+        let token = resolve_api_token(config, "KUBERNETES_TOKEN", "Kubernetes")?;
 
-        // Manifests are built but not yet POSTed in this skeleton implementation.
-        let _ = deployment;
-        let _ = service;
+        let dep_resp = self
+            .client
+            .post(self.deployments_url())
+            .bearer_auth(&token)
+            .json(&deployment)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Kubernetes deployment error: {e}")))?;
+
+        let dep_status = dep_resp.status();
+        if !dep_status.is_success() && dep_status.as_u16() != 409 {
+            let text = dep_resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Kubernetes create Deployment failed ({dep_status}): {text}"
+            )));
+        }
+
+        let svc_resp = self
+            .client
+            .post(self.services_url())
+            .bearer_auth(&token)
+            .json(&service)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Kubernetes service error: {e}")))?;
+
+        let svc_status = svc_resp.status();
+        let status = if svc_status.is_success() || svc_status.as_u16() == 409 {
+            DeploymentStatus::Pending
+        } else {
+            let text = svc_resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Kubernetes create Service failed ({svc_status}): {text}"
+            )));
+        };
 
         Ok(DeploymentInfo {
             id,
-            url: format!(
-                "http://{}.{}.svc.cluster.local",
-                deploy_name, self.namespace
-            ),
-            status: DeploymentStatus::Pending,
+            external_resource: Some(deploy_name.clone()),
+            url: format!("http://{deploy_name}.{}.svc.cluster.local", self.namespace),
+            status,
+            ..Default::default()
         })
     }
 
@@ -223,9 +247,47 @@ impl DeployProvider for KubernetesAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Kubernetes deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let token = std::env::var("KUBERNETES_TOKEN").map_err(|_| {
+            ClawzError::Auth("KUBERNETES_TOKEN required to destroy Kubernetes deployments".into())
+        })?;
+        let name = external_resource
+            .map(str::to_string)
+            .unwrap_or_else(|| k8s_resource_name(id));
+
+        let dep_url = format!(
+            "{}/apis/apps/v1/namespaces/{}/deployments/{name}",
+            self.api_server, self.namespace
+        );
+        let dep_resp = self
+            .client
+            .delete(&dep_url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Kubernetes delete deployment error: {e}")))?;
+
+        let svc_url = format!(
+            "{}/api/v1/namespaces/{}/services/{name}",
+            self.api_server, self.namespace
+        );
+        let _ = self
+            .client
+            .delete(&svc_url)
+            .bearer_auth(&token)
+            .send()
+            .await;
+
+        let status = dep_resp.status();
+        if status.is_success() || status.as_u16() == 404 {
+            log::info!("Kubernetes resources removed: {name} (deployment {id})");
+            Ok(())
+        } else {
+            let text = dep_resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Kubernetes delete deployment failed ({status}): {text}"
+            )))
+        }
     }
 }
 

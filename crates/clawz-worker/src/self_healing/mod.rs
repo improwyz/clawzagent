@@ -40,6 +40,7 @@ impl Default for SupervisorConfig {
 }
 
 /// Trait for schedulers that support circuit breaker integration.
+#[allow(async_fn_in_trait)]
 pub trait CircuitBreakerScheduler {
     /// Returns true if the circuit should be opened (too many failures).
     fn should_open_circuit(&self) -> bool;
@@ -82,7 +83,7 @@ pub async fn run_with_supervisor<S: CircuitBreakerScheduler>(
                     } else {
                         return Err(clawz_core::error::ClawzError::Orchestration(
                             format!("max restart attempts ({}) exceeded", config.max_restart_attempts)
-                        ).into());
+                        ));
                     }
                 }
             }

@@ -20,6 +20,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+fn default_tenant_id() -> String {
+    std::env::var("CLAWZ_TENANT_ID").unwrap_or_else(|_| "default".to_string())
+}
+
 /// Database (or environment) record representing a known API key.
 ///
 /// Only the SHA-256 hash of the key is persisted; the raw key is ephemeral.
@@ -31,6 +35,9 @@ pub struct ApiKeyRecord {
     pub key_hash: String,
     /// Identity that owns this key. Used to populate [`AuthContext`].
     pub user_id: String,
+    /// Tenant scope for multi-tenant isolation.
+    #[serde(default = "default_tenant_id")]
+    pub tenant_id: String,
     /// Human-readable label for administrative UIs.
     pub name: String,
     /// Permission tags attached to the key. The first entry is used as the
@@ -140,6 +147,7 @@ mod tests {
             id: "rec1".into(),
             key_hash: ApiKeyValidator::hash_key(&raw),
             user_id: "user1".into(),
+            tenant_id: "default".into(),
             name: "test key".into(),
             permissions: vec!["read".into()],
             created_at: Utc::now(),
@@ -158,6 +166,7 @@ mod tests {
             id: "rec2".into(),
             key_hash: ApiKeyValidator::hash_key(&raw),
             user_id: "user2".into(),
+            tenant_id: "default".into(),
             name: "revoked key".into(),
             permissions: vec![],
             created_at: Utc::now(),
@@ -176,6 +185,7 @@ mod tests {
             id: "rec3".into(),
             key_hash: ApiKeyValidator::hash_key(&raw),
             user_id: "user3".into(),
+            tenant_id: "default".into(),
             name: "expired key".into(),
             permissions: vec![],
             created_at: Utc::now() - Duration::hours(2),

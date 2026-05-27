@@ -211,7 +211,7 @@ impl PolicyEngine {
         // Sort policies by descending priority.
         let mut sorted: Vec<&GovernancePolicy> =
             self.policies.values().filter(|p| p.enabled).collect();
-        sorted.sort_by(|a, b| b.priority.cmp(&a.priority));
+        sorted.sort_by_key(|p| std::cmp::Reverse(p.priority));
 
         let mut violations = Vec::new();
 

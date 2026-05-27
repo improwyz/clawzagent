@@ -190,11 +190,13 @@ impl AgentTreeSpawner {
 // Mock scheduler for tests
 // ---------------------------------------------------------------------------
 
+#[allow(dead_code)]
 struct MockScheduler {
     spawned: Arc<std::sync::Mutex<Vec<AgentHandle>>>,
 }
 
 impl MockScheduler {
+    #[allow(dead_code)]
     fn new() -> Self {
         Self {
             spawned: Arc::new(std::sync::Mutex::new(Vec::new())),

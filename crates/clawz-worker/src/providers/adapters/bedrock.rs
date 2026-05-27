@@ -356,9 +356,7 @@ impl ProviderAdapter for BedrockAdapter {
     fn context_window(&self, model: &str) -> u32 {
         if model.contains("claude") {
             200_000
-        } else if model.contains("titan") {
-            8_192
-        } else if model.contains("llama3") {
+        } else if model.contains("titan") || model.contains("llama3") {
             8_192
         } else {
             128_000
@@ -678,6 +676,7 @@ struct SignedRequest {
     headers: Vec<(String, String)>,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn sign_request(
     method: &str,
     url: &str,

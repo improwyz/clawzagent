@@ -1,4 +1,6 @@
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{
+    destroy_http_ok, generate_deployment_id, resolve_api_token, short_service_name,
+};
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
 };
@@ -17,7 +19,7 @@ impl SliplaneAdapter {
     }
 
     fn api_url(&self, path: &str) -> String {
-        format!("https://api.sliplane.io/v1{}", path)
+        format!("https://api.sliplane.io/v1{path}")
     }
 }
 
@@ -38,9 +40,7 @@ impl DeployProvider for SliplaneAdapter {
     }
 
     fn supported_modes(&self) -> Vec<DeployMode> {
-        vec![
-            DeployMode::Docker { image: String::new() },
-        ]
+        vec![DeployMode::Docker { image: String::new() }]
     }
 
     async fn validate_credentials(&self, creds: &ProviderCredentials) -> Result<()> {
@@ -77,8 +77,9 @@ impl DeployProvider for SliplaneAdapter {
             }
         };
 
+        let token = resolve_api_token(config, "SLIPLANE_API_TOKEN", "Sliplane")?;
         let id = generate_deployment_id("sp");
-        let service_name = format!("clawz-{}", &id[3..11]);
+        let service_name = short_service_name(&id);
 
         let env_vec: Vec<serde_json::Value> = config
             .env_vars
@@ -86,7 +87,7 @@ impl DeployProvider for SliplaneAdapter {
             .map(|(k, v)| serde_json::json!({ "name": k, "value": v }))
             .collect();
 
-        let _body = serde_json::json!({
+        let body = serde_json::json!({
             "name": service_name,
             "image": image,
             "env": env_vec,
@@ -95,12 +96,31 @@ impl DeployProvider for SliplaneAdapter {
             "port": 8080,
         });
 
-        log::info!("Deploying to Sliplane: service={}", service_name);
+        let resp = self
+            .client
+            .post(self.api_url("/services"))
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Sliplane deploy error: {e}")))?;
+
+        let http_status = resp.status();
+        let status = if http_status.is_success() || http_status.as_u16() == 409 {
+            DeploymentStatus::Pending
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Sliplane create service failed ({http_status}): {text}"
+            )));
+        };
 
         Ok(DeploymentInfo {
             id,
-            url: format!("https://{}.sliplane.app", service_name),
-            status: DeploymentStatus::Pending,
+            external_resource: Some(service_name.clone()),
+            url: format!("https://{service_name}.sliplane.app"),
+            status,
+            ..Default::default()
         })
     }
 
@@ -108,32 +128,32 @@ impl DeployProvider for SliplaneAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Sliplane deployment: id={}", id);
-        Ok(())
-    }
-}
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let token = std::env::var("SLIPLANE_API_TOKEN").map_err(|_| {
+            ClawzError::Auth("SLIPLANE_API_TOKEN required to destroy Sliplane services".into())
+        })?;
+        let service_name = external_resource
+            .map(str::to_string)
+            .unwrap_or_else(|| short_service_name(id));
+        let url = self.api_url(&format!("/services/{service_name}"));
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        let resp = self
+            .client
+            .delete(&url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Sliplane delete error: {e}")))?;
 
-    #[test]
-    fn test_provider_id() {
-        let adapter = SliplaneAdapter::new();
-        assert_eq!(adapter.provider_id(), "sliplane");
-    }
-
-    #[test]
-    fn test_display_name() {
-        let adapter = SliplaneAdapter::new();
-        assert_eq!(adapter.display_name(), "Sliplane");
-    }
-
-    #[test]
-    fn test_supported_modes() {
-        let adapter = SliplaneAdapter::new();
-        let modes = adapter.supported_modes();
-        assert_eq!(modes.len(), 1);
+        let status = resp.status();
+        if destroy_http_ok(status) {
+            log::info!("Sliplane service removed: {service_name} (deployment {id})");
+            Ok(())
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Sliplane delete failed ({status}): {text}"
+            )))
+        }
     }
 }

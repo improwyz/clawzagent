@@ -16,7 +16,7 @@ use async_trait::async_trait;
 use clawz_core::{
     error::Result,
     traits::{MemoryBackend, PipelineContext, PipelineStep, StepOutcome},
-    types::message::{Message, Role},
+    types::message::Role,
 };
 use std::sync::Arc;
 
@@ -116,7 +116,7 @@ impl PipelineStep for RetrieveContextStep {
     }
 
     async fn execute(&self, ctx: &mut PipelineContext) -> Result<StepOutcome> {
-        let query = Self::extract_query(ctx).unwrap_or_default();
+        let _query = Self::extract_query(ctx).unwrap_or_default();
 
         // Retrieve relevant history snippets from memory.
         // We use conversation history as a lightweight RAG source; a future

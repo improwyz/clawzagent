@@ -20,7 +20,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 // Dependency: core error types, pipeline abstractions, and tool types.
 use clawz_core::{
-    error::{ClawzError, Result},
+    error::Result,
     traits::{PipelineContext, PipelineStep, StepOutcome, Tool, ToolContext},
     types::{
         message::{Message, MessageContent, Role},

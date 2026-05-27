@@ -4,8 +4,6 @@ use async_trait::async_trait;
 use clawz_core::error::ClawzError;
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde_json::Value;
-use std::io::Read;
-
 const MAX_PDF_BYTES: usize = 50 * 1024 * 1024; // 50 MB
 
 pub struct PdfReadTool;
@@ -42,12 +40,11 @@ impl PdfReadTool {
             }
 
             // Look for page markers
-            if i + 5 < bytes.len() && &bytes[i..i + 6] == b"/Page " {
-                if !current_page_text.trim().is_empty() {
+            if i + 5 < bytes.len() && &bytes[i..i + 6] == b"/Page "
+                && !current_page_text.trim().is_empty() {
                     pages.push(current_page_text.trim().to_string());
                     current_page_text = String::new();
                 }
-            }
 
             i += 1;
         }

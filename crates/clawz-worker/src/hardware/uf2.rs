@@ -45,9 +45,12 @@ const UF2_DATA_SIZE: usize = 256;
 
 /// UF2 flags
 const UF2_FLAG_NOT_MAIN_FLASH: u32 = 0x00000001;
+#[allow(dead_code)]
 const UF2_FLAG_FILE_CONTAINER: u32 = 0x00001000;
 const UF2_FLAG_FAMILYID_PRESENT: u32 = 0x00002000;
+#[allow(dead_code)]
 const UF2_FLAG_MD5_CHECKSUM: u32 = 0x00004000;
+#[allow(dead_code)]
 const UF2_FLAG_EXTENSION_TAGS: u32 = 0x00008000;
 
 // ── Known family IDs ──────────────────────────────────────────────────────────
@@ -191,7 +194,7 @@ impl FirmwareFlasher {
             .map(|b| b.file_size_or_family_id);
 
         let target = family_id
-            .and_then(|id| family_id_to_name(id))
+            .and_then(family_id_to_name)
             .unwrap_or("Unknown target")
             .to_string();
 
@@ -355,7 +358,7 @@ pub fn parse_uf2(data: &[u8]) -> Result<Vec<Uf2Block>> {
 /// - Block count is consistent across all headers
 /// - Block sequence numbers are contiguous (0..n)
 fn parse_uf2_blocks(data: &[u8]) -> Result<Vec<Uf2Block>> {
-    if data.len() % UF2_BLOCK_SIZE != 0 {
+    if !data.len().is_multiple_of(UF2_BLOCK_SIZE) {
         return Err(ClawzError::Hardware(format!(
             "UF2 file size {} is not a multiple of 512 bytes",
             data.len()
@@ -561,7 +564,7 @@ fn extract_version_from_name(path: &Path) -> String {
         .unwrap_or("");
 
     // Look for patterns like "_v1.2.3", "-v1.2", "_1.2.3"
-    for part in name.split(|c: char| c == '_' || c == '-') {
+    for part in name.split(['_', '-']) {
         if part.starts_with('v') || part.starts_with('V') {
             let rest = &part[1..];
             if rest.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {

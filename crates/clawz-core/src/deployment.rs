@@ -9,10 +9,11 @@ use serde::{Deserialize, Serialize};
 
 /// Topology mode selected at runtime via the `CLAWZ_MODE` environment variable.
 /// // Used by: worker::scheduler, gateway::server
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum DeploymentMode {
     /// Single-process monolith — everything in one binary.
+    #[default]
     Standalone,
     /// Container-per-service — worker and gateway run in separate containers.
     Micro,
@@ -42,12 +43,6 @@ impl DeploymentMode {
     /// and enable peer-to-peer agent routing.
     pub fn uses_mesh(&self) -> bool {
         matches!(self, Self::Elastic)
-    }
-}
-
-impl Default for DeploymentMode {
-    fn default() -> Self {
-        Self::Standalone
     }
 }
 

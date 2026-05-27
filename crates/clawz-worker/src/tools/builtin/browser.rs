@@ -89,8 +89,7 @@ impl Tool for BrowserTool {
             .ok_or_else(|| ClawzError::Validation("action required".into()))?;
 
         // Attempt to connect to a running Chrome instance on default debug port
-        let result = execute_cdp_action(action, &args).await;
-        result
+        execute_cdp_action(action, &args).await
     }
 }
 
@@ -98,7 +97,7 @@ impl Tool for BrowserTool {
 /// Chrome must be started with --remote-debugging-port=9222
 async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, ClawzError> {
     use tokio_tungstenite::connect_async;
-    use futures_util::{SinkExt, StreamExt};
+    use futures_util::SinkExt;
     use tokio_tungstenite::tungstenite::Message;
 
     // Get the Chrome DevTools endpoint
@@ -160,7 +159,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                 "method": "Page.navigate",
                 "params": { "url": url }
             });
-            ws.send(Message::Text(cmd.to_string().into()))
+            ws.send(Message::Text(cmd.to_string()))
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send error: {e}")))?;
 
@@ -179,7 +178,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                     "returnByValue": true
                 }
             });
-            ws.send(Message::Text(cmd.to_string().into()))
+            ws.send(Message::Text(cmd.to_string()))
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send error: {e}")))?;
             let resp = recv_cdp_result(&mut ws, 2).await?;
@@ -195,7 +194,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                 "method": "Page.captureScreenshot",
                 "params": { "format": "png" }
             });
-            ws.send(Message::Text(cmd.to_string().into()))
+            ws.send(Message::Text(cmd.to_string()))
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send error: {e}")))?;
             let resp = recv_cdp_result(&mut ws, 3).await?;
@@ -223,7 +222,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                     "returnByValue": true
                 }
             });
-            ws.send(Message::Text(find_cmd.to_string().into()))
+            ws.send(Message::Text(find_cmd.to_string()))
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
             let find_resp = recv_cdp_result(&mut ws, 10).await?;
@@ -244,7 +243,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                         "clickCount": 1
                     }
                 });
-                ws.send(Message::Text(mouse_cmd.to_string().into()))
+                ws.send(Message::Text(mouse_cmd.to_string()))
                     .await
                     .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
                 recv_cdp_result(&mut ws, id).await?;
@@ -270,7 +269,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                     "returnByValue": true
                 }
             });
-            ws.send(Message::Text(focus_cmd.to_string().into()))
+            ws.send(Message::Text(focus_cmd.to_string()))
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
             recv_cdp_result(&mut ws, 20).await?;
@@ -281,7 +280,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                 "method": "Input.insertText",
                 "params": { "text": text }
             });
-            ws.send(Message::Text(type_cmd.to_string().into()))
+            ws.send(Message::Text(type_cmd.to_string()))
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
             recv_cdp_result(&mut ws, 21).await?;
@@ -302,7 +301,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                     "awaitPromise": true
                 }
             });
-            ws.send(Message::Text(cmd.to_string().into()))
+            ws.send(Message::Text(cmd.to_string()))
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
             let resp = recv_cdp_result(&mut ws, 30).await?;
@@ -341,7 +340,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                     "awaitPromise": true
                 }
             });
-            ws.send(Message::Text(cmd.to_string().into()))
+            ws.send(Message::Text(cmd.to_string()))
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
             recv_cdp_result(&mut ws, 40).await?;
@@ -357,7 +356,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                     "returnByValue": true
                 }
             });
-            ws.send(Message::Text(cmd.to_string().into()))
+            ws.send(Message::Text(cmd.to_string()))
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
             let resp = recv_cdp_result(&mut ws, 50).await?;
@@ -391,7 +390,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                         "method": "Runtime.evaluate",
                         "params": { "expression": script, "returnByValue": true }
                     });
-                    ws.send(Message::Text(cmd.to_string().into()))
+                    ws.send(Message::Text(cmd.to_string()))
                         .await
                         .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
                     recv_cdp_result(&mut ws, 60 + filled as u64).await?;

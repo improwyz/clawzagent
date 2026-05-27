@@ -40,12 +40,7 @@ impl ReceiveMessageStep {
     /// Returns `Some(pattern)` if the text contains a known injection pattern.
     fn detect_injection<'a>(text: &str) -> Option<&'a str> {
         let lower = text.to_lowercase();
-        for pattern in INJECTION_PATTERNS {
-            if lower.contains(pattern) {
-                return Some(pattern);
-            }
-        }
-        None
+        INJECTION_PATTERNS.iter().find(|&pattern| lower.contains(pattern)).map(|v| v as _)
     }
 }
 

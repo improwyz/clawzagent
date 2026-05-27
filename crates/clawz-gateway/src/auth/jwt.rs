@@ -30,6 +30,9 @@ pub struct Claims {
     pub email: String,
     /// Role / permission group (e.g. "admin", "operator", "agent").
     pub role: String,
+    /// Tenant scope for multi-tenant isolation (optional for legacy tokens).
+    #[serde(default)]
+    pub tenant_id: Option<String>,
     /// Expiration time as a Unix timestamp (standard `exp`).
     pub exp: usize,
     /// Issued-at time as a Unix timestamp (standard `iat`).
@@ -54,12 +57,25 @@ pub fn create_token(
     secret: &str,
     expiry_hours: i64,
 ) -> Result<String, jsonwebtoken::errors::Error> {
+    create_token_with_tenant(user_id, email, role, None, secret, expiry_hours)
+}
+
+/// Create a signed JWT, optionally embedding a tenant scope claim.
+pub fn create_token_with_tenant(
+    user_id: &str,
+    email: &str,
+    role: &str,
+    tenant_id: Option<&str>,
+    secret: &str,
+    expiry_hours: i64,
+) -> Result<String, jsonwebtoken::errors::Error> {
     let now = Utc::now();
     let expiry = now + Duration::hours(expiry_hours);
     let claims = Claims {
         sub: user_id.to_string(),
         email: email.to_string(),
         role: role.to_string(),
+        tenant_id: tenant_id.map(str::to_string),
         // jsonwebtoken expects usize timestamps; chrono gives i64.
         exp: expiry.timestamp() as usize,
         iat: now.timestamp() as usize,
@@ -105,6 +121,22 @@ mod tests {
         assert_eq!(claims.sub, "user123");
         assert_eq!(claims.email, "user@example.com");
         assert_eq!(claims.role, "admin");
+    }
+
+    #[test]
+    fn test_create_token_with_tenant() {
+        let secret = "test-secret-key";
+        let token = create_token_with_tenant(
+            "user123",
+            "user@example.com",
+            "admin",
+            Some("tenant-a"),
+            secret,
+            24,
+        )
+        .unwrap();
+        let claims = verify_token(&token, secret).unwrap();
+        assert_eq!(claims.tenant_id.as_deref(), Some("tenant-a"));
     }
 
     #[test]

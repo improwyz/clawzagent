@@ -20,7 +20,9 @@
 //! * `clawz_core::error` — error types.
 
 // Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{
+    destroy_http_ok, external_resource_name, generate_deployment_id,
+};
 // Dependency: provider trait and shared vocabulary.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -57,6 +59,18 @@ impl OracleCloudAdapter {
             "https://iaas.{}.oraclecloud.com/20160919{}",
             self.region, path
         )
+    }
+
+    fn auth_header(api_key: &str, api_secret: &str) -> String {
+        format!("Signature version=1,{api_key}:{api_secret}")
+    }
+
+    fn resolve_oci_credentials() -> Result<(String, String)> {
+        let api_key = std::env::var("OCI_API_KEY")
+            .map_err(|_| ClawzError::Auth("OCI_API_KEY required".into()))?;
+        let api_secret = std::env::var("OCI_API_SECRET")
+            .map_err(|_| ClawzError::Auth("OCI_API_SECRET required".into()))?;
+        Ok((api_key, api_secret))
     }
 }
 
@@ -117,29 +131,75 @@ impl DeployProvider for OracleCloudAdapter {
         // Use the "region" config field to select the OCI VM shape.
         let shape = config.region.clone().unwrap_or_else(|| "VM.Standard.E2.1.Micro".into());
 
+        let display_name = external_resource_name(&id);
         let body = serde_json::json!({
             "availabilityDomain": format!("{}-AD-1", self.region),
             "compartmentId": compartment_id,
-            "displayName": format!("clawz-{}", id.replace('-', "")),
+            "displayName": display_name,
             "shape": shape,
             "sourceDetails": {
                 "sourceType": "image",
                 "imageId": "ocid1.image.oc1.iad.aaaaaaaaxxx"
             },
             "metadata": {
-                "user_data": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, format!("#!/bin/bash\n# Clawz deployment\n"))
+                "user_data": base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    "#!/bin/bash\n# Clawz deployment\n",
+                )
             }
         });
 
-        log::info!("Deploying to Oracle Cloud: compartment={}", compartment_id);
+        let api_key = config
+            .credentials
+            .as_ref()
+            .and_then(|c| c.api_key.clone())
+            .or_else(|| std::env::var("OCI_API_KEY").ok())
+            .ok_or_else(|| ClawzError::Auth("Oracle API key required".into()))?;
+        let api_secret = config
+            .credentials
+            .as_ref()
+            .and_then(|c| c.api_secret.clone())
+            .or_else(|| std::env::var("OCI_API_SECRET").ok())
+            .ok_or_else(|| ClawzError::Auth("Oracle API secret required".into()))?;
 
-        // Suppress unused variable warning in skeleton implementation.
-        let _ = body;
+        let resp = self
+            .client
+            .post(self.compute_url("/instances"))
+            .header(
+                "Authorization",
+                format!("Signature version=1,{api_key}:{api_secret}"),
+            )
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Oracle Cloud deploy error: {e}")))?;
+
+        let http_status = resp.status();
+        let response_body: serde_json::Value = if http_status.is_success() || http_status.as_u16() == 409 {
+            resp.json().await.unwrap_or_default()
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Oracle create instance failed ({http_status}): {text}"
+            )));
+        };
+
+        let status = DeploymentStatus::Pending;
+        let instance_id = response_body["id"]
+            .as_str()
+            .map(str::to_string)
+            .or_else(|| {
+                response_body["data"]["id"]
+                    .as_str()
+                    .map(str::to_string)
+            });
 
         Ok(DeploymentInfo {
             id,
+            external_resource: instance_id.or(Some(display_name)),
             url: "https://cloud.oracle.com".into(),
-            status: DeploymentStatus::Pending,
+            status,
+            ..Default::default()
         })
     }
 
@@ -147,9 +207,79 @@ impl DeployProvider for OracleCloudAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Oracle Cloud deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let (api_key, api_secret) = Self::resolve_oci_credentials()?;
+
+        let instance_id = if let Some(ocid) = external_resource {
+            ocid.to_string()
+        } else {
+            let compartment_id = std::env::var("OCI_COMPARTMENT_ID")
+                .unwrap_or_else(|_| self.tenancy.clone());
+            let display_name = external_resource_name(id);
+            let encoded_compartment: String = compartment_id
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '~' {
+                        c.to_string()
+                    } else {
+                        format!("%{:02X}", c as u8)
+                    }
+                })
+                .collect();
+            let list_url = format!(
+                "{}?compartmentId={encoded_compartment}",
+                self.compute_url("/instances")
+            );
+            let list_resp = self
+                .client
+                .get(&list_url)
+                .header("Authorization", Self::auth_header(&api_key, &api_secret))
+                .send()
+                .await
+                .map_err(|e| ClawzError::Provider(format!("Oracle list instances error: {e}")))?;
+
+            let list_body: serde_json::Value = list_resp.json().await.map_err(|e| {
+                ClawzError::Provider(format!("Oracle list parse error: {e}"))
+            })?;
+
+            list_body
+                .get("items")
+                .or_else(|| list_body.get("data"))
+                .and_then(|v| v.as_array())
+                .and_then(|items| {
+                    items.iter().find_map(|item| {
+                        if item["displayName"].as_str() == Some(display_name.as_str()) {
+                            item["id"].as_str().map(str::to_string)
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .ok_or_else(|| ClawzError::NotFound {
+                    entity: "oci_instance".into(),
+                    id: display_name.clone(),
+                })?
+        };
+
+        let delete_url = self.compute_url(&format!("/instances/{instance_id}"));
+        let del_resp = self
+            .client
+            .delete(&delete_url)
+            .header("Authorization", Self::auth_header(&api_key, &api_secret))
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Oracle terminate instance error: {e}")))?;
+
+        let status = del_resp.status();
+        if destroy_http_ok(status) {
+            log::info!("OCI instance terminated: {instance_id} (deployment {id})");
+            Ok(())
+        } else {
+            let text = del_resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Oracle terminate failed ({status}): {text}"
+            )))
+        }
     }
 }
 

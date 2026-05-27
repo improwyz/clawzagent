@@ -18,9 +18,13 @@
 //! // Dependency: gateway HTTP router (crate root) mounts [`handle_mcp_request`].
 //! // Dependency: gateway services would be called by `execute_tool` and `read_resource` in production.
 
+use axum::extract::State;
 use axum::Json;
+use chrono::Utc;
 // Dependency: `serde` and `serde_json` for JSON-RPC wire serialization.
 use serde::{Deserialize, Serialize};
+use crate::AppState;
+use clawz_services::dto::{ExecuteToolRequest, RunTurnRequest};
 use serde_json::{json, Value};
 
 // ---------------------------------------------------------------------------
@@ -236,66 +240,92 @@ fn builtin_resources() -> Value {
 
 /// Execute a built-in tool by name with the provided arguments.
 ///
-/// **Note:** All implementations below return hard-coded demo / stub data.
-/// In a production deployment this dispatcher would call into the gateway's
-/// internal services (e.g. agent manager, task scheduler, metrics collector).
-fn execute_tool(name: &str, args: &Value) -> Value {
+/// Dispatch MCP tool calls into live gateway state and the worker platform.
+async fn execute_tool(state: &AppState, name: &str, args: &Value) -> Value {
     match name {
         "agent_status" => {
-            // Safely extract the agent_id; default to "unknown" so the stub
-            // response never panics on malformed input.
             let agent_id = args["agent_id"].as_str().unwrap_or("unknown");
-            json!({
-                "agent_id": agent_id,
-                "status": "running",
-                "uptime_secs": 3742,
-                "tasks_completed": 17,
-                "current_task": null
-            })
+            let agents = state.agents.read().await;
+            if let Some(a) = agents.iter().find(|a| a.id == agent_id) {
+                json!({ "agent_id": agent_id, "status": a.status, "model": a.model })
+            } else {
+                json!({ "agent_id": agent_id, "status": "not_found" })
+            }
         }
-        "list_agents" => json!({
-            "agents": [
-                {"id": "agent-001", "name": "ResearchAgent", "status": "running", "provider": "anthropic"},
-                {"id": "agent-002", "name": "CodeAgent", "status": "idle", "provider": "openai"},
-                {"id": "agent-003", "name": "DataAgent", "status": "starting", "provider": "anthropic"},
-            ],
-            "total": 3
-        }),
+        "list_agents" => {
+            let agents = state.agents.read().await;
+            json!({ "agents": *agents, "total": agents.len() })
+        }
         "dispatch_task" => {
-            // Gracefully fall back to defaults so stub dispatch never panics
-            // even when required fields are missing.
             let agent_id = args["agent_id"].as_str().unwrap_or("unknown");
-            let task = args["task"].as_str().unwrap_or("");
-            let priority = args["priority"].as_str().unwrap_or("normal");
+            let task = args["task"].as_str().unwrap_or("").to_string();
+            if let Some(platform) = state.platform.as_ref() {
+                match platform
+                    .execution
+                    .run_turn(
+                        agent_id,
+                        RunTurnRequest {
+                            message: task.clone(),
+                            model: None,
+                            system_prompt: None,
+                            conversation_id: None,
+                            ..Default::default()
+                        },
+                    )
+                    .await
+                {
+                    Ok(turn) => json!({
+                        "agent_id": agent_id,
+                        "task": task,
+                        "status": "completed",
+                        "content": turn.content,
+                    }),
+                    Err(e) => json!({ "error": e.to_string() }),
+                }
+            } else {
+                json!({ "error": "worker not configured" })
+            }
+        }
+        "get_metrics" => {
+            let agents = state.agents.read().await;
             json!({
-                "task_id": format!("task-{}", uuid::Uuid::new_v4()),
-                "agent_id": agent_id,
-                "task": task,
-                "priority": priority,
-                "status": "queued",
-                "queued_at": chrono::Utc::now().to_rfc3339()
+                "active_agents": agents.len(),
+                "snapshot_at": chrono::Utc::now().to_rfc3339()
             })
         }
-        "get_metrics" => json!({
-            "active_agents": 3,
-            "requests_per_min": 42,
-            "avg_latency_ms": 120,
-            "memory_mb": 512,
-            "cpu_percent": 18,
-            "uptime_secs": 9432,
-            "snapshot_at": chrono::Utc::now().to_rfc3339()
-        }),
         "approve_action" => {
-            // Default to "reject" on malformed input as a safe conservative
-            // choice for approval stubs.
             let approval_id = args["approval_id"].as_str().unwrap_or("unknown");
             let decision = args["decision"].as_str().unwrap_or("reject");
-            json!({
-                "approval_id": approval_id,
-                "decision": decision,
-                "processed_at": chrono::Utc::now().to_rfc3339(),
-                "status": "processed"
-            })
+            let approver = args["approver_id"].as_str().unwrap_or("mcp-client");
+            if decision == "approve" {
+                let _ = state.approval_workflow.approve(approval_id, approver).await;
+            } else {
+                let _ = state
+                    .approval_workflow
+                    .reject(approval_id, approver, "rejected via MCP")
+                    .await;
+            }
+            json!({ "approval_id": approval_id, "decision": decision, "status": "processed" })
+        }
+        "execute_tool" => {
+            let agent_id = args["agent_id"].as_str().unwrap_or("default");
+            let tool_name = args["tool_name"].as_str().unwrap_or("bash");
+            if let Some(platform) = state.platform.as_ref() {
+                match platform
+                    .execution
+                    .execute_tool(ExecuteToolRequest {
+                        agent_id: agent_id.to_string(),
+                        tool_name: tool_name.to_string(),
+                        args: args.get("args").cloned().unwrap_or(json!({})),
+                    })
+                    .await
+                {
+                    Ok(resp) => json!(resp),
+                    Err(e) => json!({ "error": e.to_string() }),
+                }
+            } else {
+                json!({ "error": "worker not configured" })
+            }
         }
         _ => json!({"error": format!("Unknown tool: {}", name)}),
     }
@@ -305,43 +335,86 @@ fn execute_tool(name: &str, args: &Value) -> Value {
 // Resource reading
 // ---------------------------------------------------------------------------
 
-/// Read a built-in resource by its `clawz://` URI.
-///
-/// Returns `Some(Value)` containing the resource contents, or `None` if the
-/// URI is not recognized by the gateway.
-fn read_resource(uri: &str) -> Option<Value> {
+/// Read a resource by `clawz://` URI from live gateway state.
+async fn read_resource(state: &AppState, uri: &str) -> Option<Value> {
     match uri {
-        "clawz://agents" => Some(json!({
-            "agents": [
-                {"id": "agent-001", "name": "ResearchAgent", "status": "running"},
-                {"id": "agent-002", "name": "CodeAgent", "status": "idle"},
-            ]
-        })),
-        "clawz://providers" => Some(json!({
-            "providers": [
-                {"name": "anthropic", "status": "connected", "models": ["claude-sonnet-4-6"]},
-                {"name": "openai", "status": "connected", "models": ["gpt-4o"]},
-            ]
-        })),
-        "clawz://metrics" => Some(json!({
-            "active_agents": 2,
-            "requests_per_min": 38,
-            "avg_latency_ms": 115,
-            "snapshot_at": chrono::Utc::now().to_rfc3339()
-        })),
-        "clawz://governance/policies" => Some(json!({
-            "policies": [
-                {"id": "pol-001", "name": "RateLimitPolicy", "enabled": true},
-                {"id": "pol-002", "name": "ApprovalPolicy", "enabled": true},
-            ]
-        })),
-        "clawz://logs/recent" => Some(json!({
-            "lines": [
-                {"level": "INFO", "message": "Agent started", "agent_id": "agent-001"},
-                {"level": "DEBUG", "message": "Request received", "path": "/api/agents"},
-            ],
-            "count": 2
-        })),
+        "clawz://agents" => {
+            let agents = state.agents.read().await;
+            let list: Vec<Value> = agents
+                .iter()
+                .map(|a| {
+                    json!({
+                        "id": a.id,
+                        "name": a.name,
+                        "model": a.model,
+                        "status": a.status.to_string(),
+                    })
+                })
+                .collect();
+            Some(json!({ "agents": list }))
+        }
+        "clawz://providers" => {
+            let providers = state.providers.read().await;
+            let list: Vec<Value> = providers
+                .iter()
+                .map(|p| {
+                    json!({
+                        "id": p.id,
+                        "name": p.name,
+                        "provider_type": p.provider_type,
+                        "enabled": p.enabled,
+                    })
+                })
+                .collect();
+            Some(json!({ "providers": list }))
+        }
+        "clawz://metrics" => {
+            let agents = state.agents.read().await;
+            let running = agents
+                .iter()
+                .filter(|a| matches!(a.status, crate::AgentStatus::Running))
+                .count();
+            let uptime_secs = (Utc::now() - state.start_time).num_seconds().max(0);
+            Some(json!({
+                "active_agents": running,
+                "total_agents": agents.len(),
+                "uptime_secs": uptime_secs,
+                "snapshot_at": Utc::now().to_rfc3339()
+            }))
+        }
+        "clawz://governance/policies" => {
+            let policies = state.policies.read().await;
+            let list: Vec<Value> = policies
+                .iter()
+                .map(|p| {
+                    json!({
+                        "id": p.id,
+                        "name": p.name,
+                        "enabled": p.enabled,
+                    })
+                })
+                .collect();
+            Some(json!({ "policies": list }))
+        }
+        "clawz://logs/recent" => {
+            let audit = state.audit_log.read().await;
+            let lines: Vec<Value> = audit
+                .iter()
+                .rev()
+                .take(50)
+                .map(|e| {
+                    json!({
+                        "level": "INFO",
+                        "actor": e.actor,
+                        "action": e.action,
+                        "resource_type": e.resource_type,
+                        "resource_id": e.resource_id,
+                        "timestamp": e.created_at,
+                    })
+                })
+                .collect();
+            Some(json!({ "lines": lines, "count": lines.len() }))
+        }
         _ => None,
     }
 }
@@ -356,7 +429,10 @@ fn read_resource(uri: &str) -> Option<Value> {
 ///
 /// This is the primary integration point between the gateway HTTP layer and
 /// the MCP protocol engine.
-pub async fn handle_mcp_request(Json(req): Json<JsonRpcRequest>) -> Json<JsonRpcResponse> {
+pub async fn handle_mcp_request(
+    State(state): State<AppState>,
+    Json(req): Json<JsonRpcRequest>,
+) -> Json<JsonRpcResponse> {
     // Reject requests that do not conform to the JSON-RPC 2.0 spec upfront.
     if req.jsonrpc != "2.0" {
         return Json(JsonRpcResponse::err(
@@ -415,7 +491,7 @@ pub async fn handle_mcp_request(Json(req): Json<JsonRpcRequest>) -> Json<JsonRpc
                 .get("arguments")
                 .cloned()
                 .unwrap_or(json!({}));
-            let result = execute_tool(&tool_name, &args);
+            let result = execute_tool(&state, &tool_name, &args).await;
             JsonRpcResponse::ok(
                 req.id,
                 json!({
@@ -450,7 +526,7 @@ pub async fn handle_mcp_request(Json(req): Json<JsonRpcRequest>) -> Json<JsonRpc
                     ))
                 }
             };
-            match read_resource(&uri) {
+            match read_resource(&state, &uri).await {
                 Some(content) => JsonRpcResponse::ok(
                     req.id,
                     json!({
@@ -500,6 +576,7 @@ mod tests {
     //! plus error cases for unknown methods and invalid protocol versions.
 
     use super::*;
+    use axum::extract::State;
     use serde_json::json;
 
     /// Build a test request with the given method and optional params.
@@ -512,12 +589,19 @@ mod tests {
         }
     }
 
+    fn test_state() -> AppState {
+        AppState::new("test-mcp")
+    }
+
+    async fn dispatch(req: JsonRpcRequest, state: AppState) -> JsonRpcResponse {
+        handle_mcp_request(State(state), Json(req)).await.0
+    }
+
     /// Verify that `initialize` returns the expected protocol version and
     /// server info payload.
     #[tokio::test]
     async fn test_initialize() {
-        let req = make_req("initialize", None);
-        let Json(resp) = handle_mcp_request(Json(req)).await;
+        let resp = dispatch(make_req("initialize", None), test_state()).await;
         assert!(resp.error.is_none());
         let result = resp.result.unwrap();
         assert_eq!(result["protocolVersion"], "2024-11-05");
@@ -527,8 +611,7 @@ mod tests {
     /// Verify that `tools/list` returns a non-empty array of tool definitions.
     #[tokio::test]
     async fn test_tools_list() {
-        let req = make_req("tools/list", None);
-        let Json(resp) = handle_mcp_request(Json(req)).await;
+        let resp = dispatch(make_req("tools/list", None), test_state()).await;
         assert!(resp.error.is_none());
         let tools = &resp.result.unwrap()["tools"];
         assert!(tools.as_array().unwrap().len() > 0);
@@ -538,11 +621,14 @@ mod tests {
     /// content as required by the MCP protocol.
     #[tokio::test]
     async fn test_tools_call() {
-        let req = make_req(
-            "tools/call",
-            Some(json!({"name": "list_agents", "arguments": {}})),
-        );
-        let Json(resp) = handle_mcp_request(Json(req)).await;
+        let resp = dispatch(
+            make_req(
+                "tools/call",
+                Some(json!({"name": "list_agents", "arguments": {}})),
+            ),
+            test_state(),
+        )
+        .await;
         assert!(resp.error.is_none());
         let content = &resp.result.unwrap()["content"];
         assert_eq!(content[0]["type"], "text");
@@ -552,8 +638,7 @@ mod tests {
     /// definitions.
     #[tokio::test]
     async fn test_resources_list() {
-        let req = make_req("resources/list", None);
-        let Json(resp) = handle_mcp_request(Json(req)).await;
+        let resp = dispatch(make_req("resources/list", None), test_state()).await;
         assert!(resp.error.is_none());
         let resources = &resp.result.unwrap()["resources"];
         assert!(resources.as_array().unwrap().len() > 0);
@@ -562,19 +647,21 @@ mod tests {
     /// Verify that `resources/read` successfully fetches a known resource.
     #[tokio::test]
     async fn test_resources_read() {
-        let req = make_req(
-            "resources/read",
-            Some(json!({"uri": "clawz://agents"})),
-        );
-        let Json(resp) = handle_mcp_request(Json(req)).await;
+        let resp = dispatch(
+            make_req(
+                "resources/read",
+                Some(json!({"uri": "clawz://agents"})),
+            ),
+            test_state(),
+        )
+        .await;
         assert!(resp.error.is_none());
     }
 
     /// Verify that an unknown method yields a JSON-RPC `-32601` error.
     #[tokio::test]
     async fn test_unknown_method() {
-        let req = make_req("unknown/method", None);
-        let Json(resp) = handle_mcp_request(Json(req)).await;
+        let resp = dispatch(make_req("unknown/method", None), test_state()).await;
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, -32601);
     }
@@ -589,7 +676,7 @@ mod tests {
             method: "initialize".into(),
             params: None,
         };
-        let Json(resp) = handle_mcp_request(Json(req)).await;
+        let resp = dispatch(req, test_state()).await;
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, -32600);
     }

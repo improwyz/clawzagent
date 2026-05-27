@@ -18,7 +18,9 @@
 //! * `clawz_core::error` — error types.
 
 // Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{
+    destroy_http_ok, generate_deployment_id, resolve_api_token, short_service_name,
+};
 // Dependency: provider trait and shared vocabulary.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -105,9 +107,11 @@ impl DeployProvider for NorthflankAdapter {
         };
 
         let id = generate_deployment_id("nf");
-        let service_name = format!("clawz-{}", &id[3..11]);
+        let service_name = short_service_name(&id);
 
-        let _body = serde_json::json!({
+        let token = resolve_api_token(config, "NORTHFLANK_API_TOKEN", "Northflank")?;
+
+        let body = serde_json::json!({
             "name": service_name,
             "description": "ClawZ agent service",
             "serviceType": "deployment",
@@ -135,16 +139,32 @@ impl DeployProvider for NorthflankAdapter {
             "runtimeEnvironment": config.env_vars,
         });
 
-        log::info!(
-            "Deploying to Northflank: project={}, service={}",
-            self.project_id,
-            service_name
-        );
+        let url = self.api_url(&format!("/projects/{}/services", self.project_id));
+        let resp = self
+            .client
+            .post(&url)
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Northflank deploy error: {e}")))?;
+
+        let http_status = resp.status();
+        let status = if http_status.is_success() || http_status.as_u16() == 409 {
+            DeploymentStatus::Pending
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Northflank create service failed ({http_status}): {text}"
+            )));
+        };
 
         Ok(DeploymentInfo {
             id,
-            url: format!("https://{}.svc.cluster.local", service_name),
-            status: DeploymentStatus::Pending,
+            external_resource: Some(service_name.clone()),
+            url: format!("https://{service_name}.northflank.app"),
+            status,
+            ..Default::default()
         })
     }
 
@@ -152,9 +172,36 @@ impl DeployProvider for NorthflankAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Northflank deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let token = std::env::var("NORTHFLANK_API_TOKEN").map_err(|_| {
+            ClawzError::Auth("NORTHFLANK_API_TOKEN required to destroy Northflank services".into())
+        })?;
+        let service_name = external_resource
+            .map(str::to_string)
+            .unwrap_or_else(|| short_service_name(id));
+        let url = self.api_url(&format!(
+            "/projects/{}/services/{service_name}",
+            self.project_id
+        ));
+
+        let resp = self
+            .client
+            .delete(&url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Northflank delete error: {e}")))?;
+
+        let status = resp.status();
+        if destroy_http_ok(status) {
+            log::info!("Northflank service removed: {service_name} (deployment {id})");
+            Ok(())
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Northflank delete failed ({status}): {text}"
+            )))
+        }
     }
 }
 

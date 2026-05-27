@@ -1,30 +1,20 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { ChatInput } from '../chat/ChatInput';
-import { MessageBubble, type Message } from '../chat/MessageBubble';
+import { useRef, useCallback, useEffect } from 'react';
+import { ChatPanel } from '../chat/ChatPanel';
 import { useAppStore } from '../../lib/store';
-import { runAgent } from '../../lib/api';
-import { connectAgentStream } from '../../lib/ws';
+import { useQuery } from '@tanstack/react-query';
+import { fetchRooms } from '../../lib/api';
 
 export function ChatSidebar({ width, onResize }: { width: number; onResize: (w: number) => void }) {
   const isResizing = useRef(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(width);
-  const { chatAgentId } = useAppStore();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '0',
-      role: 'assistant',
-      content: 'Welcome to ClawZ. How can I help you today?',
-      timestamp: new Date().toISOString(),
-    },
-  ]);
-  const [sending, setSending] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const wsRef = useRef<WebSocket | null>(null);
+  const { chatAgentId, chatRoomId, setChatRoomId } = useAppStore();
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  const { data: rooms = [] } = useQuery({
+    queryKey: ['rooms'],
+    queryFn: fetchRooms,
+    refetchInterval: 30_000,
+  });
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     isResizing.current = true;
@@ -54,59 +44,7 @@ export function ChatSidebar({ width, onResize }: { width: number; onResize: (w: 
     };
   }, [onResize]);
 
-  const handleSend = async (text: string) => {
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-    };
-    setMessages((m) => [...m, userMsg]);
-    setSending(true);
-
-    const asstId = (Date.now() + 1).toString();
-    const streamMsg: Message = {
-      id: asstId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date().toISOString(),
-      streaming: true,
-    };
-    setMessages((m) => [...m, streamMsg]);
-
-    const agentId = chatAgentId ?? 'default';
-    try {
-      await runAgent(agentId, text);
-      if (wsRef.current) wsRef.current.close();
-      wsRef.current = connectAgentStream(agentId, (data) => {
-        const d = data as { token?: string; done?: boolean };
-        if (d.token) {
-          setMessages((m) =>
-            m.map((msg) =>
-              msg.id === asstId ? { ...msg, content: msg.content + d.token } : msg,
-            ),
-          );
-        }
-        if (d.done) {
-          setMessages((m) =>
-            m.map((msg) =>
-              msg.id === asstId ? { ...msg, streaming: false } : msg,
-            ),
-          );
-          setSending(false);
-        }
-      });
-    } catch (err) {
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.id === asstId
-            ? { ...msg, content: `Error: ${String(err)}`, streaming: false }
-            : msg,
-        ),
-      );
-      setSending(false);
-    }
-  };
+  const activeRoom = rooms.find((r) => r.id === chatRoomId);
 
   return (
     <div
@@ -118,36 +56,40 @@ export function ChatSidebar({ width, onResize }: { width: number; onResize: (w: 
         onMouseDown={handleMouseDown}
       />
 
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-400" />
-          <h3 className="text-zinc-100 font-medium text-sm">
-            {chatAgentId ? `Agent: ${chatAgentId}` : 'ClawZ Chat'}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-2 h-2 rounded-full bg-green-400 flex-shrink-0" />
+          <h3 className="text-zinc-100 font-medium text-sm truncate">
+            {chatRoomId
+              ? (activeRoom?.title ?? `Room ${chatRoomId.slice(0, 8)}`)
+              : chatAgentId
+                ? `Agent: ${chatAgentId}`
+                : 'ClawZ Chat'}
           </h3>
         </div>
-        <button
-          onClick={() => setMessages([{
-            id: Date.now().toString(),
-            role: 'system',
-            content: 'Conversation cleared',
-            timestamp: new Date().toISOString(),
-          }])}
-          className="text-zinc-500 hover:text-zinc-300 text-xs transition-colors"
-          title="Clear chat"
-        >
-          ⟳
-        </button>
+        {rooms.length > 0 && (
+          <select
+            className="text-xs bg-zinc-800 border border-zinc-700 text-zinc-300 rounded px-1.5 py-0.5 max-w-[120px] truncate"
+            value={chatRoomId ?? ''}
+            onChange={(e) => setChatRoomId(e.target.value || null)}
+            title="Select room"
+          >
+            <option value="">1:1 agent</option>
+            {rooms.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.title ?? r.id.slice(0, 8)}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3">
-        {messages.map((msg) => (
-          <MessageBubble key={msg.id} message={msg} />
-        ))}
-        <div ref={bottomRef} />
-      </div>
-
-      <div className="p-3 border-t border-zinc-800">
-        <ChatInput onSend={handleSend} disabled={sending} />
+      <div className="flex-1 overflow-hidden min-h-0">
+        {chatRoomId ? (
+          <ChatPanel roomId={chatRoomId} />
+        ) : (
+          <ChatPanel agentId={chatAgentId ?? 'default'} />
+        )}
       </div>
     </div>
   );

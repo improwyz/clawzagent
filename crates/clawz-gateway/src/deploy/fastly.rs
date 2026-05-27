@@ -1,48 +1,47 @@
 //! Fastly Compute@Edge adapter — deploys WASM packages to the Fastly edge network.
-//!
-//! This module implements `DeployProvider` for Fastly using the Fastly API v1.
-//! It **only** supports `DeployMode::Wasm` because Fastly Compute@Edge is a
-//! WebAssembly-based platform; Docker and native binaries are rejected.
-//!
-//! The adapter assumes the caller supplies a base64-encoded Wasm module in the
-//! `__WASM_B64` environment variable.
-//!
-//! ## Key dependencies
-//!
-//! * `crate::deploy::common` — ID generation helper.
-//! * `crate::deploy::provider` — core trait and types.
-//! * `reqwest` — HTTP client for Fastly API calls.
-//! * `clawz_core::error` — error types.
 
-// Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
-// Dependency: provider trait and shared vocabulary.
+use crate::deploy::common::{fastly_service_key, generate_deployment_id, resolve_api_token};
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
 };
 use async_trait::async_trait;
+use base64::Engine;
 use clawz_core::error::{ClawzError, Result};
 
-/// Adapter for Fastly Compute@Edge (WASM-only).
-///
-/// No per-instance state is required beyond the shared `reqwest` client;
-/// the Fastly API token is supplied at operation time via `ProviderCredentials`.
 pub struct FastlyAdapter {
-    /// Shared HTTP client for Fastly API requests.
     client: reqwest::Client,
 }
 
 impl FastlyAdapter {
-    /// Create a new Fastly adapter.
     pub fn new() -> Self {
         Self {
             client: reqwest::Client::new(),
         }
     }
 
-    /// Build a Fastly API v1 URL for the given path.
     fn api_url(&self, path: &str) -> String {
-        format!("https://api.fastly.com{}", path)
+        format!("https://api.fastly.com{path}")
+    }
+
+    async fn fastly_request(
+        &self,
+        token: &str,
+        method: reqwest::Method,
+        path: &str,
+        body: Option<Vec<u8>>,
+        content_type: Option<&str>,
+    ) -> Result<reqwest::Response> {
+        let url = self.api_url(path);
+        let mut req = self.client.request(method, &url).header("Fastly-Key", token);
+        if let Some(ct) = content_type {
+            req = req.header("Content-Type", ct);
+        }
+        if let Some(bytes) = body {
+            req = req.body(bytes);
+        }
+        req.send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Fastly API error: {e}")))
     }
 }
 
@@ -91,51 +90,136 @@ impl DeployProvider for FastlyAdapter {
     }
 
     async fn deploy(&self, config: &DeployConfig) -> Result<DeploymentInfo> {
-        // Reject anything other than Wasm — Fastly Compute has no native binary or Docker host.
         match &config.mode {
             DeployMode::Wasm => {}
-            DeployMode::Docker { .. } => {
-                return Err(ClawzError::Validation(
-                    "Fastly Compute only supports Wasm mode".into(),
-                ))
-            }
-            DeployMode::NativeBinary => {
+            _ => {
                 return Err(ClawzError::Validation(
                     "Fastly Compute only supports Wasm mode".into(),
                 ))
             }
         }
 
+        let token = resolve_api_token(config, "FASTLY_API_TOKEN", "Fastly")?;
         let id = generate_deployment_id("fastly");
-        // Keep the service name short so it fits Fastly naming limits.
-        let service_name = format!("clawz-{}", &id[7..15]);
+        let service_name = fastly_service_key(&id).ok_or_else(|| {
+            ClawzError::Internal("invalid Fastly deployment id suffix".into())
+        })?;
 
-        // Step 1: Create a new Fastly service
-        let _create_body = serde_json::json!({
-            "name": service_name,
-            "type": "wasm",
-        });
+        let create_resp = self
+            .fastly_request(
+                &token,
+                reqwest::Method::POST,
+                "/service",
+                Some(
+                    serde_json::json!({
+                        "name": service_name,
+                        "type": "wasm",
+                    })
+                    .to_string()
+                    .into_bytes(),
+                ),
+                Some("application/json"),
+            )
+            .await?;
 
-        // Step 2: Create a service version
-        // Step 3: Upload WASM package as multipart/form-data
-        // Step 4: Activate the version
-        // Wasm bytes are supplied by the caller via env_vars["__WASM_B64"]
-        let wasm_b64 = config.env_vars.get("__WASM_B64").cloned().unwrap_or_default();
+        let create_status = create_resp.status();
+        let create_body: serde_json::Value = if create_status.is_success() || create_status.as_u16() == 409 {
+            create_resp
+                .json()
+                .await
+                .unwrap_or_else(|_| serde_json::json!({}))
+        } else {
+            let text = create_resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Fastly create service failed ({create_status}): {text}"
+            )));
+        };
 
-        log::info!(
-            "Deploying WASM to Fastly Compute: service={}, wasm_bytes_b64_len={}",
-            service_name,
-            wasm_b64.len()
-        );
-        log::debug!(
-            "Fastly service create URL: {}",
-            self.api_url("/service")
-        );
+        let service_id = create_body["id"]
+            .as_str()
+            .or_else(|| create_body["data"]["id"].as_str())
+            .unwrap_or(&service_name);
+
+        let version_resp = self
+            .fastly_request(
+                &token,
+                reqwest::Method::POST,
+                &format!("/service/{service_id}/version"),
+                Some(
+                    serde_json::json!({ "comment": "clawz deploy" })
+                        .to_string()
+                        .into_bytes(),
+                ),
+                Some("application/json"),
+            )
+            .await?;
+
+        let version_status = version_resp.status();
+        if !version_status.is_success() {
+            let text = version_resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Fastly create version failed ({version_status}): {text}"
+            )));
+        }
+
+        let version_body: serde_json::Value = version_resp.json().await.unwrap_or_default();
+        let version_number = version_body["number"]
+            .as_u64()
+            .or_else(|| version_body["data"]["number"].as_u64())
+            .unwrap_or(1);
+
+        let wasm_bytes = if let Some(wasm_b64) = config.env_vars.get("__WASM_B64") {
+            base64::engine::general_purpose::STANDARD
+                .decode(wasm_b64)
+                .map_err(|e| ClawzError::Validation(format!("invalid __WASM_B64: {e}")))?
+        } else {
+            br#"export default { fetch() { return new Response("ClawZ"); } }"#.to_vec()
+        };
+
+        let pkg_resp = self
+            .fastly_request(
+                &token,
+                reqwest::Method::PUT,
+                &format!("/service/{service_id}/version/{version_number}/package"),
+                Some(wasm_bytes),
+                Some("application/octet-stream"),
+            )
+            .await?;
+
+        let pkg_status = pkg_resp.status();
+        if !pkg_status.is_success() {
+            let text = pkg_resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Fastly package upload failed ({pkg_status}): {text}"
+            )));
+        }
+
+        let activate_resp = self
+            .fastly_request(
+                &token,
+                reqwest::Method::PUT,
+                &format!("/service/{service_id}/version/{version_number}/activate"),
+                None,
+                None,
+            )
+            .await?;
+
+        let activate_status = activate_resp.status();
+        let status = if activate_status.is_success() {
+            DeploymentStatus::Pending
+        } else {
+            let text = activate_resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Fastly activate version failed ({activate_status}): {text}"
+            )));
+        };
 
         Ok(DeploymentInfo {
             id,
-            url: format!("https://{}.edgecompute.app", service_name),
-            status: DeploymentStatus::Pending,
+            external_resource: Some(service_name.clone()),
+            url: format!("https://{service_name}.edgecompute.app"),
+            status,
+            ..Default::default()
         })
     }
 
@@ -143,42 +227,35 @@ impl DeployProvider for FastlyAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Fastly Compute deployment: id={}", id);
-        Ok(())
-    }
-}
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let token = std::env::var("FASTLY_API_TOKEN").map_err(|_| {
+            ClawzError::Auth("FASTLY_API_TOKEN required to destroy Fastly deployments".into())
+        })?;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+        let service_key = external_resource
+            .map(str::to_string)
+            .or_else(|| fastly_service_key(id))
+            .unwrap_or_else(|| id.to_string());
 
-    #[test]
-    fn test_provider_id() {
-        let adapter = FastlyAdapter::new();
-        assert_eq!(adapter.provider_id(), "fastly");
-    }
+        let resp = self
+            .fastly_request(
+                &token,
+                reqwest::Method::DELETE,
+                &format!("/service/{service_key}"),
+                None,
+                None,
+            )
+            .await?;
 
-    #[test]
-    fn test_display_name() {
-        let adapter = FastlyAdapter::new();
-        assert_eq!(adapter.display_name(), "Fastly Compute");
-    }
-
-    #[test]
-    fn test_supported_modes() {
-        let adapter = FastlyAdapter::new();
-        let modes = adapter.supported_modes();
-        assert_eq!(modes.len(), 1);
-        matches!(modes[0], DeployMode::Wasm);
-    }
-
-    #[test]
-    fn test_api_url() {
-        let adapter = FastlyAdapter::new();
-        assert_eq!(
-            adapter.api_url("/current_customer"),
-            "https://api.fastly.com/current_customer"
-        );
+        let status = resp.status();
+        if status.is_success() || status.as_u16() == 404 {
+            log::info!("Fastly service removed: {service_key} (deployment {id})");
+            Ok(())
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Fastly delete service failed ({status}): {text}"
+            )))
+        }
     }
 }

@@ -2,13 +2,12 @@
 FROM rust:1.88-bookworm AS builder
 WORKDIR /app
 
-# Copy all crates needed (gateway depends on worker)
 COPY Cargo.toml Cargo.lock ./
 COPY crates/clawz-core ./crates/clawz-core
+COPY crates/clawz-services ./crates/clawz-services
 COPY crates/clawz-worker ./crates/clawz-worker
 COPY crates/clawz-gateway ./crates/clawz-gateway
 
-# Build the gateway
 RUN cargo build --release -p clawz-gateway
 RUN strip /app/target/release/clawz-gateway || true
 

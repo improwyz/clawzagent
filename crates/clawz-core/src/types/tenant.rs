@@ -56,7 +56,7 @@ impl Default for TenantId {
 /// Role hierarchy in the ClawZ cascade authorization model.
 /// Higher levels have greater permissions and can spawn child roles.
 /// // Dependency: checked by TenantContext::scope_for_agent and scope_for_tool.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, PartialOrd, Ord, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
     /// Organization owner — complete control and resource allocation.
@@ -66,6 +66,7 @@ pub enum Role {
     /// Operator — executes tasks, manages deployments, creates sub-agents.
     Operator,
     /// Viewer — read-only access to dashboards and logs.
+    #[default]
     Viewer,
     /// Agent — autonomous entity spawned by operators, scoped permissions.
     Agent,
@@ -107,15 +108,9 @@ impl fmt::Display for Role {
     }
 }
 
-impl Default for Role {
-    fn default() -> Self {
-        Role::Viewer
-    }
-}
-
 /// Fine-grained permission set with wildcard matching support.
 /// // Dependency: checked by TenantContext before every scoped action.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PermissionSet {
     /// Permissions as a set of action patterns.
     /// Patterns support `:*` suffix for wildcard matching (e.g., "deploy:*" matches "deploy:create", "deploy:delete").
@@ -200,14 +195,6 @@ impl PermissionSet {
     /// Add a permission to the set.
     pub fn add(&mut self, permission: impl Into<String>) {
         self.permissions.insert(permission.into());
-    }
-}
-
-impl Default for PermissionSet {
-    fn default() -> Self {
-        Self {
-            permissions: HashSet::new(),
-        }
     }
 }
 

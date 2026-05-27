@@ -31,6 +31,7 @@ use super::{
 // ── Request body ──────────────────────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct OpenAiRequest<'a> {
     model: &'a str,
     messages: Vec<super::WireMessage>,
@@ -50,6 +51,7 @@ struct OpenAiRequest<'a> {
 }
 
 #[derive(Debug, Serialize)]
+#[allow(dead_code)]
 struct StreamOptions {
     include_usage: bool,
 }
@@ -74,6 +76,7 @@ struct OpenAiChoice {
 
 #[derive(Debug, Deserialize)]
 struct OpenAiMessage {
+    #[allow(dead_code)]
     role: Option<String>,
     content: Option<Value>,
     tool_calls: Option<Vec<WireToolCall>>,

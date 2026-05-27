@@ -112,7 +112,7 @@ impl ComplexityScore {
     /// | 4–5         | High      |
     /// | 6–8         | Massive   |
     pub fn from_parallelism(hint: usize) -> Self {
-        let parallelism = hint.max(1).min(8);
+        let parallelism = hint.clamp(1, 8);
         let complexity = match parallelism {
             1 => TaskComplexity::Low,
             2..=3 => TaskComplexity::Medium,
@@ -166,7 +166,7 @@ impl TaskComplexityAnalyzer {
     pub fn new(llm_client: Arc<dyn LlmClient>, default_parallelism: usize) -> Self {
         Self {
             llm_client,
-            default_parallelism: default_parallelism.max(1).min(8),
+            default_parallelism: default_parallelism.clamp(1, 8),
         }
     }
 
@@ -190,7 +190,7 @@ impl TaskComplexityAnalyzer {
             .count();
 
         // Use the larger of (keyword hits, default floor), then clamp to [1, 8].
-        let parallelism = hits.max(self.default_parallelism).max(1).min(8);
+        let parallelism = hits.max(self.default_parallelism).clamp(1, 8);
 
         let complexity = match parallelism {
             1 => TaskComplexity::Low,

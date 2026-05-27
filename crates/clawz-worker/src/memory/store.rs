@@ -416,12 +416,12 @@ impl MemoryBackend for InMemoryBackend {
 
         let mut scored: Vec<(f64, String, Value, chrono::DateTime<Utc>)> = agent_map
             .iter()
-            .filter_map(|(k, (v, emb, ts))| {
+            .map(|(k, (v, emb, ts))| {
                 let score = match emb {
                     Some(e) => Self::cosine_similarity(&query_embedding, e),
                     None => 0.0,
                 };
-                Some((score, k.clone(), v.clone(), *ts))
+                (score, k.clone(), v.clone(), *ts)
             })
             .collect();
 

@@ -23,7 +23,8 @@ pub enum NegotiationMessage {
 
 /// An active negotiation session between two agents.
 #[derive(Debug, Clone)]
-struct NegotiationSession {
+pub(crate) struct NegotiationSession {
+    #[allow(dead_code)]
     id: String,
     initiator: String,
     responder: String,
@@ -214,7 +215,8 @@ impl NegotiationProtocol {
     }
 
     /// Get current session state.
-    pub async fn session(&self, session_id: &str) -> Option<NegotiationSession> {
+    #[allow(dead_code)]
+    pub(crate) async fn session(&self, session_id: &str) -> Option<NegotiationSession> {
         let sessions = self.sessions.read().await;
         sessions.get(session_id).cloned()
     }

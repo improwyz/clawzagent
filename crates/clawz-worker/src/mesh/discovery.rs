@@ -275,18 +275,15 @@ impl PeerDiscovery {
         let deadline = tokio::time::Instant::now() + Duration::from_millis(LISTEN_MS);
         let mut buf = vec![0u8; 4096];
 
-        loop {
-            match tokio::time::timeout_at(deadline, socket.recv_from(&mut buf)).await {
-                Ok(Ok((len, _src))) => {
-                    if let Some(peer) = parse_mdns_response(&buf[..len]) {
-                        log::debug!("mDNS discovered peer: {} ({})", peer.id, peer.hostname);
-                        peers.push(DiscoveredPeer {
-                            info: peer,
-                            method: DiscoveryMethod::Mdns,
-                        });
-                    }
-                }
-                Ok(Err(_)) | Err(_) => break, // socket error or timeout
+        while let Ok(Ok((len, _src))) =
+            tokio::time::timeout_at(deadline, socket.recv_from(&mut buf)).await
+        {
+            if let Some(peer) = parse_mdns_response(&buf[..len]) {
+                log::debug!("mDNS discovered peer: {} ({})", peer.id, peer.hostname);
+                peers.push(DiscoveredPeer {
+                    info: peer,
+                    method: DiscoveryMethod::Mdns,
+                });
             }
         }
 

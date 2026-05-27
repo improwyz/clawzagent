@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { clsx } from 'clsx';
+import { ClawzLogo } from '../shared/ClawzLogo';
 
 const NAV_ITEMS = [
   { to: '/', label: 'Dashboard', icon: '⬡', exact: true },
@@ -23,9 +24,16 @@ export function IconSidebar({ collapsed, onToggle }: IconSidebarProps) {
         collapsed ? 'w-12' : 'w-48',
       )}
     >
-      <div className="flex items-center justify-between px-2 py-3 border-b border-zinc-800">
-        {!collapsed && (
-          <span className="text-zinc-100 font-bold text-sm tracking-widest ml-1">CLAWZ</span>
+      <div
+        className={clsx(
+          'flex border-b border-zinc-800 px-2 py-3',
+          collapsed ? 'flex-col items-center gap-1' : 'items-center justify-between',
+        )}
+      >
+        {collapsed ? (
+          <ClawzLogo variant="mark" theme="dark" className="h-6 w-6" />
+        ) : (
+          <ClawzLogo variant="full" theme="dark" className="h-7 w-auto ml-1" />
         )}
         <button
           onClick={onToggle}
@@ -65,9 +73,7 @@ export function IconSidebar({ collapsed, onToggle }: IconSidebarProps) {
             collapsed ? 'justify-center' : '',
           )}
         >
-          <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs text-white flex-shrink-0">
-            C
-          </div>
+          <ClawzLogo variant="mark" theme="dark" className="h-6 w-6 flex-shrink-0" />
           {!collapsed && (
             <div className="min-w-0">
               <div className="text-xs text-zinc-200 font-medium truncate">ClawZ</div>

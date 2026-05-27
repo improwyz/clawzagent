@@ -20,6 +20,7 @@ pub mod deepseek;
 pub mod gemini;
 pub mod ollama;
 pub mod openai;
+pub mod stub;
 
 use std::pin::Pin;
 
@@ -52,9 +53,11 @@ pub struct WireMessage {
 /// Content payload for a [`WireMessage`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
+#[derive(Default)]
 pub enum WireContent {
     Text(String),
     Parts(Vec<WireContentPart>),
+    #[default]
     Null,
 }
 
@@ -78,11 +81,6 @@ impl WireContent {
     }
 }
 
-impl Default for WireContent {
-    fn default() -> Self {
-        WireContent::Null
-    }
-}
 
 /// A single part of a multimodal message.
 #[derive(Debug, Clone, Serialize, Deserialize)]

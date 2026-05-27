@@ -40,32 +40,26 @@ impl Default for RiskPosture {
 
 /// Processing style — fundamental cognitive mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum ProcessingStyle {
     Parallel,
     Sequential,
     Reflexive,
+    #[default]
     Deliberative,
 }
 
-impl Default for ProcessingStyle {
-    fn default() -> Self {
-        Self::Deliberative
-    }
-}
 
 /// Authority orientation — core stance toward human oversight.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum AuthorityOrientation {
     Deferential,
     Skeptical,
+    #[default]
     Egalitarian,
 }
 
-impl Default for AuthorityOrientation {
-    fn default() -> Self {
-        Self::Egalitarian
-    }
-}
 
 /// The agent's four immutable constitution principles.
 pub const CARDINAL_RULES: &[&str] = &[
@@ -124,15 +118,14 @@ impl Default for ResponseCalibration {
 
 /// Horizon baseline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Default)]
 pub enum Horizon {
     Short,
+    #[default]
     Medium,
     Long,
 }
 
-impl Default for Horizon {
-    fn default() -> Self { Self::Medium }
-}
 
 /// Temporal preference.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { IconSidebar } from './IconSidebar';
 import { ChatSidebar } from './ChatSidebar';
+import { ClawzLogo } from '../shared/ClawzLogo';
 import { ThemeToggle } from '../shared/ThemeToggle';
 import { useLocation } from 'react-router-dom';
 import { useAppStore } from '../../lib/store';
@@ -33,7 +34,12 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top bar */}
         <header className="flex items-center justify-between px-4 py-2 bg-zinc-900 border-b border-zinc-800 flex-shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ClawzLogo
+              variant="mark"
+              theme="dark"
+              className="h-5 w-5 md:hidden flex-shrink-0"
+            />
             <h1 className="text-zinc-100 font-semibold text-sm">{title}</h1>
           </div>
           <div className="flex items-center gap-2">

@@ -123,6 +123,7 @@ enum AnthropicStreamEvent {
         delta: AnthropicDelta,
     },
     ContentBlockStop {
+        #[allow(dead_code)]
         index: u32,
     },
     MessageDelta {
@@ -145,7 +146,10 @@ struct AnthropicStreamMessage {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum AnthropicStreamBlock {
-    Text { text: String },
+    Text {
+        #[allow(dead_code)]
+        text: String,
+    },
     ToolUse { id: String, name: String },
 }
 

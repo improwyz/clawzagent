@@ -111,8 +111,8 @@ impl AwsConnector {
             inner.update(data);
             let inner_hash = inner.finalize();
             let mut outer = Sha256::new();
-            outer.update(&opad);
-            outer.update(&inner_hash);
+            outer.update(opad);
+            outer.update(inner_hash);
             outer.finalize().to_vec()
         }
 

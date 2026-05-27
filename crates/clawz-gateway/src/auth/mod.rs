@@ -26,10 +26,33 @@ pub mod jwt;
 use axum::{
     body::Body,
     extract::Request,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
 };
+
+fn default_tenant_id() -> String {
+    std::env::var("CLAWZ_TENANT_ID").unwrap_or_else(|_| "default".to_string())
+}
+
+fn tenant_from_claims(claims: &jwt::Claims) -> String {
+    claims
+        .tenant_id
+        .clone()
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(default_tenant_id)
+}
+
+/// Dev-mode identity injected when `CLAWZ_DISABLE_AUTH=1`.
+pub fn dev_auth_context() -> AuthContext {
+    AuthContext {
+        user_id: "dev".to_string(),
+        email: "dev@local".to_string(),
+        role: "owner".to_string(),
+        tenant_id: default_tenant_id(),
+        auth_method: AuthMethod::ApiKey,
+    }
+}
 
 /// Authentication method that was used to establish identity for a request.
 #[derive(Debug, Clone)]
@@ -53,6 +76,8 @@ pub struct AuthContext {
     pub email: String,
     /// Role / permission group used for authorization decisions.
     pub role: String,
+    /// Tenant scope for multi-tenant resource isolation.
+    pub tenant_id: String,
     /// Which authentication path succeeded (JWT or API key).
     pub auth_method: AuthMethod,
 }
@@ -61,10 +86,14 @@ pub struct AuthContext {
 ///
 /// These routes are checked with `starts_with`, so sub-paths are also exempt.
 const PUBLIC_PATHS: &[&str] = &[
-    "/system/health",
-    "/system/auth/login",
-    "/system/auth/register",
-    "/system/openapi",
+    "/health",
+    "/api/docs",
+    "/api/v1/system/health",
+    "/api/v1/system/auth/login",
+    "/api/v1/system/auth/register",
+    "/api/v1/system/openapi",
+    "/webhooks/twilio",
+    "/webhooks/google-voice",
 ];
 
 /// Axum middleware that enforces JWT or API-key authentication.
@@ -86,6 +115,11 @@ pub async fn auth_middleware(
     mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    if std::env::var("CLAWZ_DISABLE_AUTH").ok().as_deref() == Some("1") {
+        request.extensions_mut().insert(dev_auth_context());
+        return Ok(next.run(request).await);
+    }
+
     let path = request.uri().path().to_string();
 
     // Skip auth for public endpoints so health checks and login flows work
@@ -97,7 +131,9 @@ pub async fn auth_middleware(
     // Dependency: `JWT_SECRET` is expected to be set in production.
     // Fallback to a well-known dev value so the gateway starts without extra
     // configuration in local development.
-    let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "changeme".to_string());
+    let secret = std::env::var("CLAWZ_JWT_SECRET")
+        .or_else(|_| std::env::var("JWT_SECRET"))
+        .unwrap_or_else(|_| "changeme".to_string());
 
     // --- 1. Try Bearer JWT ---
     if let Some(auth_header) = request
@@ -109,10 +145,12 @@ pub async fn auth_middleware(
             // Dependency: jwt sub-module for token verification.
             match jwt::verify_token(token, &secret) {
                 Ok(claims) => {
+                    let tenant_id = tenant_from_claims(&claims);
                     let ctx = AuthContext {
                         user_id: claims.sub,
                         email: claims.email,
                         role: claims.role,
+                        tenant_id,
                         auth_method: AuthMethod::Jwt,
                     };
                     request.extensions_mut().insert(ctx);
@@ -149,6 +187,79 @@ pub async fn auth_middleware(
     Err(StatusCode::UNAUTHORIZED)
 }
 
+/// Resolve credentials from HTTP headers and an optional query `api_key`.
+///
+/// Used by WebSocket handlers that sit outside the auth middleware stack.
+pub fn resolve_request_auth(
+    headers: &HeaderMap,
+    api_key_query: Option<&str>,
+) -> Result<AuthContext, StatusCode> {
+    if std::env::var("CLAWZ_DISABLE_AUTH").ok().as_deref() == Some("1") {
+        return Ok(dev_auth_context());
+    }
+
+    let secret = std::env::var("CLAWZ_JWT_SECRET")
+        .or_else(|_| std::env::var("JWT_SECRET"))
+        .unwrap_or_else(|_| "changeme".to_string());
+
+    if let Some(auth_header) = headers
+        .get("Authorization")
+        .and_then(|v| v.to_str().ok())
+    {
+        if let Some(token) = auth_header.strip_prefix("Bearer ") {
+            return match jwt::verify_token(token, &secret) {
+                Ok(claims) => {
+                    let tenant_id = tenant_from_claims(&claims);
+                    Ok(AuthContext {
+                        user_id: claims.sub,
+                        email: claims.email,
+                        role: claims.role,
+                        tenant_id,
+                        auth_method: AuthMethod::Jwt,
+                    })
+                }
+                Err(_) => Err(StatusCode::FORBIDDEN),
+            };
+        }
+    }
+
+    if let Some(raw_key) = headers
+        .get("X-API-Key")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+    {
+        return auth_context_from_api_key(&raw_key);
+    }
+
+    if let Some(raw_key) = api_key_query.map(|s| s.to_string()) {
+        return auth_context_from_api_key(&raw_key);
+    }
+
+    Err(StatusCode::UNAUTHORIZED)
+}
+
+fn auth_context_from_api_key(raw_key: &str) -> Result<AuthContext, StatusCode> {
+    let records = load_api_key_records_from_env();
+    match api_key::ApiKeyValidator::validate(raw_key, &records) {
+        Some(record) => Ok(AuthContext {
+            user_id: record.user_id.clone(),
+            email: format!("{}@apikey", record.user_id),
+            role: record
+                .permissions
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "agent".to_string()),
+            tenant_id: if record.tenant_id.is_empty() {
+                default_tenant_id()
+            } else {
+                record.tenant_id.clone()
+            },
+            auth_method: AuthMethod::ApiKey,
+        }),
+        None => Err(StatusCode::FORBIDDEN),
+    }
+}
+
 /// Attempt to authenticate using a raw API key string.
 ///
 /// Looks up the key against records loaded from the `VALID_API_KEYS`
@@ -177,6 +288,11 @@ async fn try_api_key(
                     .first()
                     .cloned()
                     .unwrap_or_else(|| "agent".to_string()),
+                tenant_id: if record.tenant_id.is_empty() {
+                    default_tenant_id()
+                } else {
+                    record.tenant_id.clone()
+                },
                 auth_method: AuthMethod::ApiKey,
             };
             request.extensions_mut().insert(ctx);
@@ -226,12 +342,18 @@ fn load_api_key_records_from_env() -> Vec<api_key::ApiKeyRecord> {
     };
     raw.split(',')
         .filter_map(|entry| {
-            let parts: Vec<&str> = entry.splitn(3, ':').collect();
-            if parts.len() == 3 {
+            let parts: Vec<&str> = entry.splitn(4, ':').collect();
+            if parts.len() >= 3 {
+                let tenant_id = parts
+                    .get(3)
+                    .filter(|t| !t.is_empty())
+                    .map(|t| (*t).to_string())
+                    .unwrap_or_else(default_tenant_id);
                 Some(api_key::ApiKeyRecord {
                     id: uuid::Uuid::new_v4().to_string(),
                     key_hash: parts[0].to_string(),
                     user_id: parts[1].to_string(),
+                    tenant_id,
                     name: "env key".to_string(),
                     permissions: vec![parts[2].to_string()],
                     created_at: Utc::now(),

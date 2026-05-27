@@ -10,6 +10,7 @@ import {
   updateCloudflare,
   connectSaas,
   disconnectSaas,
+  login,
   type Provider,
 } from '../lib/api';
 
@@ -96,6 +97,54 @@ function ProviderModal({
         </label>
       </div>
     </Modal>
+  );
+}
+
+function LoginForm() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: () => login(email, password),
+    onSuccess: (data) => {
+      setMessage(`Signed in as ${data.email}`);
+      setError('');
+    },
+    onError: (e) => {
+      setError(String(e));
+      setMessage('');
+    },
+  });
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="email"
+        placeholder="email@example.com"
+        className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="password"
+        className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <button
+        type="button"
+        onClick={() => mutation.mutate()}
+        disabled={mutation.isPending || !email || !password}
+        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"
+      >
+        {mutation.isPending ? 'Signing in...' : 'Sign in'}
+      </button>
+      {message && <p className="text-green-400 text-xs">{message}</p>}
+      {error && <p className="text-red-400 text-xs">{error}</p>}
+    </div>
   );
 }
 
@@ -310,6 +359,13 @@ export function Config() {
 
           {!isLoading && tab === 'system' && (
             <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-zinc-800 border border-zinc-700 space-y-3">
+                <h3 className="text-zinc-200 text-sm font-medium">Sign in</h3>
+                <p className="text-zinc-500 text-xs">
+                  Stores a JWT in <code className="text-zinc-400">localStorage.clawz_token</code> for API requests.
+                </p>
+                <LoginForm />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-zinc-400 text-xs mb-1">Gateway Port</label>

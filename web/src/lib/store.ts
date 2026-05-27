@@ -9,6 +9,8 @@ interface AppStore {
   toggleChat: () => void;
   chatAgentId: string | null;
   setChatAgentId: (id: string | null) => void;
+  chatRoomId: string | null;
+  setChatRoomId: (id: string | null) => void;
   notifications: Notification[];
   addNotification: (n: Omit<Notification, 'id'>) => void;
   dismissNotification: (id: string) => void;
@@ -35,7 +37,11 @@ export const useAppStore = create<AppStore>((set) => ({
   chatOpen: true,
   toggleChat: () => set((s) => ({ chatOpen: !s.chatOpen })),
   chatAgentId: null,
-  setChatAgentId: (id) => set({ chatAgentId: id }),
+  setChatAgentId: (id) =>
+    set((s) => ({ chatAgentId: id, chatRoomId: id ? null : s.chatRoomId })),
+  chatRoomId: null,
+  setChatRoomId: (id) =>
+    set((s) => ({ chatRoomId: id, chatAgentId: id ? null : s.chatAgentId })),
   notifications: [],
   addNotification: (n) =>
     set((s) => ({

@@ -17,7 +17,7 @@
 //! * `serde_json` — body construction for ARM requests.
 
 // Dependency: common helpers for generating deployment IDs.
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{azure_app_name, destroy_http_ok, generate_deployment_id};
 // Dependency: provider trait and shared vocabulary.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -111,6 +111,28 @@ impl AzureFunctionsAdapter {
             .map(|s| s.to_string())
             .ok_or_else(|| ClawzError::Auth("Missing access_token in Azure response".into()))
     }
+
+    fn azure_credentials(config: &DeployConfig) -> Result<(String, String, String)> {
+        let creds = config.credentials.as_ref().ok_or_else(|| {
+            ClawzError::Auth(
+                "Azure credentials required in config.credentials (tenant_id in extra, api_key=client_id, api_secret=secret)".into(),
+            )
+        })?;
+        let tenant_id = creds
+            .extra
+            .get("tenant_id")
+            .cloned()
+            .ok_or_else(|| ClawzError::Auth("Azure tenant_id required in extra fields".into()))?;
+        let client_id = creds
+            .api_key
+            .clone()
+            .ok_or_else(|| ClawzError::Auth("Azure client_id required (api_key field)".into()))?;
+        let client_secret = creds
+            .api_secret
+            .clone()
+            .ok_or_else(|| ClawzError::Auth("Azure client_secret required (api_secret field)".into()))?;
+        Ok((tenant_id, client_id, client_secret))
+    }
 }
 
 #[async_trait]
@@ -164,51 +186,79 @@ impl DeployProvider for AzureFunctionsAdapter {
             }
         };
 
+        let (tenant_id, client_id, client_secret) = Self::azure_credentials(config)?;
+        let bearer = self
+            .get_bearer_token(&tenant_id, &client_id, &client_secret)
+            .await?;
+
         let id = generate_deployment_id("az");
-        // Strip dashes so the app name stays within Azure naming restrictions.
-        let app_name = format!("clawz{}", &id[3..11].replace('-', ""));
+        let app_name = azure_app_name(&id);
         let resource_path = self.function_app_url(&app_name);
         let region = config.region.as_deref().unwrap_or("eastus");
 
-        // Determine the Linux FX version based on deployment mode.
         let site_config = if let Some(img) = image {
             serde_json::json!({
-                "linuxFxVersion": format!("DOCKER|{}", img),
+                "linuxFxVersion": format!("DOCKER|{img}"),
             })
         } else {
             serde_json::json!({
-                "linuxFxVersion": "dotnet-isolated|8.0",
+                "linuxFxVersion": "DOTNET-ISOLATED|8.0",
             })
         };
 
-        // Convert env-var map into Azure's app-settings array format.
-        let env_app_settings: Vec<serde_json::Value> = config
-            .env_vars
-            .iter()
-            .map(|(k, v)| serde_json::json!({ "name": k, "value": v }))
-            .collect();
-
-        let _body = serde_json::json!({
+        let body = serde_json::json!({
             "location": region,
             "kind": "functionapp,linux",
             "properties": {
-                "serverFarmId": null,
                 "siteConfig": site_config,
-                "appSettings": env_app_settings,
                 "reserved": true,
             }
         });
 
-        log::info!(
-            "Deploying to Azure Functions: app={}, resource_path={}",
-            app_name,
-            resource_path
+        let put_url = format!(
+            "https://management.azure.com{resource_path}?api-version=2022-03-01"
         );
+        let resp = self
+            .client
+            .put(&put_url)
+            .bearer_auth(&bearer)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Azure deploy request failed: {e}")))?;
+
+        let http_status = resp.status();
+        let status = if http_status.is_success() || http_status.as_u16() == 409 {
+            DeploymentStatus::Pending
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Azure Function App deploy failed ({http_status}): {text}"
+            )));
+        };
+
+        if !config.env_vars.is_empty() {
+            let settings_url = format!(
+                "https://management.azure.com{resource_path}/config/appsettings?api-version=2022-03-01"
+            );
+            let settings_body = serde_json::json!({
+                "properties": config.env_vars,
+            });
+            let _ = self
+                .client
+                .put(&settings_url)
+                .bearer_auth(&bearer)
+                .json(&settings_body)
+                .send()
+                .await;
+        }
 
         Ok(DeploymentInfo {
             id,
-            url: format!("https://{}.azurewebsites.net", app_name),
-            status: DeploymentStatus::Pending,
+            external_resource: Some(app_name.clone()),
+            url: format!("https://{app_name}.azurewebsites.net"),
+            status,
+            ..Default::default()
         })
     }
 
@@ -216,9 +266,46 @@ impl DeployProvider for AzureFunctionsAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Azure Functions deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let tenant_id = std::env::var("AZURE_TENANT_ID").map_err(|_| {
+            ClawzError::Auth("AZURE_TENANT_ID required to destroy Azure Function Apps".into())
+        })?;
+        let client_id = std::env::var("AZURE_CLIENT_ID").map_err(|_| {
+            ClawzError::Auth("AZURE_CLIENT_ID required to destroy Azure Function Apps".into())
+        })?;
+        let client_secret = std::env::var("AZURE_CLIENT_SECRET").map_err(|_| {
+            ClawzError::Auth("AZURE_CLIENT_SECRET required to destroy Azure Function Apps".into())
+        })?;
+
+        let bearer = self
+            .get_bearer_token(&tenant_id, &client_id, &client_secret)
+            .await?;
+        let app_name = external_resource
+            .map(str::to_string)
+            .unwrap_or_else(|| azure_app_name(id));
+        let delete_url = format!(
+            "https://management.azure.com{}?api-version=2022-03-01",
+            self.function_app_url(&app_name)
+        );
+
+        let resp = self
+            .client
+            .delete(&delete_url)
+            .bearer_auth(&bearer)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Azure delete request failed: {e}")))?;
+
+        let status = resp.status();
+        if destroy_http_ok(status) {
+            log::info!("Azure Function App removed: {app_name} (deployment {id})");
+            Ok(())
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Azure delete Function App failed ({status}): {text}"
+            )))
+        }
     }
 }
 

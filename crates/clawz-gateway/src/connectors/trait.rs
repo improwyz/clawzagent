@@ -44,7 +44,7 @@ pub enum AuthType {
 /// Not all fields are populated for every [`AuthType`]. For example, `OAuth2` fills
 /// `access_token` and `refresh_token`, while `ApiKey` fills `api_key`. The `extra`
 /// map stores platform-specific values such as instance URLs or tenant IDs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Credentials {
     /// OAuth2 access token or API key value.
     pub access_token: Option<String>,
@@ -60,20 +60,6 @@ pub struct Credentials {
     pub password: Option<String>,
     /// Extra credential fields (e.g., instance URL, tenant ID).
     pub extra: HashMap<String, String>,
-}
-
-impl Default for Credentials {
-    fn default() -> Self {
-        Self {
-            access_token: None,
-            refresh_token: None,
-            expires_at: None,
-            api_key: None,
-            username: None,
-            password: None,
-            extra: HashMap::new(),
-        }
-    }
 }
 
 /// Filters for listing objects.

@@ -18,6 +18,8 @@
 //! - `evaluate` writes to `AppState.audit_log` so every decision is traceable.
 //! - `create_policy` also audits itself so policy changes appear in the same log.
 
+use clawz_core::types::governance::ApprovalStatus;
+use clawz_services::dto::EvaluateGovernanceRequest;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -148,6 +150,9 @@ async fn create_policy(
 
     let mut policies = state.policies.write().await;
     policies.push(record.clone());
+    if let Some(ref pool) = state.db {
+        let _ = crate::postgres_store::persist_policy(pool, &record).await;
+    }
     Ok((StatusCode::CREATED, Json(json!(record))))
 }
 
@@ -182,8 +187,12 @@ async fn update_policy(
     if let Some(enf) = body.enforcement { record.enforcement = enf; }
     if let Some(enabled) = body.enabled { record.enabled = enabled; }
     record.updated_at = Utc::now();
-
-    Ok(Json(json!(record.clone())))
+    let snapshot = record.clone();
+    drop(policies);
+    if let Some(ref pool) = state.db {
+        let _ = crate::postgres_store::persist_policy(pool, &snapshot).await;
+    }
+    Ok(Json(json!(snapshot)))
 }
 
 /// `DELETE /governance/policies/{id}` — remove a policy.
@@ -197,6 +206,9 @@ async fn delete_policy(
         .position(|p| p.id == id)
         .ok_or_else(|| GatewayError::not_found("Policy", &id))?;
     policies.remove(pos);
+    if let Some(ref pool) = state.db {
+        crate::postgres_store::delete_policy(pool, &id).await;
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -213,21 +225,49 @@ async fn audit_log(
     // Clamp pagination: high limits are allowed because audit is typically
     // smaller than conversation data, but we still cap at 200 for safety.
     let page = q.page.unwrap_or(1).max(1);
-    let limit = q.limit.unwrap_or(50).max(1).min(200);
-    let offset = (page - 1) * limit;
+    let limit = q.limit.unwrap_or(50).clamp(1, 200);
+    let offset = ((page - 1) * limit) as i64;
+    let limit_i64 = limit as i64;
+
+    if let Some(ref pool) = state.db {
+        if let Ok((data, total)) = crate::postgres_store::query_audit_filtered(
+            pool,
+            q.resource_type.as_deref(),
+            q.actor.as_deref(),
+            limit_i64,
+            offset,
+        )
+        .await
+        {
+            return Json(json!({
+                "data": data,
+                "total": total,
+                "page": page,
+                "limit": limit,
+            }));
+        }
+    }
 
     let audit = state.audit_log.read().await;
     let filtered: Vec<&AuditEntry> = audit
         .iter()
         .filter(|e| {
-            let rt_ok = q.resource_type.as_ref().map_or(true, |rt| &e.resource_type == rt);
-            let actor_ok = q.actor.as_ref().map_or(true, |a| &e.actor == a);
+            let rt_ok = q
+                .resource_type
+                .as_ref()
+                .is_none_or(|rt| &e.resource_type == rt);
+            let actor_ok = q.actor.as_ref().is_none_or(|a| &e.actor == a);
             rt_ok && actor_ok
         })
         .collect();
 
     let total = filtered.len();
-    let page_data: Vec<&&AuditEntry> = filtered.iter().skip(offset).take(limit).collect();
+    let page_data: Vec<&AuditEntry> = filtered
+        .iter()
+        .skip(offset as usize)
+        .take(limit)
+        .copied()
+        .collect();
 
     Json(json!({
         "data": page_data,
@@ -311,87 +351,220 @@ async fn evaluate(
         GatewayError::Unprocessable("field 'action' is required".to_string())
     })?;
 
-    let policies = state.policies.read().await;
-    let active_policies: Vec<&PolicyRecord> = policies.iter().filter(|p| p.enabled).collect();
-
-    // Simple substring evaluation: if the action contains any rule string,
-    // the policy is considered matched. This is intentionally coarse-grained
-    // so it can be replaced by a DSL or WASM engine later without changing
-    // the API contract.
-    let mut violations: Vec<Value> = Vec::new();
-    for policy in &active_policies {
-        for rule in &policy.rules {
-            if action.contains(rule.as_str()) {
-                violations.push(json!({
-                    "policy_id": policy.id,
-                    "policy_name": policy.name,
-                    "rule": rule,
-                    "enforcement": policy.enforcement,
-                }));
-            }
+    {
+        let agents = state.agents.read().await;
+        if !agents.iter().any(|a| a.id == agent_id) {
+            return Err(GatewayError::not_found("Agent", &agent_id));
         }
     }
 
-    let allowed = violations.iter().all(|v| v["enforcement"] != "block");
-    let result_status = if violations.is_empty() {
-        "allowed"
-    } else if allowed {
-        "allowed_with_warning"
-    } else {
-        "blocked"
-    };
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
 
-    // Persist the evaluation so compliance tooling can replay the decision.
+    let context = body.context.clone().unwrap_or(json!({}));
+    let gov = platform
+        .execution
+        .evaluate_governance(EvaluateGovernanceRequest {
+            agent_id: agent_id.clone(),
+            action: action.clone(),
+            context: context.clone(),
+        })
+        .await
+        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+
     state
         .append_audit(
             "governance",
-            &format!("evaluate:{}", result_status),
+            &format!("evaluate:{}", gov.result),
             "agent",
             &agent_id,
             Some(format!("action={action}")),
         )
         .await;
 
+    state.publish_event(
+        "governance.evaluate",
+        json!({
+            "agent_id": agent_id,
+            "result": gov.result,
+            "allowed": gov.allowed,
+        }),
+    );
+
     Ok(Json(json!({
         "agent_id": agent_id,
         "action": action,
-        "context": body.context,
-        "result": result_status,
-        "allowed": allowed,
-        "violations": violations,
+        "context": context,
+        "result": gov.result,
+        "allowed": gov.allowed,
+        "violations": gov.violations,
+        "detail": gov.detail,
         "evaluated_at": Utc::now(),
     })))
 }
 
-// ─── Legacy proposal endpoints ────────────────────────────────────────────────
+// ─── Proposal / approval endpoints ───────────────────────────────────────────
 
-/// `GET /governance/proposals` — legacy stub returning an empty list.
-async fn list_proposals() -> Json<Value> {
-    Json(json!({ "data": [], "total": 0 }))
+#[derive(Debug, Deserialize)]
+pub struct CreateProposalBody {
+    pub agent_id: Option<String>,
+    pub action: Option<String>,
+    #[serde(default)]
+    pub context: Option<Value>,
+    pub required_approvals: Option<u32>,
 }
 
-/// `POST /governance/proposals` — legacy stub creating a pending proposal.
-async fn create_proposal() -> Json<Value> {
-    Json(json!({ "id": Uuid::new_v4().to_string(), "status": "pending" }))
+#[derive(Debug, Deserialize)]
+pub struct VoteProposalBody {
+    pub approver_id: Option<String>,
+    pub decision: Option<String>,
+    pub reason: Option<String>,
 }
 
-/// `GET /governance/proposals/{id}` — legacy stub.
-async fn get_proposal(Path(id): Path<String>) -> Json<Value> {
-    Json(json!({ "id": id, "status": "pending" }))
+fn proposal_json(req: &clawz_core::types::governance::ApprovalRequest) -> Value {
+    json!({
+        "id": req.id,
+        "agent_id": req.agent_id,
+        "action": req.action,
+        "context": req.context,
+        "status": format!("{:?}", req.status).to_lowercase(),
+        "required_approvals": req.required_approvals,
+        "granted_approvals": req.granted_approvals,
+        "approvers": req.approvers,
+        "created_at": req.created_at,
+        "expires_at": req.expires_at,
+    })
 }
 
-/// `PUT /governance/proposals/{id}` — legacy stub.
-async fn update_proposal(Path(id): Path<String>) -> Json<Value> {
-    Json(json!({ "id": id, "updated": true }))
+async fn list_proposals(State(state): State<AppState>) -> Json<Value> {
+    let all = state.approval_workflow.list_all().await;
+    let data: Vec<Value> = all.iter().map(proposal_json).collect();
+    Json(json!({ "data": data, "total": data.len() }))
 }
 
-/// `DELETE /governance/proposals/{id}` — legacy stub.
-async fn delete_proposal(Path(id): Path<String>) -> StatusCode {
-    let _ = id;
-    StatusCode::NO_CONTENT
+async fn create_proposal(
+    State(state): State<AppState>,
+    Json(body): Json<CreateProposalBody>,
+) -> Result<(StatusCode, Json<Value>), GatewayError> {
+    let agent_id = body.agent_id.ok_or_else(|| {
+        GatewayError::Unprocessable("field 'agent_id' is required".to_string())
+    })?;
+    let action = body.action.ok_or_else(|| {
+        GatewayError::Unprocessable("field 'action' is required".to_string())
+    })?;
+    let required = body.required_approvals.unwrap_or(1);
+    let context = body.context.unwrap_or(json!({}));
+
+    let id = state
+        .approval_workflow
+        .request(agent_id, action, context, required)
+        .await;
+
+    let req = state
+        .approval_workflow
+        .get_request(&id)
+        .await
+        .ok_or_else(|| GatewayError::Internal("proposal missing after create".into()))?;
+
+    state.publish_event("governance.proposal", json!({ "id": id, "status": "pending" }));
+
+    Ok((StatusCode::CREATED, Json(proposal_json(&req))))
 }
 
-/// `POST /governance/proposals/{id}/vote` — legacy stub.
-async fn vote_proposal(Path(id): Path<String>) -> Json<Value> {
-    Json(json!({ "id": id, "voted": true }))
+async fn get_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, GatewayError> {
+    let req = state
+        .approval_workflow
+        .get_request(&id)
+        .await
+        .ok_or_else(|| GatewayError::not_found("Proposal", &id))?;
+    Ok(Json(proposal_json(&req)))
+}
+
+async fn update_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<CreateProposalBody>,
+) -> Result<Json<Value>, GatewayError> {
+    let existing = state
+        .approval_workflow
+        .get_request(&id)
+        .await
+        .ok_or_else(|| GatewayError::not_found("Proposal", &id))?;
+
+    if existing.status != ApprovalStatus::Pending {
+        return Err(GatewayError::Unprocessable(
+            "only pending proposals can be updated".to_string(),
+        ));
+    }
+
+    let agent_id = body.agent_id.unwrap_or(existing.agent_id);
+    let action = body.action.unwrap_or(existing.action);
+    let context = body.context.unwrap_or(existing.context);
+    let required = body.required_approvals.unwrap_or(existing.required_approvals);
+
+    state.approval_workflow.reject(&id, "system", "superseded by update").await.ok();
+    let new_id = state
+        .approval_workflow
+        .request(agent_id, action, context, required)
+        .await;
+    let req = state
+        .approval_workflow
+        .get_request(&new_id)
+        .await
+        .ok_or_else(|| GatewayError::Internal("proposal missing after update".into()))?;
+    Ok(Json(proposal_json(&req)))
+}
+
+async fn delete_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, GatewayError> {
+    state
+        .approval_workflow
+        .reject(&id, "system", "deleted by operator")
+        .await
+        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn vote_proposal(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<VoteProposalBody>,
+) -> Result<Json<Value>, GatewayError> {
+    let approver = body.approver_id.unwrap_or_else(|| "operator".to_string());
+    let decision = body.decision.unwrap_or_else(|| "approve".to_string());
+
+    if decision == "approve" {
+        state
+            .approval_workflow
+            .approve(&id, &approver)
+            .await
+            .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    } else {
+        let reason = body.reason.unwrap_or_else(|| "rejected".to_string());
+        state
+            .approval_workflow
+            .reject(&id, &approver, &reason)
+            .await
+            .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    }
+
+    let req = state
+        .approval_workflow
+        .get_request(&id)
+        .await
+        .ok_or_else(|| GatewayError::not_found("Proposal", &id))?;
+
+    state.publish_event(
+        "governance.vote",
+        json!({ "id": id, "status": format!("{:?}", req.status).to_lowercase() }),
+    );
+
+    Ok(Json(proposal_json(&req)))
 }

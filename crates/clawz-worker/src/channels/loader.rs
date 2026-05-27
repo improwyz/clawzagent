@@ -77,6 +77,7 @@ struct DynEntry {
     lifecycle: PluginLifecycle,
     /// Absolute path to the loaded file; stored so hot-reload can correlate
     /// `notify` events with existing entries.
+    #[allow(dead_code)]
     path: PathBuf,
 }
 

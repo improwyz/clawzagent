@@ -156,7 +156,7 @@ impl TransportListener for WssListener {
                     let len = u32::from_be_bytes(len_buf) as usize;
                     let mut buf = vec![0u8; len];
                     if reader.read_exact(&mut buf).await.is_err() { break; }
-                    if sink.send(Message::Binary(buf.into())).await.is_err() { break; }
+                    if sink.send(Message::Binary(buf)).await.is_err() { break; }
                 }
             });
         }
@@ -228,7 +228,7 @@ impl WssTransport {
 
         // Send payload as a binary frame.
         ws_stream
-            .send(Message::Binary(payload.to_vec().into()))
+            .send(Message::Binary(payload.to_vec()))
             .await
             .map_err(|e| ClawzError::Transport(format!("wss send: {e}")))?;
 
@@ -238,7 +238,7 @@ impl WssTransport {
             .map_err(|_| ClawzError::Transport(format!("wss response timeout from {url}")))?;
 
         match response {
-            Some(Ok(Message::Binary(data))) => Ok(data.into()),
+            Some(Ok(Message::Binary(data))) => Ok(data),
             Some(Ok(other)) => Err(ClawzError::Transport(format!(
                 "wss unexpected frame type: {other:?}"
             ))),

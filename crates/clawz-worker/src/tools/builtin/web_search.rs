@@ -112,7 +112,7 @@ fn parse_ddg_html(html: &str, max_results: usize) -> Vec<SearchResult> {
 
         // Extract title and URL
         let title = extract_between(remaining, "class=\"result__a\"", "</a>")
-            .map(|s| strip_html_tags(s))
+            .map(strip_html_tags)
             .unwrap_or_default();
 
         let url = extract_between(remaining, "class=\"result__url\"", "</a>")
@@ -127,7 +127,7 @@ fn parse_ddg_html(html: &str, max_results: usize) -> Vec<SearchResult> {
         };
 
         let snippet = extract_between(remaining, "class=\"result__snippet\"", "</a>")
-            .map(|s| strip_html_tags(s))
+            .map(strip_html_tags)
             .unwrap_or_default();
 
         if !title.is_empty() && !clean_url.is_empty() {

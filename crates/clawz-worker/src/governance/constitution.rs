@@ -11,7 +11,7 @@ use uuid::Uuid;
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
 
-use crate::governance::council::{Council, Vote, CouncilRole};
+use crate::governance::council::{Council, Vote};
 use clawz_core::error::ClawzError;
 use clawz_core::types::governance::GovernancePolicy;
 

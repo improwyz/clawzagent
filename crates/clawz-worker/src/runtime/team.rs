@@ -20,8 +20,7 @@
 //! - Each member is typically backed by an `AgentRuntime`; this module
 //!   does *not* own the runtime — it only tracks IDs and load state.
 
-use std::collections::{BinaryHeap, HashMap, VecDeque};
-use std::cmp::Reverse;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 
 // Dependency: timestamp types for task bookkeeping.
@@ -30,7 +29,7 @@ use chrono::{DateTime, Utc};
 use clawz_core::{
     error::{ClawzError, Result},
     types::{
-        agent::{AgentConfig, AgentStatus},
+        agent::AgentStatus,
         message::Message,
     },
 };
@@ -193,6 +192,7 @@ pub struct Team {
     /// structure; for now callers insert in priority order.
     task_queue: Arc<RwLock<VecDeque<Task>>>,
     /// Archive of finished tasks for audit / replay.
+    #[allow(dead_code)]
     completed_tasks: Arc<RwLock<Vec<Task>>>,
 }
 

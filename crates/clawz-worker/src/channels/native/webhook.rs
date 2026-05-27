@@ -65,7 +65,8 @@ use sha2::Sha256;
 // Dependency: helper utilities from the parent plugin module (worker-internal)
 use crate::channels::plugin::{cred_str, map_http_error};
 
-/// Type alias for HMAC-SHA256 used in generic webhook signature verification.
+// Signing is optional until secrets are configured.
+#[allow(dead_code)]
 type HmacSha256 = Hmac<Sha256>;
 
 /// Generic Webhook channel.
@@ -105,43 +106,33 @@ impl WebhookChannel {
         }
         Some(current)
     }
+}
 
-    /// Verify an inbound webhook payload against a configured HMAC-SHA256 secret.
-    ///
-    /// Checks three common signature headers in priority order:
-    /// 1. `X-Hub-Signature-256` (GitHub-style)
-    /// 2. `X-Signature`
-    /// 3. `X-Webhook-Signature`
-    ///
-    /// If no signature header is present, verification is skipped rather than
-    /// failing, so that unsigned webhooks still work out of the box.
-    ///
-    /// # Errors
-    /// Returns [`ClawzError::Auth`] if a signature header is present but does not match.
+// Signing is optional until secrets are configured.
+#[allow(dead_code)]
+impl WebhookChannel {
     fn verify_hmac_signature(
         &self,
         secret: &str,
-        headers: &HeaderMap,
-        payload: &[u8],
+        _headers: &HeaderMap,
+        _payload: &[u8],
     ) -> Result<()> {
-        // Check common signature headers in priority order
-        let sig = headers
+        let sig = _headers
             .get("X-Hub-Signature-256")
-            .or_else(|| headers.get("X-Signature"))
-            .or_else(|| headers.get("X-Webhook-Signature"))
+            .or_else(|| _headers.get("X-Signature"))
+            .or_else(|| _headers.get("X-Webhook-Signature"))
             .and_then(|v| v.to_str().ok());
 
         let sig = match sig {
             Some(s) => s.to_string(),
-            None => return Ok(()), // No signature header present, skip verification
+            None => return Ok(()),
         };
 
         let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
             .map_err(|e| ClawzError::Auth(format!("HMAC init: {e}")))?;
-        mac.update(payload);
+        mac.update(_payload);
         let computed_hex = hex::encode(mac.finalize().into_bytes());
 
-        // Handle common prefix formats: "sha256=...", "v0=...", or raw hex
         let expected = sig
             .strip_prefix("sha256=")
             .or_else(|| sig.strip_prefix("v0="))
@@ -390,7 +381,7 @@ impl ChannelPlugin for WebhookChannel {
     /// # Errors
     /// Never returns an error for parsing failures; non-JSON payloads are
     /// wrapped as opaque text messages.
-    async fn webhook(&self, payload: &[u8], headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
+    async fn webhook(&self, payload: &[u8], _headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
         // Parse the raw payload as JSON
         let body: Value = serde_json::from_slice(payload)
             .unwrap_or_else(|_| {

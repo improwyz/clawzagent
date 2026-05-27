@@ -387,6 +387,7 @@ const DESTRUCTIVE_KEYWORDS: &[&str] = &[
 ];
 
 /// Keywords indicating data modification that could conflict with integrity goals.
+#[allow(dead_code)]
 const MODIFYING_KEYWORDS: &[&str] = &[
     "overwrite",
     "replace",
@@ -694,7 +695,7 @@ impl GovernanceGuardrails {
             clawz_core::types::purpose::GoalType::Satisfy => {
                 // For Satisfy goals, check if action violates constraints
                 for constraint in &goal.constraints {
-                    let constraint_text = constraint.description.to_lowercase();
+                    let _constraint_text = constraint.description.to_lowercase();
                     // Check for obvious violations
                     if constraint.kind == clawz_core::types::purpose::ConstraintKind::Compliance {
                         // Compliance constraints — check if action undermines them
@@ -734,16 +735,15 @@ impl GovernanceGuardrails {
         for constraint in &goal.constraints {
             let constraint_text = constraint.description.to_lowercase();
             // If constraint mentions something we should preserve, check for destructive action
-            if constraint_text.contains("audit")
+            if (constraint_text.contains("audit")
                 || constraint_text.contains("log")
                 || constraint_text.contains("trail")
-                || constraint_text.contains("record")
-            {
-                if action_lower.contains("delete")
+                || constraint_text.contains("record"))
+                && (action_lower.contains("delete")
                     || action_lower.contains("clear")
                     || action_lower.contains("wipe")
                     || action_lower.contains("erase")
-                    || action_lower.contains("purge")
+                    || action_lower.contains("purge"))
                 {
                     return (
                         false,
@@ -753,18 +753,16 @@ impl GovernanceGuardrails {
                         )),
                     );
                 }
-            }
 
             // If constraint mentions uptime or availability
-            if constraint_text.contains("uptime")
+            if (constraint_text.contains("uptime")
                 || constraint_text.contains("availability")
                 || constraint_text.contains("running")
-                    || constraint_text.contains("available")
-            {
-                if action_lower.contains("stop")
+                    || constraint_text.contains("available"))
+                && (action_lower.contains("stop")
                     || action_lower.contains("terminate")
                     || action_lower.contains("kill")
-                    || action_lower.contains("shutdown")
+                    || action_lower.contains("shutdown"))
                 {
                     return (
                         false,
@@ -774,7 +772,6 @@ impl GovernanceGuardrails {
                         )),
                     );
                 }
-            }
         }
 
         // Passed all alignment checks

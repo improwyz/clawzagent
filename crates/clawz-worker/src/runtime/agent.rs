@@ -21,12 +21,12 @@
 //! - Persists state via `clawz_core::traits::MemoryBackend`.
 //! - Governance checks via `clawz_core::traits::GovernanceEngine`.
 
-use std::{fs, path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 // Dependency: core error and trait definitions from the shared `clawz_core` crate.
 use clawz_core::{
     error::{ClawzError, Result},
-    traits::{GovernanceEngine, MemoryBackend, PipelineContext, PipelineStep, StepOutcome},
+    traits::{GovernanceEngine, MemoryBackend, PipelineContext, StepOutcome},
     types::{
         agent::{AgentConfig, AgentState, AgentStatus},
         message::{Message, MessageContent, Role},
@@ -271,6 +271,15 @@ impl AgentRuntime {
         self
     }
 
+    /// Shared memory backend (conversation history, RAG, agent state).
+    pub fn memory(&self) -> Arc<dyn MemoryBackend> {
+        self.deps.memory.clone()
+    }
+
+    pub fn cost_tracker(&self) -> Arc<CostTracker> {
+        self.deps.cost_tracker.clone()
+    }
+
     /// Build the standard pipeline for a single turn.
     ///
     /// The step order is deliberate:
@@ -342,7 +351,7 @@ impl AgentRuntime {
         }
 
         // Record environmental metrics for reality awareness.
-        if let Some(ref metrics) = self.deps.container_metrics {
+        if let Some(ref _metrics) = self.deps.container_metrics {
             if let Ok(m) = crate::reality::container_metrics::ContainerMetrics::fetch(&ctx.agent_id).await {
                 log::debug!(
                     "[agent_runtime] container {} — cpu={:.1}%, mem={:.1}%, queue={}",
@@ -359,11 +368,34 @@ impl AgentRuntime {
     /// Returns the assistant's reply.  Creates a fresh conversation context,
     /// so this is suitable for stateless / one-shot use cases.
     pub async fn run(&self, message: Message) -> Result<Message> {
-        let mut ctx = PipelineContext::new(
-            self.config.id.to_string(),
-            uuid::Uuid::new_v4().to_string(),
-        );
+        self.run_in_conversation(message, uuid::Uuid::new_v4().to_string())
+            .await
+    }
+
+    /// Execute a single turn scoped to an existing conversation (e.g. a room thread).
+    pub async fn run_in_conversation(
+        &self,
+        message: Message,
+        conversation_id: impl Into<String>,
+    ) -> Result<Message> {
+        self.run_in_conversation_with_meta(message, conversation_id, serde_json::Value::Null)
+            .await
+    }
+
+    /// Execute a single turn with extra metadata forwarded into the pipeline context.
+    pub async fn run_in_conversation_with_meta(
+        &self,
+        message: Message,
+        conversation_id: impl Into<String>,
+        meta: serde_json::Value,
+    ) -> Result<Message> {
+        let mut ctx = PipelineContext::new(self.config.id.to_string(), conversation_id);
         ctx.agent_state = AgentState::running("processing message");
+        if let Some(obj) = meta.as_object() {
+            for (key, value) in obj {
+                ctx.insert_meta(key.clone(), value.clone());
+            }
+        }
 
         self.run_turn(&mut ctx, message).await?;
 

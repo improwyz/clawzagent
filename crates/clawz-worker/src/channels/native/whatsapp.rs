@@ -88,6 +88,7 @@ impl WhatsAppChannel {
     /// [`Attachment`]s with empty URLs (media must be fetched separately via
     /// the media ID endpoint). Returns `None` if the message lacks `id`, `type`,
     /// or `from` fields.
+    #[allow(dead_code)]
     fn parse_message(&self, ctx: &ChannelContext, msg: &Value, contact: Option<&Value>) -> Option<IncomingMessage> {
         let msg_id = msg.get("id")?.as_str()?.to_string();
         let msg_type = msg.get("type")?.as_str()?;

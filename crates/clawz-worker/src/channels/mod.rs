@@ -29,3 +29,5 @@ pub mod loader;
 pub mod registry;
 /// Built-in native channel implementations (e.g. Slack, Discord) compiled into the worker binary.
 pub mod native;
+/// Platform name → native plugin instance.
+pub mod resolve;

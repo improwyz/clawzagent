@@ -13,19 +13,14 @@ use uuid::Uuid;
 // ── PeerStatus ────────────────────────────────────────────────────────────────
 
 /// Reachability state of a mesh peer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum PeerStatus {
     Online,
     Offline,
     Degraded,
+    #[default]
     Unknown,
-}
-
-impl Default for PeerStatus {
-    fn default() -> Self {
-        PeerStatus::Unknown
-    }
 }
 
 impl std::fmt::Display for PeerStatus {
@@ -216,7 +211,7 @@ impl MeshPath {
 
 /// Select the best path from a list according to `policy`.
 /// // Called by: worker::mesh router before every cross-peer RPC.
-pub fn select_best_path<'a>(paths: &'a [MeshPath], policy: RoutingPolicy) -> Option<&'a MeshPath> {
+pub fn select_best_path(paths: &[MeshPath], policy: RoutingPolicy) -> Option<&MeshPath> {
     paths
         .iter()
         .filter(|p| p.reliability > 0.0)

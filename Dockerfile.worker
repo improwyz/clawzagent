@@ -1,17 +1,18 @@
 # Stage 1: Build
 FROM rust:1.88-bookworm AS builder
 WORKDIR /app
+
 COPY Cargo.toml Cargo.lock ./
 COPY crates/clawz-core ./crates/clawz-core
+COPY crates/clawz-services ./crates/clawz-services
 COPY crates/clawz-worker ./crates/clawz-worker
 COPY crates/clawz-gateway ./crates/clawz-gateway
-RUN <<EOF
-cargo build --release -p clawz-gateway
-strip /app/target/release/clawz-gateway || true
-EOF
 
-# Stage 2: Runtime (distroless, no shell, no root)
+RUN cargo build --release -p clawz-worker
+RUN strip /app/target/release/clawz-worker || true
+
+# Stage 2: Runtime
 FROM gcr.io/distroless/cc-debian12
-COPY --from=builder /app/target/release/clawz-gateway /usr/local/bin/
+COPY --from=builder /app/target/release/clawz-worker /usr/local/bin/
 USER nonroot:nonroot
-ENTRYPOINT ["/usr/local/bin/clawz-gateway"]
+ENTRYPOINT ["/usr/local/bin/clawz-worker"]

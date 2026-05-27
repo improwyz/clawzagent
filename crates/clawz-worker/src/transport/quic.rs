@@ -253,12 +253,9 @@ impl TransportListener for QuicListener {
         tokio::spawn(async move {
             let mut writer = a_tx;
             let mut buf = vec![0u8; 65536];
-            loop {
-                match recv.read(&mut buf).await {
-                    Ok(Some(n)) => {
-                        if writer.write_all(&buf[..n]).await.is_err() { break; }
-                    }
-                    _ => break,
+            while let Ok(Some(n)) = recv.read(&mut buf).await {
+                if writer.write_all(&buf[..n]).await.is_err() {
+                    break;
                 }
             }
         });

@@ -6,7 +6,6 @@ use clawz_core::types::{ToolResult, ToolSchema};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::Executor;
 use uuid::Uuid;
 
 /// Escalation priority levels.

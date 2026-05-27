@@ -46,7 +46,8 @@ use sha1::Sha1;
 // Dependency: helper utilities from the parent plugin module (worker-internal)
 use crate::channels::plugin::{cred_str, map_http_error};
 
-/// Type alias for HMAC-SHA1 used in Webex signature verification.
+// Signing is optional until secrets are configured.
+#[allow(dead_code)]
 type HmacSha1 = Hmac<Sha1>;
 
 /// Base URL for the Webex REST API v1.
@@ -83,36 +84,6 @@ impl WebexChannel {
     /// Returns [`ClawzError::Config`] if `room_id` is missing.
     fn room_id<'a>(&self, ctx: &'a ChannelContext) -> Result<&'a str> {
         cred_str(&ctx.config.credentials, "room_id")
-    }
-
-    /// Verify the `X-Spark-Signature` HMAC-SHA1 header on incoming webhooks.
-    ///
-    /// Webex signs the raw request body with the configured `webhook_secret`.
-    /// If no secret is configured, verification is silently skipped.
-    ///
-    /// # Errors
-    /// Returns [`ClawzError::Auth`] if the signature header is missing or mismatched.
-    fn verify_signature(&self, ctx: &ChannelContext, headers: &HeaderMap, payload: &[u8]) -> Result<()> {
-        let secret = match cred_str(&ctx.config.credentials, "webhook_secret") {
-            Ok(s) => s,
-            Err(_) => return Ok(()),
-        };
-
-        let sig = headers
-            .get("X-Spark-Signature")
-            .and_then(|v| v.to_str().ok())
-            .ok_or_else(|| ClawzError::Auth("missing X-Spark-Signature".into()))?;
-
-        let mut mac = HmacSha1::new_from_slice(secret.as_bytes())
-            .map_err(|e| ClawzError::Auth(format!("HMAC init: {e}")))?;
-        mac.update(payload);
-        let computed = hex::encode(mac.finalize().into_bytes());
-
-        if computed != sig {
-            return Err(ClawzError::Auth("Webex signature mismatch".into()));
-        }
-
-        Ok(())
     }
 
     /// Convert a raw Webex message JSON object into an [`IncomingMessage`].
@@ -159,6 +130,38 @@ impl WebexChannel {
         }
 
         Some(im)
+    }
+}
+
+// Signing is optional until secrets are configured.
+#[allow(dead_code)]
+impl WebexChannel {
+    fn verify_signature(
+        &self,
+        ctx: &ChannelContext,
+        _headers: &HeaderMap,
+        _payload: &[u8],
+    ) -> Result<()> {
+        let secret = match cred_str(&ctx.config.credentials, "webhook_secret") {
+            Ok(s) => s,
+            Err(_) => return Ok(()),
+        };
+
+        let sig = _headers
+            .get("X-Spark-Signature")
+            .and_then(|v| v.to_str().ok())
+            .ok_or_else(|| ClawzError::Auth("missing X-Spark-Signature".into()))?;
+
+        let mut mac = HmacSha1::new_from_slice(secret.as_bytes())
+            .map_err(|e| ClawzError::Auth(format!("HMAC init: {e}")))?;
+        mac.update(_payload);
+        let computed = hex::encode(mac.finalize().into_bytes());
+
+        if computed != sig {
+            return Err(ClawzError::Auth("Webex signature mismatch".into()));
+        }
+
+        Ok(())
     }
 }
 
@@ -322,7 +325,7 @@ impl ChannelPlugin for WebexChannel {
     ///
     /// # Errors
     /// - [`ClawzError::Serialization`] if the payload is not valid JSON.
-    async fn webhook(&self, payload: &[u8], headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
+    async fn webhook(&self, payload: &[u8], _headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
         let body: Value = serde_json::from_slice(payload)
             .map_err(|e| ClawzError::Serialization(format!("Webex webhook: {e}")))?;
 

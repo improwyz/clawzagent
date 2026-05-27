@@ -53,7 +53,7 @@ use clawz_core::{
     error::{ClawzError, Result},
     traits::GovernanceEngine,
     types::governance::{
-        ApprovalRequest, GovernancePolicy, GovernanceResult, TrustTier,
+        ApprovalRequest, GovernancePolicy, GovernanceResult,
     },
 };
 // Dependency: `serde` — serialisation for configuration and cache entries.
@@ -158,7 +158,7 @@ pub struct ClawzGovernanceEngine {
     guardrails: Arc<RwLock<GovernanceGuardrails>>,
     // Dependency: `crate::governance::approval::ApprovalWorkflow`
     /// Human-in-the-loop approval queue.
-    approval_workflow: Arc<ApprovalWorkflow>,
+    pub(crate) approval_workflow: Arc<ApprovalWorkflow>,
     // Dependency: `crate::governance::audit::AuditLogger`
     /// Immutable audit log. Every evaluation (and certain other operations)
     /// appends an entry when `audit_enabled` is true.
@@ -178,12 +178,20 @@ impl ClawzGovernanceEngine {
     /// trust scores, and audit history start empty. The default cache TTL is
     /// **5 seconds**.
     pub fn new(config: GovernanceEngineConfig) -> Self {
+        Self::new_with_approval(config, Arc::new(ApprovalWorkflow::new()))
+    }
+
+    /// Create an engine using a shared approval workflow (gateway + worker).
+    pub fn new_with_approval(
+        config: GovernanceEngineConfig,
+        approval_workflow: Arc<ApprovalWorkflow>,
+    ) -> Self {
         Self {
             config,
             policy_engine: Arc::new(RwLock::new(PolicyEngine::new())),
             trust_scorer: Arc::new(TrustScorer::new()),
             guardrails: Arc::new(RwLock::new(GovernanceGuardrails::new())),
-            approval_workflow: Arc::new(ApprovalWorkflow::new()),
+            approval_workflow,
             audit_logger: Arc::new(AuditLogger::new()),
             cache: Arc::new(RwLock::new(HashMap::new())),
             cache_ttl_secs: 5,

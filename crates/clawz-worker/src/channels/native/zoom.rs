@@ -319,7 +319,7 @@ impl ChannelPlugin for ZoomChannel {
     ///
     /// # Errors
     /// - [`ClawzError::Serialization`] if the payload is not valid JSON.
-    async fn webhook(&self, payload: &[u8], headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
+    async fn webhook(&self, payload: &[u8], _headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
         let body: Value = serde_json::from_slice(payload)
             .map_err(|e| ClawzError::Serialization(format!("Zoom webhook: {e}")))?;
 

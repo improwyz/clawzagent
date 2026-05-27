@@ -22,7 +22,7 @@ use async_trait::async_trait;
 use clawz_core::{
     error::{ClawzError, Result},
     traits::{PipelineContext, PipelineStep, StepOutcome},
-    types::message::{ChatRequest, Message, MessageContent, Role},
+    types::message::{ChatRequest, Message},
 };
 
 // Dependency: provider router and cost tracker from the worker crate.

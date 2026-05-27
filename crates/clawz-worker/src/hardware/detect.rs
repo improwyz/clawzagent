@@ -325,7 +325,7 @@ impl HardwareDetector {
         //   INT8: 1 byte/param   → 1B params ≈ 1000 MB
         //   Q4:   0.5 bytes/param → 1B params ≈ 500 MB
         // Leave 20% headroom for activations / KV cache
-        let usable_mb = (available_mb as f32 * 0.8) as f32;
+        let usable_mb = available_mb as f32 * 0.8;
 
         let max_params_fp16_b = usable_mb / 2000.0;
         let max_params_int8_b = usable_mb / 1000.0;
@@ -364,7 +364,7 @@ fn detect_cpu_features() -> Vec<String> {
             for line in content.lines() {
                 let lower = line.to_lowercase();
                 if lower.starts_with("flags") || lower.starts_with("features") {
-                    if let Some(val) = line.splitn(2, ':').nth(1) {
+                    if let Some(val) = line.split_once(':').map(|x| x.1) {
                         let flags: Vec<&str> = val.split_whitespace().collect();
 
                         // x86 features we care about
@@ -377,7 +377,7 @@ fn detect_cpu_features() -> Vec<String> {
                         ];
 
                         for flag in &flags {
-                            if interesting.iter().any(|&i| i == *flag) {
+                            if interesting.contains(flag) {
                                 features.push(flag.to_uppercase().replace('_', ""));
                             }
                         }

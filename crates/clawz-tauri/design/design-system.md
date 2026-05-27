@@ -12,10 +12,10 @@ The ClawZ Design System defines the visual language for the ClawZ Agent Orchestr
 
 | Asset | File | Usage |
 |-------|------|-------|
-| Copper Full Logo | `docs/Logo/clawz-copper-f.png` | Light theme — headers, splash screens |
-| Copper Icon | `docs/Logo/clawz-copper.png` | Light theme — favicons, compact spaces |
-| Silver Full Logo | `docs/Logo/clawz-silver-f.png` | Dark theme — headers, splash screens |
-| Silver Icon | `docs/Logo/clawz-silver.png` | Dark theme — favicons, compact spaces |
+| Copper Full Logo | `web/public/branding/clawz-logo-light.png` | Light theme — headers, splash screens |
+| Copper Icon | `web/public/branding/clawz-mark-light.png` | Light theme — favicons, compact spaces |
+| Silver Full Logo | `web/public/branding/clawz-logo-dark.png` | Dark theme — headers, splash screens |
+| Silver Icon | `web/public/branding/clawz-mark-dark.png` | Dark theme — favicons, compact spaces |
 
 **Rule:** Silver variants are used on dark backgrounds; copper variants are used on light backgrounds.
 
@@ -206,8 +206,16 @@ crates/clawz-tauri/
 ├── design/
 │   ├── design-system.md        # This document
 │   └── design-preview.html     # Interactive preview
+├── icons/                      # Tauri bundle icons (generated from branding assets)
+│   ├── 32x32.png
+│   ├── 128x128.png
+│   ├── 128x128@2x.png
+│   ├── icon.ico
+│   └── icon.icns
 ├── src-ui/                     # Frontend source (HTML/CSS/JS)
 │   ├── index.html
+│   ├── assets/
+│   │   └── branding/           # Copper/silver logo variants for UI
 │   ├── styles/
 │   │   ├── tokens.css          # CSS custom properties
 │   │   ├── base.css
@@ -229,10 +237,41 @@ crates/clawz-tauri/
 
 ---
 
+## Installation
+
+The Tauri desktop app is built from the ClawZ monorepo. For platform prerequisites, Docker/source install paths, and production deployment, see **[INSTALL.md](../../../INSTALL.md)**.
+
+**Desktop app build (from repo root):**
+
+```bash
+# Prerequisites: Rust 1.87+, system deps for Tauri (see INSTALL.md)
+cd crates/clawz-tauri
+cargo tauri build
+```
+
+**Regenerate bundle icons** after updating logo assets in `src-ui/assets/branding/`:
+
+```bash
+SOURCE=crates/clawz-tauri/src-ui/assets/branding/clawz-copper-f.png
+SQUARE=/tmp/clawz-icon-square.png
+ICONS=crates/clawz-tauri/icons
+
+convert "$SOURCE" -background none -gravity center -extent 676x676 "$SQUARE"
+convert "$SQUARE" -resize 32x32 "$ICONS/32x32.png"
+convert "$SQUARE" -resize 128x128 "$ICONS/128x128.png"
+convert "$SQUARE" -resize 256x256 "$ICONS/128x128@2x.png"
+convert "$SQUARE" -define icon:auto-resize=256,128,64,48,32,16 "$ICONS/icon.ico"
+# macOS .icns: png2icns (icnsutils) with 16–512 px PNGs
+```
+
+Copy UI branding assets into `src-ui/assets/branding/` from `web/public/branding/` (copper and silver full + icon variants).
+
+---
+
 ## Implementation Notes
 
 1. **Theme switching:** Detect `prefers-color-scheme` via JavaScript/CSS. Tauri provides OS theme events.
-2. **Logo swapping:** Toggle between copper and silver logo assets when the theme changes.
+2. **Logo swapping:** Toggle between copper and silver logo assets in `src-ui/assets/branding/` when the theme changes.
 3. **Tauri CSP:** Ensure `tauri.conf.json` CSP allows inline styles for the theme system.
 4. **Font loading:** Bundle Inter and JetBrains Mono or load from Google Fonts with local fallback.
 5. **Mobile frame:** For mobile Tauri builds, use the 320px-wide mobile mockup layout with a bottom navigation bar replacing the sidebar.

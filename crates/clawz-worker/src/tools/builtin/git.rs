@@ -201,7 +201,7 @@ impl Tool for GitTool {
                     .map(|line| {
                         let parts: Vec<&str> = line.splitn(5, '|').collect();
                         serde_json::json!({
-                            "hash": parts.get(0).unwrap_or(&""),
+                            "hash": parts.first().unwrap_or(&""),
                             "author": parts.get(1).unwrap_or(&""),
                             "email": parts.get(2).unwrap_or(&""),
                             "date": parts.get(3).unwrap_or(&""),
@@ -389,11 +389,20 @@ fn format_git_status(porcelain_v2: &str) -> String {
     let mut lines = Vec::new();
     for line in porcelain_v2.lines() {
         if line.starts_with("# branch.head ") {
-            lines.push(format!("Branch: {}", &line[15..]));
+            lines.push(format!(
+                "Branch: {}",
+                line.strip_prefix("# branch.head ").unwrap_or(line)
+            ));
         } else if line.starts_with("# branch.upstream ") {
-            lines.push(format!("Upstream: {}", &line[19..]));
+            lines.push(format!(
+                "Upstream: {}",
+                line.strip_prefix("# branch.upstream ").unwrap_or(line)
+            ));
         } else if line.starts_with("# branch.ab ") {
-            lines.push(format!("Ahead/Behind: {}", &line[12..]));
+            lines.push(format!(
+                "Ahead/Behind: {}",
+                line.strip_prefix("# branch.ab ").unwrap_or(line)
+            ));
         } else if let Some(rest) = line.strip_prefix("1 ") {
             // Modified/added tracked file
             let parts: Vec<&str> = rest.splitn(9, ' ').collect();

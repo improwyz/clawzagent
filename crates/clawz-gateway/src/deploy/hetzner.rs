@@ -19,7 +19,9 @@
 //! * `clawz_core::error` — error types.
 
 // Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{
+    destroy_http_ok, external_resource_name, generate_deployment_id, resolve_api_token,
+};
 // Dependency: provider trait and shared vocabulary.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -100,19 +102,59 @@ impl DeployProvider for HetznerAdapter {
             .clone()
             .unwrap_or_else(|| "cx21".into());
 
-        let _body = serde_json::json!({
-            "name": format!("clawz-{}", id.replace('-', "")),
+        let token = resolve_api_token(config, "HETZNER_API_TOKEN", "Hetzner")?;
+        let server_name = external_resource_name(&id);
+        let image = match &config.mode {
+            DeployMode::Docker { image } => format!(
+                "#!/bin/bash\napt-get update && apt-get install -y docker.io\n\
+                 docker run -d -p 8080:8080 {image}\n"
+            ),
+            DeployMode::NativeBinary => "#!/bin/bash\n# native binary bootstrap\n".into(),
+            _ => String::new(),
+        };
+
+        let body = serde_json::json!({
+            "name": server_name,
             "server_type": server_type,
             "image": "ubuntu-22.04",
-            "user_data": format!("#!/bin/bash\n# Clawz deployment setup\n")
+            "user_data": image,
+            "location": "nbg1",
+            "start_after_create": true,
         });
 
-        log::info!("Deploying to Hetzner Cloud: type={}", server_type);
+        let resp = self
+            .client
+            .post(self.api_url("/servers"))
+            .bearer_auth(&token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Hetzner deploy error: {e}")))?;
+
+        let http_status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        let status = if http_status.is_success() {
+            DeploymentStatus::Pending
+        } else {
+            return Err(ClawzError::Provider(format!(
+                "Hetzner create server failed ({http_status}): {text}"
+            )));
+        };
+
+        let parsed: serde_json::Value =
+            serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({}));
+        let deploy_url = parsed["server"]["public_net"]["ipv4"]["ip"]
+            .as_str()
+            .map(|ip| format!("http://{ip}:8080"))
+            .unwrap_or_else(|| "https://hetzner.cloud".into());
+        let server_id = parsed["server"]["id"].as_i64().map(|n| n.to_string());
 
         Ok(DeploymentInfo {
             id,
-            url: "https://hetzner.cloud".into(),
-            status: DeploymentStatus::Pending,
+            external_resource: server_id.or(Some(server_name.clone())),
+            url: deploy_url,
+            status,
+            ..Default::default()
         })
     }
 
@@ -120,9 +162,61 @@ impl DeployProvider for HetznerAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Hetzner Cloud deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let token = std::env::var("HETZNER_API_TOKEN").map_err(|_| {
+            ClawzError::Auth("HETZNER_API_TOKEN required to destroy Hetzner servers".into())
+        })?;
+        let server_id = if let Some(sid) = external_resource {
+            sid.to_string()
+        } else {
+            let server_name = external_resource_name(id);
+            let list = self
+                .client
+                .get(self.api_url("/servers"))
+                .bearer_auth(&token)
+                .send()
+                .await
+                .map_err(|e| ClawzError::Provider(format!("Hetzner list servers error: {e}")))?;
+
+            let body: serde_json::Value = list.json().await.map_err(|e| {
+                ClawzError::Provider(format!("Hetzner list parse error: {e}"))
+            })?;
+
+            body["servers"]
+                .as_array()
+                .and_then(|servers| {
+                    servers.iter().find_map(|s| {
+                        if s["name"].as_str() == Some(server_name.as_str()) {
+                            s["id"].as_i64().map(|n| n.to_string())
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .ok_or_else(|| ClawzError::NotFound {
+                    entity: "hetzner_server".into(),
+                    id: server_name.clone(),
+                })?
+        };
+
+        let resp = self
+            .client
+            .delete(self.api_url(&format!("/servers/{server_id}")))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Hetzner delete server error: {e}")))?;
+
+        let status = resp.status();
+        if destroy_http_ok(status) {
+            log::info!("Hetzner server removed: {server_id} (deployment {id})");
+            Ok(())
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Hetzner delete server failed ({status}): {text}"
+            )))
+        }
     }
 }
 

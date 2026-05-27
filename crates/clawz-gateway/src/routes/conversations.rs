@@ -8,12 +8,11 @@
 //! # Cross-module interactions
 //! - `create_conversation` validates that the referenced `agent_id` exists in
 //!   `AppState.agents` before creating the thread.
-//! - `send_message` auto-generates an assistant reply when the role is `"user"`,
-//!   simulating the downstream agent loop that will eventually be wired to real
-//!   model inference.
+//! - `send_message` runs a worker turn when the role is `"user"` and persists
+//!   messages to Postgres when `DATABASE_URL` is configured.
 
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -24,7 +23,9 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 // Dependency: AppState, ConversationRecord, GatewayError, MessageRecord defined in crate root.
-use crate::{AppState, ConversationRecord, GatewayError, MessageRecord};
+use crate::auth::AuthContext;
+use crate::routes::conversation_room;
+use crate::{AppState, ConversationRecord, GatewayError};
 
 /// Assemble the conversation sub-router.
 ///
@@ -81,10 +82,11 @@ async fn list_conversations(
     // Clamp pagination to sensible bounds so a mis-configured client cannot
     // request an unbounded slice that locks the state for too long.
     let page = q.page.unwrap_or(1).max(1);
-    let limit = q.limit.unwrap_or(20).max(1).min(100);
+    let limit = q.limit.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * limit;
 
     let conversations = state.conversations.read().await;
+    let rooms = state.rooms.read().await;
     let filtered: Vec<&ConversationRecord> = conversations
         .iter()
         .filter(|c| {
@@ -102,12 +104,19 @@ async fn list_conversations(
         .skip(offset)
         .take(limit)
         .map(|c| {
+            let message_count = rooms
+                .iter()
+                .find(|r| r.id == c.id)
+                .filter(|r| !r.messages.is_empty())
+                .map(|r| r.messages.len())
+                .unwrap_or_else(|| c.messages.len());
             json!({
                 "id": c.id,
                 "agent_id": c.agent_id,
+                "room_id": c.id,
                 "title": c.title,
                 "archived": c.archived,
-                "message_count": c.messages.len(),
+                "message_count": message_count,
                 "created_at": c.created_at,
                 "updated_at": c.updated_at,
             })
@@ -128,6 +137,7 @@ async fn list_conversations(
 /// cannot be created through the public API.
 async fn create_conversation(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthContext>>,
     Json(body): Json<CreateConversationBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
     let agent_id = body.agent_id.ok_or_else(|| {
@@ -156,12 +166,29 @@ async fn create_conversation(
 
     let mut conversations = state.conversations.write().await;
     conversations.push(record.clone());
+    if let Some(ref pool) = state.db {
+        crate::postgres_store::persist_conversation(pool, &record)
+            .await
+            .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    }
+    drop(conversations);
+
+    let tenant_id = auth
+        .as_ref()
+        .map(|Extension(ctx)| ctx.tenant_id.clone())
+        .unwrap_or_else(crate::postgres_store::default_tenant);
+    let created_by = auth
+        .as_ref()
+        .map(|Extension(ctx)| ctx.user_id.clone())
+        .unwrap_or_else(|| "system".to_string());
+    conversation_room::ensure_direct_room(&state, &record, &tenant_id, &created_by).await?;
 
     Ok((
         StatusCode::CREATED,
         Json(json!({
             "id": record.id,
             "agent_id": record.agent_id,
+            "room_id": record.id,
             "title": record.title,
             "archived": record.archived,
             "message_count": 0,
@@ -181,12 +208,22 @@ async fn get_conversation(
         .iter()
         .find(|c| c.id == id)
         .ok_or_else(|| GatewayError::not_found("Conversation", &id))?;
+    let message_count = {
+        let rooms = state.rooms.read().await;
+        rooms
+            .iter()
+            .find(|r| r.id == id)
+            .filter(|r| !r.messages.is_empty())
+            .map(|r| r.messages.len())
+            .unwrap_or_else(|| record.messages.len())
+    };
     Ok(Json(json!({
         "id": record.id,
         "agent_id": record.agent_id,
+        "room_id": record.id,
         "title": record.title,
         "archived": record.archived,
-        "message_count": record.messages.len(),
+        "message_count": message_count,
         "created_at": record.created_at,
         "updated_at": record.updated_at,
     })))
@@ -206,81 +243,75 @@ async fn delete_conversation(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// `GET /conversations/{id}/messages` — list every message in a thread.
+/// `GET /conversations/{id}/messages` — list messages from the linked room log.
 async fn list_messages(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, GatewayError> {
-    let conversations = state.conversations.read().await;
-    let record = conversations
-        .iter()
-        .find(|c| c.id == id)
-        .ok_or_else(|| GatewayError::not_found("Conversation", &id))?;
+    let messages = conversation_room::list_conversation_messages(&state, &id).await?;
     Ok(Json(json!({
         "conversation_id": id,
-        "messages": record.messages,
-        "total": record.messages.len(),
+        "room_id": id,
+        "messages": messages,
+        "total": messages.len(),
     })))
 }
 
-/// `POST /conversations/{id}/messages` — append a message.
-///
-/// When `role` is `"user"` the gateway synthesises an assistant response so the
-/// UI can render a complete chat turn immediately. In production this will be
-/// replaced by an async inference call to the agent's backing model.
+/// `POST /conversations/{id}/messages` — append via the room pipeline (async agent turns).
 async fn send_message(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthContext>>,
     Path(id): Path<String>,
     Json(body): Json<SendMessageBody>,
-) -> Result<Json<Value>, GatewayError> {
+) -> Result<(StatusCode, Json<Value>), GatewayError> {
     let content = body.content.ok_or_else(|| {
         GatewayError::Unprocessable("field 'content' is required".to_string())
     })?;
     let role = body.role.unwrap_or_else(|| "user".to_string());
 
-    let now = Utc::now();
-    let user_msg = MessageRecord {
-        id: Uuid::new_v4().to_string(),
-        conversation_id: id.clone(),
-        role: role.clone(),
-        content: content.clone(),
-        created_at: now,
+    let tenant_id = auth
+        .as_ref()
+        .map(|Extension(ctx)| ctx.tenant_id.clone())
+        .unwrap_or_else(crate::postgres_store::default_tenant);
+    let sender_user_id = auth
+        .as_ref()
+        .map(|Extension(ctx)| ctx.user_id.clone())
+        .unwrap_or_else(|| "dev".to_string());
+
+    let conversation = {
+        let conversations = state.conversations.read().await;
+        conversations
+            .iter()
+            .find(|c| c.id == id)
+            .cloned()
+            .ok_or_else(|| GatewayError::not_found("Conversation", &id))?
     };
 
-    // Generate assistant response when role is "user" so the conversation
-    // feels interactive even before the real inference backend is wired in.
-    let assistant_msg = if role == "user" {
-        Some(MessageRecord {
-            id: Uuid::new_v4().to_string(),
-            conversation_id: id.clone(),
-            role: "assistant".to_string(),
-            // Truncate content to 120 chars so the placeholder response stays readable.
-            content: format!("Response to: {}", &content[..content.len().min(120)]),
-            created_at: now,
-        })
-    } else {
-        None
-    };
+    let (room_msg, turn_queued) = conversation_room::append_conversation_message(
+        &state,
+        &conversation,
+        &tenant_id,
+        &sender_user_id,
+        &role,
+        content,
+    )
+    .await?;
 
-    let mut conversations = state.conversations.write().await;
-    let record = conversations
-        .iter_mut()
-        .find(|c| c.id == id)
-        .ok_or_else(|| GatewayError::not_found("Conversation", &id))?;
+    let legacy = conversation_room::room_message_to_conversation(&room_msg);
+    let status = if turn_queued { "turn_queued" } else { "accepted" };
 
-    record.messages.push(user_msg.clone());
-    let response_msg = if let Some(ref am) = assistant_msg {
-        record.messages.push(am.clone());
-        Some(am.clone())
-    } else {
-        None
-    };
-    record.updated_at = now;
-
-    Ok(Json(json!({
-        "message": user_msg,
-        "response": response_msg,
-    })))
+    Ok((
+        if role == "user" {
+            StatusCode::ACCEPTED
+        } else {
+            StatusCode::OK
+        },
+        Json(json!({
+            "message": legacy,
+            "room_message": room_msg,
+            "status": status,
+        })),
+    ))
 }
 
 /// `POST /conversations/{id}/archive` — soft-delete a thread.

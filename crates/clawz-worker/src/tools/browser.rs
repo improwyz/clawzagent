@@ -83,7 +83,7 @@ impl TabConnection {
         });
 
         self.ws
-            .send(Message::Text(cmd.to_string().into()))
+            .send(Message::Text(cmd.to_string()))
             .await
             .map_err(|e| ClawzError::Tool(format!("CDP send failed: {e}")))?;
 
@@ -153,7 +153,7 @@ impl BrowserManager {
             .chrome_path
             .clone()
             .or_else(|| std::env::var("CHROME_BIN").ok())
-            .unwrap_or_else(|| find_chrome_binary());
+            .unwrap_or_else(find_chrome_binary);
 
         let mut cmd = tokio::process::Command::new(&chrome_bin);
         cmd.args([

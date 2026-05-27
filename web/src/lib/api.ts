@@ -1,8 +1,13 @@
 const API_BASE = '/api/v1';
 
+function authHeaders(): Record<string, string> {
+  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('clawz_token') : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...init?.headers },
     ...init,
   });
   if (!res.ok) {
@@ -10,6 +15,18 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error(`API ${res.status}: ${text}`);
   }
   return res.json() as Promise<T>;
+}
+
+interface PaginatedResponse<T> {
+  data?: T;
+  total?: number;
+}
+
+function unwrapData<T>(payload: PaginatedResponse<T> | T): T {
+  if (payload != null && typeof payload === 'object' && 'data' in payload) {
+    return (payload as PaginatedResponse<T>).data as T;
+  }
+  return payload as T;
 }
 
 // ── Agents ─────────────────────────────────────────────────────────────────
@@ -25,7 +42,10 @@ export interface Agent {
   conversation_count?: number;
 }
 
-export function fetchAgents() { return req<Agent[]>('/agents'); }
+export async function fetchAgents() {
+  const res = await req<PaginatedResponse<Agent[]> | Agent[]>('/agents');
+  return unwrapData(res) ?? [];
+}
 export function fetchAgent(id: string) { return req<Agent>(`/agents/${id}`); }
 export function createAgent(data: Partial<Agent>) {
   return req<Agent>('/agents', { method: 'POST', body: JSON.stringify(data) });
@@ -53,7 +73,7 @@ export interface DashboardMetrics {
   provider_distribution: { name: string; value: number }[];
 }
 
-export function fetchMetrics() { return req<DashboardMetrics>('/metrics'); }
+export function fetchMetrics() { return req<DashboardMetrics>('/dashboard/metrics'); }
 
 // ── Fleet ──────────────────────────────────────────────────────────────────
 export interface FleetNode {
@@ -79,7 +99,18 @@ export interface Deployment {
   deployed_at: string;
 }
 
-export function fetchFleet() { return req<{ nodes: FleetNode[]; deployments: Deployment[] }>('/fleet'); }
+export async function fetchFleet() {
+  const res = await req<PaginatedResponse<FleetNode[]> | { nodes?: FleetNode[]; deployments?: Deployment[] }>(
+    '/fleet',
+  );
+  if (Array.isArray((res as PaginatedResponse<FleetNode[]>).data)) {
+    return { nodes: (res as PaginatedResponse<FleetNode[]>).data ?? [], deployments: [] as Deployment[] };
+  }
+  return {
+    nodes: (res as { nodes?: FleetNode[] }).nodes ?? [],
+    deployments: (res as { deployments?: Deployment[] }).deployments ?? [],
+  };
+}
 export function deployAgent(agentId: string, nodeId: string, provider: string) {
   return req<Deployment>('/fleet/deploy', {
     method: 'POST',
@@ -159,7 +190,16 @@ export interface Channel {
   enabled: boolean;
 }
 
-export function fetchChannels() { return req<Channel[]>('/channels'); }
+export async function fetchChannels() {
+  const res = await req<PaginatedResponse<Channel[]> | Channel[]>('/channels');
+  const raw = unwrapData(res) ?? [];
+  return raw.map((ch) => ({
+    ...ch,
+    type: ch.type ?? (ch as { channel_type?: string }).channel_type ?? 'unknown',
+    status: ch.status ?? (ch.enabled ? 'active' : 'idle'),
+    messages: ch.messages ?? 0,
+  }));
+}
 export function updateChannel(id: string, data: Partial<Channel>) {
   return req<Channel>(`/channels/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
@@ -199,7 +239,22 @@ export interface ToolsData {
   docker_tools: DockerTool[];
 }
 
-export function fetchTools() { return req<ToolsData>('/tools'); }
+export async function fetchTools(): Promise<ToolsData> {
+  const res = await req<PaginatedResponse<Array<Record<string, unknown>>> | ToolsData>('/tools');
+  if (res != null && typeof res === 'object' && 'tools' in res && Array.isArray((res as ToolsData).tools)) {
+    return res as ToolsData;
+  }
+  const raw = unwrapData(res as PaginatedResponse<Array<Record<string, unknown>>>) ?? [];
+  const tools: Tool[] = raw.map((t) => ({
+    id: String(t.id ?? ''),
+    name: String(t.name ?? ''),
+    category: String(t.category ?? t.tool_type ?? 'function'),
+    description: String(t.description ?? ''),
+    enabled: Boolean(t.enabled ?? true),
+    icon: t.icon as string | undefined,
+  }));
+  return { tools, mcp_servers: [], docker_tools: [] };
+}
 export function toggleTool(id: string, enabled: boolean) {
   return req<Tool>(`/tools/${id}`, { method: 'PUT', body: JSON.stringify({ enabled }) });
 }
@@ -208,6 +263,58 @@ export function executeTool(id: string, args: Record<string, unknown>) {
     method: 'POST',
     body: JSON.stringify({ args }),
   });
+}
+
+// ── Auth ─────────────────────────────────────────────────────────────────────
+export interface AuthResponse {
+  token: string;
+  user_id: string;
+  email: string;
+  role: string;
+}
+
+export async function login(email: string, password: string): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE}/system/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Login failed ${res.status}: ${text}`);
+  }
+  const data = (await res.json()) as AuthResponse;
+  if (typeof localStorage !== 'undefined' && data.token) {
+    localStorage.setItem('clawz_token', data.token);
+  }
+  return data;
+}
+
+export async function register(
+  email: string,
+  password: string,
+  role?: string,
+): Promise<AuthResponse & { api_key?: string }> {
+  const res = await fetch(`${API_BASE}/system/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, role }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Register failed ${res.status}: ${text}`);
+  }
+  const data = (await res.json()) as AuthResponse & { api_key?: string };
+  if (typeof localStorage !== 'undefined' && data.token) {
+    localStorage.setItem('clawz_token', data.token);
+  }
+  return data;
+}
+
+export function clearAuthToken() {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('clawz_token');
+  }
 }
 
 // ── Config / Providers ─────────────────────────────────────────────────────
@@ -254,4 +361,184 @@ export function connectSaas(id: string) {
 }
 export function disconnectSaas(id: string) {
   return req<void>(`/config/saas/${id}/disconnect`, { method: 'POST' });
+}
+
+// ── Rooms ────────────────────────────────────────────────────────────────────
+export type RoomType = 'direct' | 'agent_team' | 'shared_agent';
+export type ParticipantType = 'user' | 'agent';
+export type ParticipantRole = 'owner' | 'member' | 'leader' | 'observer';
+export type MessageKind =
+  | 'user_text'
+  | 'agent_text'
+  | 'system'
+  | 'delegation'
+  | 'approval_request';
+export type MessageVisibility = 'room' | 'private' | 'internal' | 'side_thread';
+
+export interface RoomParticipant {
+  participant_type: ParticipantType;
+  participant_id: string;
+  name?: string;
+  role: ParticipantRole;
+}
+
+export interface Room {
+  id: string;
+  tenant_id?: string;
+  title?: string;
+  room_type: RoomType;
+  orchestration_mode?: 'single' | 'team' | 'swarm';
+  swarm_pattern?: string | null;
+  parent_room_id?: string | null;
+  visibility?: 'public' | 'private';
+  participants: RoomParticipant[];
+  primary_agent_id?: string;
+  metadata?: Record<string, unknown>;
+  created_at?: string;
+}
+
+export interface RoomMessage {
+  id: string;
+  room_id: string;
+  seq: number;
+  sender_type: ParticipantType | 'system';
+  sender_id: string;
+  sender_name?: string;
+  content: string;
+  message_kind?: MessageKind;
+  visibility: MessageVisibility;
+  target_agent_ids?: string[];
+  thread_id?: string | null;
+  timestamp?: string;
+  created_at?: string;
+}
+
+/** Map gateway message records to UI-friendly shape. */
+export function normalizeRoomMessage(msg: RoomMessage): RoomMessage {
+  const kind =
+    msg.message_kind ??
+    (msg.sender_type === 'user'
+      ? 'user_text'
+      : msg.sender_type === 'agent'
+        ? 'agent_text'
+        : 'system');
+  return {
+    ...msg,
+    message_kind: kind,
+    timestamp: msg.timestamp ?? msg.created_at ?? new Date().toISOString(),
+  };
+}
+
+export interface CreateRoomRequest {
+  title?: string;
+  room_type: RoomType;
+  orchestration_mode?: 'single' | 'team' | 'swarm';
+  participants: {
+    participant_type: ParticipantType;
+    participant_id: string;
+    role?: ParticipantRole;
+  }[];
+  primary_agent_id?: string;
+}
+
+export interface SendRoomMessageRequest {
+  content: string;
+  client_message_id?: string;
+  mentions?: string[];
+  visibility?: MessageVisibility;
+  thread_id?: string;
+}
+
+export interface CreateSideThreadRequest {
+  title?: string;
+  participant_ids?: string[];
+}
+
+export interface SideThread {
+  id: string;
+  room_id: string;
+  title?: string;
+  participant_ids: string[];
+  created_by: string;
+  created_at: string;
+}
+
+export interface OrchestrateRoomRequest {
+  orchestration_mode?: string;
+  config?: Record<string, unknown>;
+  agent_ids?: string[];
+}
+
+export interface SendRoomMessageResponse {
+  message: RoomMessage;
+  response?: RoomMessage | null;
+}
+
+export interface PromoteMessageResponse {
+  promoted: RoomMessage;
+  source_message_id: string;
+}
+
+/** `GET /rooms` — list rooms (when gateway exposes list endpoint). */
+export async function listRooms() {
+  const res = await req<PaginatedResponse<Room[]> | Room[]>('/rooms');
+  return unwrapData(res) ?? [];
+}
+
+export function fetchRooms() {
+  return listRooms();
+}
+
+export function createRoom(data: CreateRoomRequest) {
+  return req<Room>('/rooms', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function getRoom(id: string) {
+  return req<Room>(`/rooms/${id}`);
+}
+
+export async function listRoomMessages(roomId: string, afterSeq?: number) {
+  const qs = afterSeq != null ? `?after_seq=${afterSeq}` : '';
+  const res = await req<{ messages: RoomMessage[]; has_more?: boolean }>(
+    `/rooms/${roomId}/messages${qs}`,
+  );
+  return {
+    ...res,
+    messages: (res.messages ?? []).map(normalizeRoomMessage),
+  };
+}
+
+export async function sendRoomMessage(roomId: string, data: SendRoomMessageRequest) {
+  const res = await req<SendRoomMessageResponse>(`/rooms/${roomId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return {
+    message: normalizeRoomMessage(res.message),
+    response: res.response ? normalizeRoomMessage(res.response) : null,
+  };
+}
+
+export async function createSideThread(roomId: string, data?: CreateSideThreadRequest) {
+  const res = await req<{ side_thread: SideThread }>(`/rooms/${roomId}/side-threads`, {
+    method: 'POST',
+    body: JSON.stringify(data ?? {}),
+  });
+  return res.side_thread;
+}
+
+export function promoteMessage(roomId: string, messageId: string) {
+  return req<PromoteMessageResponse>(`/rooms/${roomId}/messages/${messageId}/promote`, {
+    method: 'POST',
+  }).then((res) => ({
+    ...res,
+    promoted: normalizeRoomMessage(res.promoted),
+  }));
+}
+
+export function orchestrateRoom(roomId: string, data?: OrchestrateRoomRequest) {
+  return req<{ run_id: string }>(`/rooms/${roomId}/orchestrate`, {
+    method: 'POST',
+    body: JSON.stringify(data ?? {}),
+  });
 }

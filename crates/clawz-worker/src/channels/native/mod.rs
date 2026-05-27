@@ -1,7 +1,7 @@
 //! Native channel implementations for the ClawZ worker execution layer.
 //!
 //! This module bundles concrete implementations of the [`ChannelPlugin`] trait
-//! for 10 popular communication platforms. Each submodule encapsulates the
+//! for popular communication platforms (including Twilio and Google Voice). Each submodule encapsulates the
 //! platform-specific HTTP API, authentication flow, pagination strategy, and
 //! webhook normalization logic required to turn external messages into the
 //! worker's canonical [`IncomingMessage`] / [`OutgoingMessage`] types.
@@ -38,6 +38,8 @@ pub mod whatsapp;
 pub mod threecx;
 pub mod ringcentral;
 pub mod dialpad;
+pub mod twilio;
+pub mod google_voice;
 pub mod webhook;
 
 // Dependency: Re-export each channel struct so consumers only need `native::*`
@@ -50,6 +52,8 @@ pub use whatsapp::WhatsAppChannel;
 pub use threecx::ThreeCXChannel;
 pub use ringcentral::RingCentralChannel;
 pub use dialpad::DialpadChannel;
+pub use twilio::TwilioChannel;
+pub use google_voice::GoogleVoiceChannel;
 pub use webhook::WebhookChannel;
 
 // Dependency: ChannelRegistry lives in the sibling `registry` module
@@ -57,7 +61,7 @@ use crate::channels::registry::ChannelRegistry;
 // Dependency: ChannelConfig is defined in the shared `core` crate
 use clawz_core::types::channel::ChannelConfig;
 
-/// Register all 10 native channel implementations into the given registry.
+/// Register all native channel implementations into the given registry.
 ///
 /// Each channel is constructed with a default [`ChannelConfig`] keyed by
 /// platform name.  Callers may add additional instances (e.g. a second Slack
@@ -90,5 +94,7 @@ pub fn register_all(registry: &mut ChannelRegistry) {
     native!("3cx", ThreeCXChannel::new());
     native!("ringcentral", RingCentralChannel::new());
     native!("dialpad", DialpadChannel::new());
+    native!("twilio", TwilioChannel::new());
+    native!("google_voice", GoogleVoiceChannel::new());
     native!("webhook", WebhookChannel::new());
 }

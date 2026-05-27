@@ -21,31 +21,43 @@ Licensed under **Elastic License 2.0 (ELv2)**. All contributors agree to the Con
 - **Docker** (optional, for container orchestration testing)
 - **Git** and a GitHub account
 
-### Clone & Build
+### Install & run locally
+
+The fastest path is the one-click installer — it clones the repo, creates `.env`, and starts gateway, worker, and Postgres (pgvector):
 
 ```bash
-git clone https://github.com/enterpryz-ventures/clawz.git
+git clone https://github.com/improwyz/clawz.git
 cd clawz
+./scripts/install.sh          # Docker when available, else source build
+./scripts/install.sh --source   # Force cargo build without Docker
+./scripts/install.sh --with-web # Include React dashboard build
+```
+
+See **[INSTALL.md](INSTALL.md)** for Windows (`install.ps1`), production checklist, and troubleshooting.
+
+### Clone & build (without installer)
+
+```bash
+git clone https://github.com/improwyz/clawz.git
+cd clawz
+cp .env.example .env
 cargo build --workspace
 ```
 
-### Run Tests
+### Run tests
 
 ```bash
 cargo test --workspace
 ```
 
-### Set Up Local Database
+### Database (optional manual setup)
+
+The Docker installer and Compose stack provision Postgres with pgvector automatically. For a custom Postgres instance:
 
 ```bash
-# Create postgres database with pgvector
 createdb clawz
 psql clawz -c "CREATE EXTENSION IF NOT EXISTS pgvector"
-
-# Set DATABASE_URL for sqlx
 export DATABASE_URL="postgres://user:password@localhost:5432/clawz"
-
-# Run migrations (if applicable)
 cargo sqlx migrate run
 ```
 

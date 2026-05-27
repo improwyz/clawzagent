@@ -3,11 +3,13 @@
   "productName": "ClawZ",
   "version": "1.0.0",
   "identifier": "com.clawz.app",
-  "build": {},
+  "build": {
+    "frontendDist": "src-ui"
+  },
   "app": {
     "windows": [
       {
-        "title": "ClawZ Agent Runtime",
+        "title": "ClawZ",
         "width": 800,
         "height": 600,
         "resizable": true,

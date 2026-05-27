@@ -16,6 +16,7 @@ pub mod message;
 pub mod orchestration;
 pub mod purpose;
 pub mod reality;
+pub mod room;
 pub mod tenant;
 pub mod tool;
 pub mod tool_risk;
@@ -33,6 +34,7 @@ pub use message::*;
 pub use orchestration::*;
 pub use purpose::*;
 pub use reality::*;
+pub use room::*;
 // tenant exports — rename Role to avoid collision with message::Role
 pub use tenant::BudgetLease;
 pub use tenant::NetworkScope;

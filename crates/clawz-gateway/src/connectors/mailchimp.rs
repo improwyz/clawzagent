@@ -63,7 +63,7 @@ impl MailchimpConnector {
     pub fn with_api_key(api_key: impl Into<String>) -> Self {
         let key: String = api_key.into();
         // Extract data center from key (e.g., "abc123-us1" -> "us1")
-        let dc = key.split('-').last().map(|s| s.to_string());
+        let dc = key.rsplit('-').next().map(|s| s.to_string());
         let oauth = OAuth2Flow::new("", "", "", "", "", vec![]);
         Self {
             oauth,
@@ -157,14 +157,7 @@ impl SaaSConnector for MailchimpConnector {
             .await
             .map_err(|e| ClawzError::Provider(format!("Mailchimp list failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
-        let key = match obj {
-            "lists" => "lists",
-            "campaigns" => "campaigns",
-            "templates" => "templates",
-            "members" => "members",
-            _ => obj,
-        };
-        Ok(json[key].as_array().cloned().unwrap_or_default())
+        Ok(json[obj].as_array().cloned().unwrap_or_default())
     }
 
     async fn create_object(&self, obj: &str, data: Value) -> Result<Value> {

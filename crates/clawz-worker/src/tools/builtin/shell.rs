@@ -35,7 +35,7 @@ const BLOCKED_COMMANDS: &[&str] = &[
     "crontab",
 ];
 
-const MAX_OUTPUT_BYTES: usize = 1 * 1024 * 1024; // 1 MB
+const MAX_OUTPUT_BYTES: usize = 1024 * 1024; // 1 MB
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
 
 pub struct ShellTool {

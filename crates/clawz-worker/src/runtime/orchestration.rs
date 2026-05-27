@@ -153,6 +153,7 @@ impl WorkflowStepDef {
 
 /// Mutable per-step state tracked during workflow execution.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct StepState {
     status: StepStatus,
     output: Option<StepOutput>,
@@ -162,6 +163,7 @@ struct StepState {
 }
 
 impl StepState {
+    #[allow(dead_code)]
     fn pending() -> Self {
         Self {
             status: StepStatus::Pending,
@@ -193,6 +195,7 @@ pub struct Workflow {
     /// User-defined steps keyed by name.
     steps: HashMap<String, WorkflowStepDef>,
     /// Topological order (computed once on execute).
+    #[allow(dead_code)]
     step_order: Vec<String>,
 }
 

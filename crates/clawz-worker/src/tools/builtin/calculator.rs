@@ -135,6 +135,7 @@ enum Token {
 pub struct CalcError(String);
 
 impl CalcError {
+    #[allow(dead_code)]
     fn parse(msg: impl Into<String>) -> Self {
         CalcError(msg.into())
     }

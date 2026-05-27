@@ -81,6 +81,7 @@ const GGUF_MAGIC: u32 = 0x46475547;
 /// Magic number for GGML legacy files (first 4 bytes = 0x67676d6c = "ggml" or 0x67676a74)
 const GGML_MAGIC: u32 = 0x67676d6c;
 /// ONNX protobuf magic (first 2 bytes of a protobuf file vary; check extension + attempt parse)
+#[allow(dead_code)]
 const ONNX_MAGIC_BYTES: &[u8] = b"\x08\x07"; // common ONNX pb field
 
 /// Metadata read from a GGUF file header.
@@ -105,6 +106,7 @@ pub struct GgufMetadata {
 /// Each variant carries an approximate bytes-per-parameter cost used to estimate
 /// memory requirements.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(non_camel_case_types)]
 pub enum Quantization {
     /// Full-precision 32-bit float (4 bytes/param)
     F32,
@@ -152,7 +154,7 @@ impl Quantization {
     }
 
     /// Parse a quantization string (case-insensitive) into a [`Quantization`] variant.
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_quantization(s: &str) -> Self {
         match s.to_uppercase().as_str() {
             "F32" => Quantization::F32,
             "F16" => Quantization::F16,
@@ -506,7 +508,7 @@ fn read_gguf_metadata(path: &Path) -> Result<GgufMetadata> {
     }
 
     let version = read_u32_le(&mut file)?;
-    if version < 1 || version > 3 {
+    if !(1..=3).contains(&version) {
         // Accept versions 1-3; warn but continue
         log::warn!("GGUF version {} may not be fully supported", version);
     }
@@ -707,7 +709,7 @@ fn extract_quantization(meta: &HashMap<String, String>, path: &Path) -> Option<Q
     // GGUF stores file type as integer; map common values
     if let Some(val) = meta.get("general.file_type") {
         let quant_str = gguf_file_type_to_quant_str(val.parse::<u32>().unwrap_or(0));
-        return Some(Quantization::from_str(quant_str));
+        return Some(Quantization::parse_quantization(quant_str));
     }
     // Fall back to filename
     guess_quantization_from_filename(path)
@@ -815,7 +817,7 @@ fn guess_quantization_from_filename(path: &Path) -> Option<Quantization> {
 
     for q in &quants {
         if name.contains(q) {
-            return Some(Quantization::from_str(q));
+            return Some(Quantization::parse_quantization(q));
         }
     }
     None

@@ -19,7 +19,9 @@
 //! * `clawz_core::error` — error types.
 
 // Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{
+    destroy_http_ok, generate_deployment_id, massivegrid_env_name, resolve_api_token,
+};
 // Dependency: provider trait and shared vocabulary.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -59,10 +61,6 @@ impl MassiveGridAdapter {
         format!("{}/1.0/environment/control/rest/createenvironment", self.api_endpoint)
     }
 
-    /// URL for the Jelastic container deployment endpoint.
-    fn deploy_url(&self) -> String {
-        format!("{}/1.0/environment/build/rest/deploycontainer", self.api_endpoint)
-    }
 }
 
 #[async_trait]
@@ -132,7 +130,7 @@ impl DeployProvider for MassiveGridAdapter {
         };
 
         let id = generate_deployment_id("mg");
-        let env_name = format!("clawz-{}", &id[3..11]);
+        let env_name = massivegrid_env_name(&id);
         let region = config.region.as_deref().unwrap_or("default");
 
         // Step 1: Create environment manifest
@@ -159,19 +157,33 @@ impl DeployProvider for MassiveGridAdapter {
             }]
         });
 
-        log::info!(
-            "Deploying to MassiveGrid Jelastic: env={}, create_url={}",
-            env_name,
-            self.create_env_url()
-        );
-        // Keep manifest and deploy URL alive for future expansion where we actually POST them.
-        let _ = &env_manifest;
-        let _ = self.deploy_url();
+        let session = resolve_api_token(config, "MASSIVEGRID_SESSION", "MassiveGrid")?;
+        let url = format!("{}?session={}", self.create_env_url(), session);
+
+        let resp = self
+            .client
+            .post(&url)
+            .json(&env_manifest)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("MassiveGrid deploy error: {e}")))?;
+
+        let http_status = resp.status();
+        let status = if http_status.is_success() {
+            DeploymentStatus::Pending
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "MassiveGrid create environment failed ({http_status}): {text}"
+            )));
+        };
 
         Ok(DeploymentInfo {
             id,
-            url: format!("https://{}.massivegrid.net", env_name),
-            status: DeploymentStatus::Pending,
+            external_resource: Some(env_name.clone()),
+            url: format!("https://{env_name}.massivegrid.net"),
+            status,
+            ..Default::default()
         })
     }
 
@@ -179,9 +191,35 @@ impl DeployProvider for MassiveGridAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying MassiveGrid deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let session = std::env::var("MASSIVEGRID_SESSION").map_err(|_| {
+            ClawzError::Auth("MASSIVEGRID_SESSION required to destroy MassiveGrid environments".into())
+        })?;
+        let env_name = external_resource
+            .map(str::to_string)
+            .unwrap_or_else(|| massivegrid_env_name(id));
+        let url = format!(
+            "{}/1.0/environment/control/rest/deleteenv?envName={env_name}&session={session}",
+            self.api_endpoint
+        );
+
+        let resp = self
+            .client
+            .post(&url)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("MassiveGrid delete error: {e}")))?;
+
+        let status = resp.status();
+        if destroy_http_ok(status) {
+            log::info!("MassiveGrid environment removed: {env_name} (deployment {id})");
+            Ok(())
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "MassiveGrid deleteenv failed ({status}): {text}"
+            )))
+        }
     }
 }
 
@@ -212,6 +250,5 @@ mod tests {
     fn test_api_urls() {
         let adapter = MassiveGridAdapter::new("https://app.massivegrid.com");
         assert!(adapter.create_env_url().contains("createenvironment"));
-        assert!(adapter.deploy_url().contains("deploycontainer"));
     }
 }

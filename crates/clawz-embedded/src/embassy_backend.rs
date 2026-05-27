@@ -152,6 +152,10 @@ compile_error!("must enable either \"std\" or \"no_std\" feature");
 
 #[cfg(test)]
 mod tests {
+    use clawz_runtime::RuntimeBackend;
+
+    use crate::EmbassyBackend;
+
     #[tokio::test]
     async fn test_embassy_backend_compiles() {
         let backend = EmbassyBackend::new();

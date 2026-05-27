@@ -30,6 +30,15 @@ pub mod channels;
 // Dependency: crate::routes::conversations (reads/writes `AppState.conversations`, validates `AppState.agents`)
 pub mod conversations;
 
+/// Multi-participant agent room routes.
+pub mod rooms;
+
+/// Async room agent turn execution.
+pub mod room_turn;
+
+/// Bridge 1:1 conversations to multi-participant rooms.
+pub mod conversation_room;
+
 /// Fleet management routes — worker nodes, mesh topology, agent deployments.
 // Dependency: crate::routes::fleet (reads/writes `AppState.fleet_nodes`, `AppState.deployments`, cross-checks `AppState.agents`)
 pub mod fleet;
@@ -46,6 +55,15 @@ pub mod providers;
 // Dependency: crate::routes::system (reads `AppState.start_time`, `AppState.agents`, `AppState.fleet_nodes`, etc.)
 pub mod system;
 
+/// Dashboard JSON metrics for the web UI.
+pub mod dashboard;
+
+/// Cloud provider deployment API (`/cloud/*`).
+pub mod cloud_deploy;
+
 /// Tool registry routes — tool CRUD, execution, skills, plugins, marketplace.
 // Dependency: crate::routes::tools (reads/writes `AppState.tools`)
 pub mod tools;
+
+/// Telephony webhooks (Twilio, Google Voice) — public, signature-verified.
+pub mod telephony;

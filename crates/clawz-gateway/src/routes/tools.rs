@@ -19,6 +19,7 @@ use axum::{
     Json, Router,
 };
 use chrono::Utc;
+use clawz_services::dto::ExecuteToolRequest;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -114,6 +115,9 @@ async fn create_tool(
 
     let mut tools = state.tools.write().await;
     tools.push(record.clone());
+    if let Some(ref pool) = state.db {
+        let _ = crate::postgres_store::persist_tool(pool, &record).await;
+    }
     Ok((StatusCode::CREATED, Json(json!(record))))
 }
 
@@ -148,8 +152,12 @@ async fn update_tool(
     if let Some(cfg) = body.config { record.config = cfg; }
     if let Some(enabled) = body.enabled { record.enabled = enabled; }
     record.updated_at = Utc::now();
-
-    Ok(Json(json!(record.clone())))
+    let snapshot = record.clone();
+    drop(tools);
+    if let Some(ref pool) = state.db {
+        let _ = crate::postgres_store::persist_tool(pool, &snapshot).await;
+    }
+    Ok(Json(json!(snapshot)))
 }
 
 /// `DELETE /tools/{id}` — unregister a tool.
@@ -163,6 +171,9 @@ async fn delete_tool(
         .position(|t| t.id == id)
         .ok_or_else(|| GatewayError::not_found("Tool", &id))?;
     tools.remove(pos);
+    if let Some(ref pool) = state.db {
+        crate::postgres_store::delete_tool(pool, &id).await;
+    }
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -188,17 +199,29 @@ async fn execute_tool(
 
     let args = body.args.unwrap_or(json!({}));
 
-    // Simulate tool execution — returns a deterministic placeholder so UI
-    // tests and demos have a stable shape to assert against.
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
+
+    let result = platform
+        .execution
+        .execute_tool(ExecuteToolRequest {
+            agent_id: "gateway".to_string(),
+            tool_name: record.name.clone(),
+            args,
+        })
+        .await
+        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+
     Ok(Json(json!({
         "tool_id": id,
         "tool_name": record.name,
         "tool_type": record.tool_type,
-        "args": args,
         "result": {
-            "status": "success",
-            "output": format!("Tool '{}' executed successfully", record.name),
-            "execution_time_ms": 23,
+            "status": if result.success { "success" } else { "error" },
+            "output": result.output,
+            "execution_time_ms": result.duration_ms,
         },
         "executed_at": Utc::now(),
     })))
@@ -224,15 +247,32 @@ async fn list_plugins(State(state): State<AppState>) -> Json<Value> {
 ///
 /// Serves as a placeholder until a real marketplace backend (with versioning,
 /// publisher verification, and search) is implemented.
-async fn list_marketplace(_state: State<AppState>) -> Json<Value> {
-    // Placeholder marketplace catalog — in production this would query a
-    // registry service or package index.
-    Json(json!({
-        "data": [
-            { "id": "mkt-001", "name": "Web Search", "tool_type": "api", "description": "Search the web", "publisher": "clawz", "version": "1.0.0" },
-            { "id": "mkt-002", "name": "Code Interpreter", "tool_type": "function", "description": "Execute code snippets", "publisher": "clawz", "version": "1.2.0" },
-            { "id": "mkt-003", "name": "Database Query", "tool_type": "mcp", "description": "Run SQL against databases", "publisher": "clawz", "version": "0.9.1" },
-        ],
-        "total": 3
-    }))
+async fn list_marketplace(state: State<AppState>) -> Json<Value> {
+    let tools = state.tools.read().await;
+    let registered: Vec<Value> = tools
+        .iter()
+        .map(|t| {
+            json!({
+                "id": t.id,
+                "name": t.name,
+                "tool_type": t.tool_type,
+                "description": t.description,
+                "publisher": "tenant",
+                "version": "1.0.0",
+                "source": "registered",
+            })
+        })
+        .collect();
+
+    let builtins = vec![
+        json!({ "id": "mkt-bash", "name": "bash", "tool_type": "builtin", "description": "Execute shell commands", "publisher": "clawz", "version": "1.0.0", "source": "catalog" }),
+        json!({ "id": "mkt-http", "name": "http_request", "tool_type": "builtin", "description": "HTTP client", "publisher": "clawz", "version": "1.0.0", "source": "catalog" }),
+        json!({ "id": "mkt-file", "name": "read_file", "tool_type": "builtin", "description": "Read files from workspace", "publisher": "clawz", "version": "1.0.0", "source": "catalog" }),
+        json!({ "id": "mkt-calc", "name": "calculator", "tool_type": "builtin", "description": "Math evaluation", "publisher": "clawz", "version": "1.0.0", "source": "catalog" }),
+    ];
+
+    let mut data = builtins;
+    data.extend(registered);
+    let total = data.len();
+    Json(json!({ "data": data, "total": total }))
 }

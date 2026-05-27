@@ -82,6 +82,9 @@ impl PipelineStep for ApplyGovernanceStep {
             "conversation_id": ctx.conversation_id,
             "action": self.action,
             "has_response": ctx.get_meta(META_CHAT_RESPONSE).is_some(),
+            "room_id": ctx.get_meta("room_id"),
+            "sender_user_id": ctx.get_meta("sender_user_id"),
+            "orchestration_run_id": ctx.get_meta("orchestration_run_id"),
         });
 
         let result = self

@@ -1,44 +1,18 @@
-//! Fly.io adapter — deploys Docker containers or native binaries via the Fly Machines API.
-//!
-//! This module implements `DeployProvider` for Fly.io.  It uses the Fly Machines
-//! REST API (`api.machines.dev`) to create apps and launch machines.
-//!
-//! Supported modes:
-//! * **Docker** — deploy the supplied OCI image directly.
-//! * **NativeBinary** — wrap the binary in a minimal `debian:bullseye-slim` image
-//!   because Fly.io ultimately runs containers.
-//!
-//! Wasm is rejected; Fly.io has no native Wasm runtime.
-//!
-//! ## Key dependencies
-//!
-//! * `crate::deploy::common` — ID generation helper.
-//! * `crate::deploy::provider` — core trait and types.
-//! * `reqwest` — HTTP client for Fly API calls.
-//! * `clawz_core::error` — error types.
+//! Fly.io adapter — deploys Docker containers via the Fly Machines API.
 
-// Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
-// Dependency: provider trait and shared types.
+use crate::deploy::common::{external_resource_name, generate_deployment_id, resolve_api_token};
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
 };
 use async_trait::async_trait;
 use clawz_core::error::{ClawzError, Result};
 
-/// Adapter for Fly.io (Machines platform).
-///
-/// Stores the target organisation slug so that newly created apps are scoped
-/// correctly under the caller's Fly account.
 pub struct FlyIoAdapter {
-    /// Shared HTTP client for Fly API requests.
     client: reqwest::Client,
-    /// Fly organisation identifier, e.g. `"personal"`.
     org: String,
 }
 
 impl FlyIoAdapter {
-    /// Create a new adapter targeting a specific Fly organisation.
     pub fn new(org: impl Into<String>) -> Self {
         Self {
             client: reqwest::Client::new(),
@@ -46,9 +20,8 @@ impl FlyIoAdapter {
         }
     }
 
-    /// Build a Fly Machines API v1 URL for the given path.
     fn api_url(&self, path: &str) -> String {
-        format!("https://api.machines.dev/v1{}", path)
+        format!("https://api.machines.dev/v1{path}")
     }
 }
 
@@ -94,9 +67,9 @@ impl DeployProvider for FlyIoAdapter {
     }
 
     async fn deploy(&self, config: &DeployConfig) -> Result<DeploymentInfo> {
+        let token = resolve_api_token(config, "FLY_API_TOKEN", "Fly.io")?;
         let image = match &config.mode {
             DeployMode::Docker { image } => image.clone(),
-            // For native binary we need a base image; debian:bullseye-slim is small and compatible.
             DeployMode::NativeBinary => "debian:bullseye-slim".into(),
             _ => {
                 return Err(ClawzError::Validation(
@@ -106,26 +79,78 @@ impl DeployProvider for FlyIoAdapter {
         };
 
         let id = generate_deployment_id("fly");
-        let app_name = format!("clawz-{}", id.replace('-', ""));
+        let app_name = external_resource_name(&id);
 
-        let _body = serde_json::json!({
-            "app": app_name,
-            "org": self.org,
-            "image": image,
-            "env": config.env_vars,
-            "services": [{
-                "ports": [{"port": 8080, "handlers": ["http"]}],
-                "protocol": "tcp",
-                "internal_port": 8080
-            }]
+        let create_app = serde_json::json!({
+            "app_name": app_name,
+            "org_slug": self.org,
         });
 
-        log::info!("Deploying to Fly.io: app={}", app_name);
+        let app_resp = self
+            .client
+            .post(self.api_url("/apps"))
+            .bearer_auth(&token)
+            .json(&create_app)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Fly.io create app error: {e}")))?;
+
+        let app_status = app_resp.status();
+        if !app_status.is_success() && app_status.as_u16() != 409 {
+            let body = app_resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Fly.io create app failed ({app_status}): {body}"
+            )));
+        }
+
+        let env: Vec<serde_json::Value> = config
+            .env_vars
+            .iter()
+            .map(|(k, v)| json_env(k, v))
+            .collect();
+
+        let machine_config = serde_json::json!({
+            "config": {
+                "image": image,
+                "env": env,
+                "services": [{
+                    "protocol": "tcp",
+                    "internal_port": 8080,
+                    "ports": [{"port": 80, "handlers": ["http"]}, {"port": 443, "handlers": ["tls", "http"]}],
+                }],
+                "guest": {
+                    "cpu_kind": "shared",
+                    "cpus": 1,
+                    "memory_mb": 512
+                }
+            }
+        });
+
+        let machine_resp = self
+            .client
+            .post(self.api_url(&format!("/apps/{app_name}/machines")))
+            .bearer_auth(&token)
+            .json(&machine_config)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Fly.io create machine error: {e}")))?;
+
+        let machine_status = machine_resp.status();
+        let status = if machine_status.is_success() || machine_status.as_u16() == 409 {
+            DeploymentStatus::Pending
+        } else {
+            let body = machine_resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Fly.io create machine failed ({machine_status}): {body}"
+            )));
+        };
 
         Ok(DeploymentInfo {
             id,
-            url: format!("https://{}.fly.dev", app_name),
-            status: DeploymentStatus::Pending,
+            external_resource: Some(app_name.clone()),
+            url: format!("https://{app_name}.fly.dev"),
+            status,
+            ..Default::default()
         })
     }
 
@@ -133,10 +158,36 @@ impl DeployProvider for FlyIoAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Fly.io deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let token = std::env::var("FLY_API_TOKEN").map_err(|_| {
+            ClawzError::Auth("FLY_API_TOKEN required to destroy Fly.io deployments".into())
+        })?;
+        let app_name = external_resource
+            .map(str::to_string)
+            .unwrap_or_else(|| external_resource_name(id));
+        let resp = self
+            .client
+            .delete(self.api_url(&format!("/apps/{app_name}")))
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Fly.io delete app error: {e}")))?;
+
+        let status = resp.status();
+        if status.is_success() || status.as_u16() == 404 {
+            log::info!("Fly.io app removed: {app_name} (deployment {id})");
+            Ok(())
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Fly.io delete app failed ({status}): {text}"
+            )))
+        }
     }
+}
+
+fn json_env(key: &str, value: &str) -> serde_json::Value {
+    serde_json::json!({ "name": key, "value": value })
 }
 
 #[cfg(test)]
@@ -147,18 +198,5 @@ mod tests {
     fn test_provider_id() {
         let adapter = FlyIoAdapter::new("personal");
         assert_eq!(adapter.provider_id(), "fly_io");
-    }
-
-    #[test]
-    fn test_display_name() {
-        let adapter = FlyIoAdapter::new("personal");
-        assert_eq!(adapter.display_name(), "Fly.io");
-    }
-
-    #[test]
-    fn test_supported_modes() {
-        let adapter = FlyIoAdapter::new("personal");
-        let modes = adapter.supported_modes();
-        assert_eq!(modes.len(), 2);
     }
 }

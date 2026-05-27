@@ -20,7 +20,7 @@ use clawz_core::{
     error::ClawzError,
     types::{
         cost::BudgetConfig,
-        message::{ChatRequest, ChatResponse, StreamChunk},
+        message::{ChatRequest, ChatResponse, Message, StreamChunk},
     },
 };
 use futures_core::Stream;
@@ -33,7 +33,7 @@ use super::{
     adapters::{
         anthropic::AnthropicAdapter, azure::AzureAdapter, bedrock::BedrockAdapter,
         deepseek::DeepSeekAdapter, gemini::GeminiAdapter, ollama::OllamaAdapter,
-        openai::OpenAiAdapter, AdapterConfig, ProviderAdapter,
+        openai::OpenAiAdapter, stub::StubAdapter, AdapterConfig, ProviderAdapter,
     },
     cost::CostTracker,
     registry::ProviderRegistry,
@@ -416,6 +416,70 @@ impl ProviderRouter {
         Ok(stream)
     }
 
+    /// Probe a provider with optional gateway-supplied endpoint and API key.
+    ///
+    /// Uses the worker registry when present, overlaying `endpoint` / `api_key`
+    /// from the gateway provider record so health checks hit the configured upstream.
+    pub async fn probe_provider(
+        &self,
+        provider_id: &str,
+        endpoint: Option<String>,
+        api_key: Option<String>,
+    ) -> Result<ChatResponse, ClawzError> {
+        let provider_name = self
+            .registry
+            .resolve(provider_id)
+            .unwrap_or_else(|_| provider_id.to_string());
+
+        let adapter = self.get_adapter(&provider_name)?;
+        let base_cfg = self.registry.get_config(&provider_name);
+
+        let endpoint_url = endpoint
+            .or_else(|| {
+                base_cfg
+                    .and_then(|c| c.api_base.clone())
+                    .filter(|s| !s.is_empty())
+            })
+            .or_else(|| base_cfg.map(|c| c.endpoint.clone()).filter(|s| !s.is_empty()))
+            .or_else(|| default_endpoint_for(&provider_name))
+            .ok_or_else(|| {
+                ClawzError::Provider(format!(
+                    "no endpoint for provider '{provider_name}'; set base_url on the gateway provider"
+                ))
+            })?;
+
+        let key = api_key
+            .or_else(|| base_cfg.map(|c| c.resolved_api_key()))
+            .unwrap_or_default();
+
+        if key.is_empty()
+            && !matches!(provider_name.as_str(), "stub" | "local" | "ollama")
+        {
+            return Err(ClawzError::Auth(format!(
+                "API key required for provider '{provider_name}'"
+            )));
+        }
+
+        let adapter_config = AdapterConfig {
+            endpoint: endpoint_url,
+            api_key: key,
+            extra_headers: Vec::new(),
+            extra_query: Vec::new(),
+            extras: base_cfg
+                .map(|c| c.extras.clone())
+                .unwrap_or_default(),
+        };
+
+        let model = base_cfg
+            .and_then(|c| c.models.first().cloned())
+            .unwrap_or_else(|| default_probe_model(&provider_name));
+
+        let request = ChatRequest::new(model, vec![Message::user("health check ping")]);
+        adapter
+            .chat(&self.client, &adapter_config, &request)
+            .await
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     /// Execute a chat request with exponential-backoff retries.
@@ -491,6 +555,7 @@ impl ProviderRouter {
             "ollama" => Box::new(OllamaAdapter),
             "deepseek" => Box::new(DeepSeekAdapter),
             "azure" => Box::new(AzureAdapter),
+            "stub" | "local" => Box::new(StubAdapter),
             other => {
                 // Try to infer adapter from endpoint pattern in config
                 if let Some(cfg) = self.registry.get_config(other) {
@@ -536,6 +601,29 @@ impl ProviderRouter {
             extra_query: Vec::new(),
             extras: config.extras.clone(),
         })
+    }
+}
+
+fn default_endpoint_for(provider: &str) -> Option<String> {
+    match provider {
+        "openai" => Some("https://api.openai.com/v1".into()),
+        "anthropic" => Some("https://api.anthropic.com/v1".into()),
+        "gemini" => Some("https://generativelanguage.googleapis.com/v1beta".into()),
+        "deepseek" => Some("https://api.deepseek.com/v1".into()),
+        "ollama" | "local" => Some("http://127.0.0.1:11434".into()),
+        "stub" => Some("http://127.0.0.1:1".into()),
+        _ => None,
+    }
+}
+
+fn default_probe_model(provider: &str) -> String {
+    match provider {
+        "anthropic" => "claude-haiku-3".into(),
+        "openai" => "gpt-4o-mini".into(),
+        "gemini" => "gemini-2.0-flash".into(),
+        "ollama" | "local" => "llama3.2".into(),
+        "stub" => "stub".into(),
+        other => format!("{other}-health"),
     }
 }
 

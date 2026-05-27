@@ -44,6 +44,7 @@ pub mod northflank;
 pub mod oracle_cloud;
 pub mod provider;
 pub mod railway;
+pub mod sigv4;
 pub mod sliplane;
 pub mod tofu;
 pub mod vercel;
@@ -66,18 +67,19 @@ pub use provider::{
 };
 pub use railway::RailwayAdapter;
 pub use sliplane::SliplaneAdapter;
-pub use tofu::TofuRunner;
+pub use tofu::{TofuDeployAdapter, TofuRunner};
 pub use vercel::VercelAdapter;
 
 // Dependency: clawz_core::error for unified error handling across all provider calls.
 use clawz_core::error::{ClawzError, Result};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 /// Lightweight metadata about a registered provider, suitable for UI listings.
 ///
 /// Does **not** hold credentials — those are supplied at operation time.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct ProviderInfo {
     /// Canonical provider identifier, e.g. `"fly_io"` or `"aws_lambda"`.
     pub id: String,
@@ -94,6 +96,8 @@ pub struct DeployManager {
     providers: HashMap<String, Arc<dyn DeployProvider>>,
     /// Persistent (or in-memory) store for deployment records.
     store: Arc<dyn DeploymentStore>,
+    /// Optional Postgres pool for durable cloud deployment metadata.
+    db: Option<sqlx::PgPool>,
 }
 
 impl DeployManager {
@@ -101,10 +105,11 @@ impl DeployManager {
     ///
     /// Callers that need non-default constructor arguments (account IDs, regions, etc.)
     /// should use `with_providers` instead.
-    pub fn new_default(store: Arc<dyn DeploymentStore>) -> Self {
+    pub fn new_default(store: Arc<dyn DeploymentStore>, db: Option<sqlx::PgPool>) -> Self {
         let mut m = Self {
             providers: HashMap::new(),
             store,
+            db,
         };
 
         // Tier 1 — container platforms
@@ -132,6 +137,11 @@ impl DeployManager {
             "default",
         )));
 
+        let tofu_dir = std::env::var("CLAWZ_TOFU_WORKDIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| std::env::temp_dir().join("clawz-tofu"));
+        m.register(Arc::new(TofuDeployAdapter::new(tofu_dir)));
+
         m
     }
 
@@ -143,6 +153,7 @@ impl DeployManager {
         let mut m = Self {
             providers: HashMap::new(),
             store,
+            db: None,
         };
         for p in providers {
             m.register(p);
@@ -218,8 +229,9 @@ impl DeployManager {
         config: &DeployConfig,
     ) -> Result<DeploymentInfo> {
         let provider = self.get_provider(provider_id)?;
-        let info = provider.deploy(config).await?;
-        self.store.save(info.clone())?;
+        let mut info = provider.deploy(config).await?;
+        info.provider_id = provider_id.to_string();
+        self.persist_deployment(&info).await?;
         Ok(info)
     }
 
@@ -228,20 +240,52 @@ impl DeployManager {
         let provider = self.get_provider(provider_id)?;
         let status = provider.status(deployment_id).await?;
         self.store.update_status(deployment_id, status)?;
+        if let Some(ref pool) = self.db {
+            let uuid = common::deployment_db_uuid(deployment_id);
+            let _ = clawz_core::db::DeploymentRepo::update_status(
+                pool,
+                uuid,
+                common::deployment_status_to_str(status),
+                None,
+            )
+            .await;
+        }
         Ok(status)
     }
 
     /// Stop / tear down a deployment.
     pub async fn destroy(&self, provider_id: &str, deployment_id: &str) -> Result<()> {
         let provider = self.get_provider(provider_id)?;
-        provider.destroy(deployment_id).await?;
-        self.store.update_status(deployment_id, DeploymentStatus::Stopped)?;
+        let external = self
+            .store
+            .get(deployment_id)?
+            .and_then(|info| info.external_resource);
+        provider
+            .destroy(deployment_id, external.as_deref())
+            .await?;
+        self.store.remove(deployment_id)?;
+        if let Some(ref pool) = self.db {
+            crate::postgres_store::delete_cloud_deployment(pool, deployment_id).await?;
+        }
         Ok(())
     }
 
     /// List all deployments tracked in the local store.
     pub fn list_deployments(&self) -> Result<Vec<DeploymentInfo>> {
         self.store.list()
+    }
+
+    /// Rehydrate the in-memory store from Postgres (startup).
+    pub fn restore_deployment(&self, info: DeploymentInfo) -> Result<()> {
+        self.store.save(info)
+    }
+
+    async fn persist_deployment(&self, info: &DeploymentInfo) -> Result<()> {
+        self.store.save(info.clone())?;
+        if let Some(ref pool) = self.db {
+            crate::postgres_store::persist_cloud_deployment(pool, info).await?;
+        }
+        Ok(())
     }
 
     /// Choose a provider based on the deployment mode in the config.
@@ -273,7 +317,7 @@ mod tests {
 
     fn make_manager() -> DeployManager {
         let store = Arc::new(MemoryDeploymentStore::new());
-        DeployManager::new_default(store)
+        DeployManager::new_default(store, None)
     }
 
     #[test]
@@ -312,6 +356,7 @@ mod tests {
             env_vars: Default::default(),
             region: None,
             replicas: 1,
+            credentials: None,
         };
         let id = m.auto_select_provider(&config).unwrap();
         assert_eq!(id, "fastly");
@@ -325,6 +370,7 @@ mod tests {
             env_vars: Default::default(),
             region: None,
             replicas: 1,
+            credentials: None,
         };
         let id = m.auto_select_provider(&config).unwrap();
         assert_eq!(id, "fly_io");
@@ -338,6 +384,7 @@ mod tests {
             env_vars: Default::default(),
             region: None,
             replicas: 1,
+            credentials: None,
         };
         let id = m.auto_select_provider(&config).unwrap();
         assert_eq!(id, "aws_lambda");

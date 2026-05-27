@@ -38,6 +38,8 @@ use uuid::Uuid;
 
 // Dependency: ApiKeyRecord, AppState, GatewayError, UserRecord defined in crate root.
 use crate::{ApiKeyRecord, AppState, GatewayError, UserRecord};
+use crate::password::{hash_password, verify_password};
+use crate::prism_check;
 // Dependency: auth::jwt helper for token creation and validation.
 use crate::auth::jwt;
 
@@ -62,6 +64,7 @@ pub fn routes() -> Router<AppState> {
         .route("/openapi", get(openapi_spec))
         // Pairing stubs retained for mobile-app compatibility
         .route("/pairing", post(create_pairing).delete(delete_pairing))
+        .route("/prism", get(prism_status))
 }
 
 // ─── Body types ───────────────────────────────────────────────────────────────
@@ -73,6 +76,8 @@ pub struct LoginBody {
     pub email: Option<String>,
     /// Plain-text password (required).
     pub password: Option<String>,
+    /// Tenant scope for Postgres fallback lookup; defaults to `default_tenant()`.
+    pub tenant_id: Option<String>,
 }
 
 /// Request body for `POST /system/auth/register`.
@@ -84,6 +89,8 @@ pub struct RegisterBody {
     pub password: Option<String>,
     /// Desired role; defaults to "user".
     pub role: Option<String>,
+    /// Tenant scope for persistence; defaults to `default_tenant()`.
+    pub tenant_id: Option<String>,
 }
 
 /// Request body for `PUT /system/config`.
@@ -240,22 +247,52 @@ async fn login(
     let password = body.password.ok_or_else(|| {
         GatewayError::Unprocessable("field 'password' is required".to_string())
     })?;
+    let tenant_id = body
+        .tenant_id
+        .unwrap_or_else(crate::postgres_store::default_tenant);
 
-    let users = state.users.read().await;
-    let user = users
-        .iter()
-        .find(|u| u.email == email)
-        .ok_or_else(|| GatewayError::Unauthorized("Invalid email or password".to_string()))?;
+    let user = {
+        let users = state.users.read().await;
+        users.iter().find(|u| u.email == email).cloned()
+    };
 
-    // Verify password using the current (demo) hash function.
-    // NOTE: This must be upgraded to bcrypt before any production deployment.
-    let password_hash = sha256_hex(&password);
-    if user.password_hash != password_hash {
+    let user = match user {
+        Some(u) => u,
+        None => {
+            let Some(ref pool) = state.db else {
+                return Err(GatewayError::Unauthorized(
+                    "Invalid email or password".to_string(),
+                ));
+            };
+            let db_user = crate::postgres_store::find_user_by_email(pool, &tenant_id, &email)
+                .await
+                .map_err(|e| GatewayError::Internal(e.to_string()))?
+                .ok_or_else(|| {
+                    GatewayError::Unauthorized("Invalid email or password".to_string())
+                })?;
+            let mut users = state.users.write().await;
+            if let Some(cached) = users.iter().find(|u| u.email == email) {
+                cached.clone()
+            } else {
+                users.push(db_user.clone());
+                db_user
+            }
+        }
+    };
+
+    if !verify_password(&password, &user.password_hash) {
         return Err(GatewayError::Unauthorized("Invalid email or password".to_string()));
     }
 
-    let token = jwt::create_token(&user.id, &user.email, &user.role, &state.jwt_secret, 24)
-        .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    let token = jwt::create_token_with_tenant(
+        &user.id,
+        &user.email,
+        &user.role,
+        Some(&tenant_id),
+        &state.jwt_secret,
+        24,
+    )
+    .map_err(|e| GatewayError::Internal(e.to_string()))?;
 
     state
         .append_audit(&user.id, "login", "user", &user.id, None)
@@ -307,7 +344,7 @@ async fn register(
     let user = UserRecord {
         id: user_id.clone(),
         email: email.clone(),
-        password_hash: sha256_hex(&password),
+        password_hash: hash_password(&password).map_err(GatewayError::Internal)?,
         role: body.role.unwrap_or_else(|| "user".to_string()),
         created_at: now,
         updated_at: now,
@@ -319,13 +356,25 @@ async fn register(
     let api_key = ApiKeyRecord {
         id: Uuid::new_v4().to_string(),
         user_id: user_id.clone(),
-        key_hash: sha256_hex(&raw_key),
+        key_hash: hash_password(&raw_key).map_err(GatewayError::Internal)?,
         label: "default".to_string(),
         created_at: now,
     };
 
     state.users.write().await.push(user.clone());
     state.api_keys.write().await.push(api_key.clone());
+
+    if let Some(ref pool) = state.db {
+        let tenant_id = body
+            .tenant_id
+            .unwrap_or_else(crate::postgres_store::default_tenant);
+        crate::postgres_store::persist_user(pool, &user, &tenant_id)
+            .await
+            .map_err(|e| GatewayError::Internal(e.to_string()))?;
+        crate::postgres_store::persist_api_key(pool, &api_key, &tenant_id)
+            .await
+            .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    }
 
     state
         .append_audit(&user_id, "register", "user", &user_id, None)
@@ -344,15 +393,33 @@ async fn register(
     ))
 }
 
-/// `POST /system/auth/webauthn` — WebAuthn authentication stub.
-///
-/// Returns a structured "not_configured" response so clients can gracefully
-/// fall back to password login without crashing on a 404.
-async fn webauthn_auth() -> Json<Value> {
+/// `POST /system/auth/webauthn` — begin WebAuthn registration/authentication ceremony.
+async fn webauthn_auth(Json(body): Json<Value>) -> Json<Value> {
+    let email = body["email"].as_str().unwrap_or("user@clawz.local");
+    let challenge = base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        Uuid::new_v4().as_bytes(),
+    );
     Json(json!({
-        "status": "not_configured",
-        "message": "WebAuthn is not yet configured on this gateway",
+        "status": "challenge_issued",
+        "publicKey": {
+            "challenge": challenge,
+            "rp": { "name": "ClawZ", "id": "localhost" },
+            "user": {
+                "id": base64::Engine::encode(&base64::engine::general_purpose::STANDARD, email.as_bytes()),
+                "name": email,
+                "displayName": email
+            },
+            "pubKeyCredParams": [{ "type": "public-key", "alg": -7 }],
+            "timeout": 60000,
+            "attestation": "none"
+        }
     }))
+}
+
+/// `GET /system/prism` — live PRISM-G dimension capability status.
+async fn prism_status() -> Json<Value> {
+    Json(prism_check::prism_status_json().await)
 }
 
 // ─── OpenAPI spec ─────────────────────────────────────────────────────────────
@@ -415,23 +482,3 @@ async fn delete_pairing() -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/// Simple FNV-1a-like hash rendered as a 64-char hex string.
-///
-/// # Security warning
-/// This is **not** a cryptographic hash. It exists as a placeholder because
-/// the `sha2` crate integration is not yet confirmed in the build environment.
-/// Replace with `sha2::Sha256` (or bcrypt) before handling real credentials.
-fn sha256_hex(input: &str) -> String {
-    use std::fmt::Write;
-    let bytes = input.as_bytes();
-    let mut hash: u64 = 14695981039346656037;
-    for &b in bytes {
-        hash ^= b as u64;
-        hash = hash.wrapping_mul(1099511628211);
-    }
-    let mut s = String::new();
-    write!(s, "{:016x}{:016x}{:016x}{:016x}", hash, hash ^ 0xdeadbeef, hash.wrapping_add(1), hash.wrapping_mul(7)).unwrap();
-    s
-}

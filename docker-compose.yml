@@ -7,11 +7,25 @@ services:
       dockerfile: Dockerfile.gateway
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     environment:
       - RUST_LOG=info
-      - WORKER_URL=worker:50051
+      - CLAWZ_MODE=standalone
+      - CLAWZ_DISABLE_AUTH=1
+      - CLAWZ_STUB_PROVIDER=1
+      - VALID_API_KEYS=dev-key
+      - CLAWZ_JWT_SECRET=dev-compose-secret
+      - CLAWZ_TENANT_ID=default
+      - CLAWZ_WORKER_TOKEN=dev-compose-worker-token
+      - WORKER_URL=http://worker:50051
+      - DATABASE_URL=postgresql://postgres:password@db:5432/clawz
+      - CLAWZ_PUBLIC_URL=http://localhost:3000
     depends_on:
-      - worker
+      db:
+        condition: service_healthy
+      worker:
+        condition: service_started
     networks:
       - clawz-net
 
@@ -19,21 +33,35 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
+    ports:
+      - "50051:50051"
+    env_file:
+      - .env
     environment:
       - RUST_LOG=info
+      - CLAWZ_MODE=standalone
+      - CLAWZ_STUB_PROVIDER=1
+      - CLAWZ_WORKER_TOKEN=dev-compose-worker-token
       - DATABASE_URL=postgresql://postgres:password@db:5432/clawz
+      - CLAWZ_LISTEN_ADDR=0.0.0.0:50051
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - clawz-net
 
   db:
-    image: postgres:15-bookworm
+    image: pgvector/pgvector:pg15
     environment:
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=clawz
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d clawz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - clawz-net
 

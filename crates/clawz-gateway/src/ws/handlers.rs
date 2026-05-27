@@ -17,17 +17,20 @@
 
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
-    extract::Path,
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode},
     response::Response,
 };
+use crate::auth::resolve_request_auth;
+use crate::AppState;
 // Dependency: chrono provides UTC timestamps for every outbound message.
 use chrono::Utc;
 // Dependency: serde_json used for lightweight JSON payload construction.
 use serde_json::json;
 // Dependency: tokio time utilities for interval-driven demo data.
 use tokio::time::{interval, Duration};
-// Dependency: WsEvent / WsControl wire shapes for autonomous streaming.
-use super::{WsControl, WsEvent};
+// Dependency: WsEvent / WsControl / RoomInbound wire shapes for streaming.
+use super::{RoomInbound, WsControl, WsEvent};
 
 // ---------------------------------------------------------------------------
 // Helper macros
@@ -400,7 +403,7 @@ pub async fn voice(ws: WebSocketUpgrade) -> Response {
 /// - Inbound binary → echoed back immediately (duplex loopback).
 /// - Inbound text  → treated as control messages (`start`, `stop`, `config`).
 /// - Outbound      → `{"type":"audio_frame_ack","bytes":N}` or
-///                   `{"type":"voice_ack","received":"..."}`.
+///   `{"type":"voice_ack","received":"..."}`.
 async fn handle_voice(mut socket: WebSocket) {
     while let Some(msg) = socket.recv().await {
         match msg {
@@ -646,5 +649,123 @@ async fn wait_for_stop(socket: &mut WebSocket) -> bool {
         }
         Some(Ok(Message::Close(_))) | None => true,
         _ => false,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// room_stream — multi-participant agent room events
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, serde::Deserialize)]
+pub struct RoomStreamQuery {
+    pub api_key: Option<String>,
+}
+
+/// Upgrade an HTTP connection to a WebSocket subscribed to a room's event stream.
+///
+/// Mounted at `/ws/rooms/{room_id}`. Forwards [`WsEvent`] payloads published via
+/// [`AppState::publish_room_event`] and relays inbound typing/presence control
+/// messages to other subscribers in the same room.
+pub async fn room_stream(
+    State(state): State<AppState>,
+    Path(room_id): Path<String>,
+    headers: HeaderMap,
+    Query(query): Query<RoomStreamQuery>,
+    ws: WebSocketUpgrade,
+) -> Result<Response, StatusCode> {
+    let ctx = resolve_request_auth(&headers, query.api_key.as_deref())?;
+
+    let member = {
+        let rooms = state.rooms.read().await;
+        rooms
+            .iter()
+            .find(|r| r.id == room_id)
+            .map(|room| {
+                room.participants
+                    .iter()
+                    .any(|p| p.participant_id == ctx.user_id)
+            })
+            .unwrap_or(false)
+    };
+    if !member {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    let rx = state.subscribe_room(&room_id).await;
+    Ok(ws.on_upgrade(move |socket| handle_room_stream(socket, room_id, rx, state)))
+}
+
+/// Room WebSocket loop: forward broadcast events and handle inbound control.
+async fn handle_room_stream(
+    mut socket: WebSocket,
+    room_id: String,
+    mut rx: tokio::sync::broadcast::Receiver<String>,
+    state: AppState,
+) {
+    let hello = json!({
+        "type": "connected",
+        "room_id": room_id,
+        "timestamp": Utc::now().to_rfc3339(),
+    });
+    if socket.send(text_msg!(hello)).await.is_err() {
+        return;
+    }
+
+    loop {
+        tokio::select! {
+            result = rx.recv() => {
+                match result {
+                    Ok(payload) => {
+                        if socket.send(Message::Text(payload.into())).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                        let gap = serde_json::to_value(WsEvent::SeqGap {
+                            room_id: room_id.clone(),
+                            expected_seq: 0,
+                            received_seq: 0,
+                        })
+                        .unwrap_or(json!({"type":"SeqGap","room_id":room_id}));
+                        if socket.send(text_msg!(gap)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        if let Ok(inbound) = serde_json::from_str::<RoomInbound>(text.as_str()) {
+                            let event = match inbound {
+                                RoomInbound::Typing { participant_id, is_typing } => {
+                                    WsEvent::Typing {
+                                        room_id: room_id.clone(),
+                                        participant_id,
+                                        is_typing,
+                                    }
+                                }
+                                RoomInbound::Presence { participant_id, status } => {
+                                    WsEvent::Presence {
+                                        room_id: room_id.clone(),
+                                        participant_id,
+                                        status,
+                                    }
+                                }
+                            };
+                            if let Ok(json) = serde_json::to_value(&event) {
+                                state.publish_room_event(&room_id, json).await;
+                            }
+                        }
+                    }
+                    Some(Ok(Message::Ping(data))) => {
+                        let _ = socket.send(Message::Pong(data)).await;
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+        }
     }
 }

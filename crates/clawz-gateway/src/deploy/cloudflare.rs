@@ -17,7 +17,8 @@
 //! * `clawz_core::error` — error types.
 
 // Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::generate_deployment_id;
+use crate::deploy::common::{external_resource_name, generate_deployment_id, resolve_api_token};
+use base64::Engine;
 // Dependency: provider trait and shared types.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -94,31 +95,94 @@ impl DeployProvider for CloudflareAdapter {
     }
 
     async fn deploy(&self, config: &DeployConfig) -> Result<DeploymentInfo> {
-        let id = generate_deployment_id("cf");
-        // Remove dashes so the script name is a valid DNS label.
-        let script_name = format!("clawz-{}", id.replace('-', ""));
+        let token = resolve_api_token(config, "CLOUDFLARE_API_TOKEN", "Cloudflare")?;
+        let account_id = config
+            .credentials
+            .as_ref()
+            .and_then(|c| {
+                c.extra
+                    .get("account_id")
+                    .cloned()
+                    .or_else(|| c.project_id.clone())
+            })
+            .filter(|id| !id.is_empty() && id != "default")
+            .or_else(|| {
+                if self.account_id.is_empty() || self.account_id == "default" {
+                    None
+                } else {
+                    Some(self.account_id.clone())
+                }
+            })
+            .or_else(|| std::env::var("CLOUDFLARE_ACCOUNT_ID").ok())
+            .ok_or_else(|| {
+                ClawzError::Auth(
+                    "Cloudflare account_id required in credentials.extra or CLOUDFLARE_ACCOUNT_ID".into(),
+                )
+            })?;
 
-        match &config.mode {
+        let id = generate_deployment_id("cf");
+        let script_name = external_resource_name(&id);
+
+        let script_body = match &config.mode {
             DeployMode::Wasm => {
-                log::info!("Deploying Wasm worker to Cloudflare: script={}", script_name);
+                if let Some(wasm_b64) = config.env_vars.get("__WASM_B64") {
+                    base64::engine::general_purpose::STANDARD
+                        .decode(wasm_b64)
+                        .map_err(|e| ClawzError::Validation(format!("invalid __WASM_B64: {e}")))?
+                } else {
+                    br#"export default { fetch() { return new Response("ClawZ"); } }"#.to_vec()
+                }
             }
             DeployMode::Docker { image } => {
-                log::info!(
-                    "Deploying container to Cloudflare Pages/Workers: image={}",
-                    image
-                );
+                format!(
+                    "export default {{ fetch() {{ return new Response('docker:{image}'); }} }}"
+                )
+                .into_bytes()
             }
             _ => {
                 return Err(ClawzError::Validation(
                     "Cloudflare only supports Docker and Wasm modes".into(),
                 ))
             }
-        }
+        };
+
+        let url = format!(
+            "https://api.cloudflare.com/client/v4/accounts/{account_id}/workers/scripts/{script_name}"
+        );
+
+        let content_type = match &config.mode {
+            DeployMode::Wasm if config.env_vars.contains_key("__WASM_B64") => {
+                "application/wasm"
+            }
+            _ => "application/javascript+module",
+        };
+
+        let resp = self
+            .client
+            .put(&url)
+            .bearer_auth(&token)
+            .header("Content-Type", content_type)
+            .body(script_body)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Cloudflare deploy error: {e}")))?;
+
+        let http_status = resp.status();
+        let status = if http_status.is_success() {
+            DeploymentStatus::Pending
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(ClawzError::Provider(format!(
+                "Cloudflare worker upload failed ({http_status}): {text}"
+            )));
+        };
 
         Ok(DeploymentInfo {
             id,
-            url: format!("https://{}.workers.dev", script_name),
-            status: DeploymentStatus::Pending,
+            external_resource: Some(script_name.clone()),
+            url: format!("https://{script_name}.workers.dev"),
+            status,
+            ..Default::default()
         })
     }
 
@@ -126,9 +190,41 @@ impl DeployProvider for CloudflareAdapter {
         Ok(DeploymentStatus::Running)
     }
 
-    async fn destroy(&self, id: &str) -> Result<()> {
-        log::info!("Destroying Cloudflare deployment: id={}", id);
-        Ok(())
+    async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
+        let token = std::env::var("CLOUDFLARE_API_TOKEN").map_err(|_| {
+            ClawzError::Auth(
+                "CLOUDFLARE_API_TOKEN required to destroy Cloudflare deployments".into(),
+            )
+        })?;
+        let account_id = std::env::var("CLOUDFLARE_ACCOUNT_ID").map_err(|_| {
+            ClawzError::Auth(
+                "CLOUDFLARE_ACCOUNT_ID required to destroy Cloudflare deployments".into(),
+            )
+        })?;
+        let script_name = external_resource
+            .map(str::to_string)
+            .unwrap_or_else(|| external_resource_name(id));
+        let url = format!(
+            "https://api.cloudflare.com/client/v4/accounts/{account_id}/workers/scripts/{script_name}"
+        );
+        let resp = self
+            .client
+            .delete(&url)
+            .bearer_auth(&token)
+            .send()
+            .await
+            .map_err(|e| ClawzError::Provider(format!("Cloudflare delete script error: {e}")))?;
+
+        let status = resp.status();
+        if status.is_success() || status.as_u16() == 404 {
+            log::info!("Cloudflare worker removed: {script_name} (deployment {id})");
+            Ok(())
+        } else {
+            let text = resp.text().await.unwrap_or_default();
+            Err(ClawzError::Provider(format!(
+                "Cloudflare delete script failed ({status}): {text}"
+            )))
+        }
     }
 }
 

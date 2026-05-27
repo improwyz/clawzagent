@@ -24,6 +24,14 @@ use uuid::Uuid;
 
 // ── CostEntry (internal time-bucketed record) ─────────────────────────────────
 
+/// Optional room-scoped attribution for a provider cost event.
+#[derive(Debug, Clone, Default)]
+pub struct CostAttribution {
+    pub room_id: Option<String>,
+    pub triggered_by_user_id: Option<String>,
+    pub orchestration_run_id: Option<String>,
+}
+
 /// A single recorded cost event.
 ///
 /// Kept in-memory; persisted externally via [`build_record`] if desired.
@@ -32,17 +40,23 @@ struct CostEntry {
     /// Provider name (e.g. "openai").
     provider: String,
     /// Model identifier.
+    #[allow(dead_code)]
     model: String,
     /// Optional agent that initiated the call.
+    #[allow(dead_code)]
     agent_id: Option<Uuid>,
     /// Prompt tokens consumed.
+    #[allow(dead_code)]
     input_tokens: u64,
     /// Completion tokens consumed.
+    #[allow(dead_code)]
     output_tokens: u64,
     /// Computed cost in USD.
     cost_usd: f64,
     /// When the call was made.
     timestamp: DateTime<Utc>,
+    /// Room turn attribution when the call originated from a multi-participant room.
+    attribution: CostAttribution,
 }
 
 // ── CostTracker ───────────────────────────────────────────────────────────────
@@ -59,6 +73,8 @@ pub struct CostTracker {
     pricing: Arc<HashMap<String, ModelPricing>>,
     /// Optional daily / monthly budget constraints.
     budget: Option<BudgetConfig>,
+    /// Attribution applied to the next recorded provider cost (room turns).
+    pending_attribution: Arc<RwLock<CostAttribution>>,
 }
 
 impl Default for CostTracker {
@@ -78,7 +94,29 @@ impl CostTracker {
             entries: Arc::new(RwLock::new(Vec::new())),
             pricing: Arc::new(pricing),
             budget,
+            pending_attribution: Arc::new(RwLock::new(CostAttribution::default())),
         }
+    }
+
+    /// Set attribution metadata for subsequent provider cost recordings.
+    pub async fn set_attribution(&self, attribution: CostAttribution) {
+        *self.pending_attribution.write().await = attribution;
+    }
+
+    /// Clear pending room attribution after a turn completes.
+    pub async fn clear_attribution(&self) {
+        *self.pending_attribution.write().await = CostAttribution::default();
+    }
+
+    /// Sum recorded spend for a room (used for per-room budget caps).
+    pub async fn room_total(&self, room_id: &str) -> f64 {
+        self.entries
+            .read()
+            .await
+            .iter()
+            .filter(|e| e.attribution.room_id.as_deref() == Some(room_id))
+            .map(|e| e.cost_usd)
+            .sum()
     }
 
     // ── Cost calculation ──────────────────────────────────────────────────────
@@ -123,6 +161,7 @@ impl CostTracker {
         let output = response.usage.completion_tokens as u64;
         let cost = self.calculate_cost(&response.model, input, output);
 
+        let attribution = self.pending_attribution.read().await.clone();
         self.record_entry(CostEntry {
             provider: provider.to_string(),
             model: response.model.clone(),
@@ -131,12 +170,14 @@ impl CostTracker {
             output_tokens: output,
             cost_usd: cost,
             timestamp: Utc::now(),
+            attribution,
         })
         .await;
     }
 
     /// Record a raw cost entry (useful for non-token-based charges).
     pub async fn record_cost(&self, provider: &str, cost_usd: f64) {
+        let attribution = self.pending_attribution.read().await.clone();
         self.record_entry(CostEntry {
             provider: provider.to_string(),
             model: String::new(),
@@ -145,6 +186,7 @@ impl CostTracker {
             output_tokens: 0,
             cost_usd,
             timestamp: Utc::now(),
+            attribution,
         })
         .await;
     }

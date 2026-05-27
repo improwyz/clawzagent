@@ -109,6 +109,120 @@ pub fn generate_deployment_id(prefix: &str) -> String {
     format!("{}-{}", prefix, uuid::Uuid::new_v4())
 }
 
+/// External app/script/service name derived from a gateway deployment id.
+pub fn external_resource_name(deployment_id: &str) -> String {
+    format!("clawz-{}", deployment_id.replace('-', ""))
+}
+
+/// Kubernetes Deployment/Service name (short suffix for DNS limits).
+pub fn k8s_resource_name(deployment_id: &str) -> String {
+    if deployment_id.len() >= 12 {
+        format!("clawz-{}", &deployment_id[4..12])
+    } else {
+        external_resource_name(deployment_id)
+    }
+}
+
+/// Fastly service name suffix (`clawz-{8}`) from `fastly-{uuid}` ids.
+pub fn fastly_service_key(deployment_id: &str) -> Option<String> {
+    if deployment_id.starts_with("fastly-") && deployment_id.len() >= 15 {
+        Some(format!("clawz-{}", &deployment_id[7..15]))
+    } else {
+        None
+    }
+}
+
+fn id_suffix(deployment_id: &str, start: usize, len: usize) -> String {
+    if deployment_id.len() >= start + len {
+        deployment_id[start..start + len].to_string()
+    } else {
+        deployment_id.get(start..).unwrap_or("").to_string()
+    }
+}
+
+/// AWS Lambda function name from a `lambda-{uuid}` deployment id.
+pub fn lambda_function_name(deployment_id: &str) -> String {
+    format!("clawz-{}", id_suffix(deployment_id, 7, 8))
+}
+
+/// Vercel project name from a `vcl-{uuid}` deployment id.
+pub fn vercel_project_name(deployment_id: &str) -> String {
+    format!("clawz-{}", id_suffix(deployment_id, 4, 8))
+}
+
+/// Azure Function App name from an `az-{uuid}` deployment id.
+pub fn azure_app_name(deployment_id: &str) -> String {
+    format!("clawz{}", id_suffix(deployment_id, 3, 8).replace('-', ""))
+}
+
+/// Northflank / Sliplane service name from `nf-` / `sp-` ids.
+pub fn short_service_name(deployment_id: &str) -> String {
+    format!("clawz-{}", id_suffix(deployment_id, 3, 8))
+}
+
+/// MassiveGrid Jelastic environment name from `mg-{uuid}` ids.
+pub fn massivegrid_env_name(deployment_id: &str) -> String {
+    format!("clawz-{}", id_suffix(deployment_id, 3, 8))
+}
+
+/// Returns true when an HTTP status indicates a successful destroy (including 404).
+pub fn destroy_http_ok(status: reqwest::StatusCode) -> bool {
+    status.is_success() || status.as_u16() == 404
+}
+
+/// Parse `DeploymentStatus` from the `deployments.status` column.
+pub fn deployment_status_from_str(s: &str) -> DeploymentStatus {
+    match s {
+        "running" => DeploymentStatus::Running,
+        "stopped" => DeploymentStatus::Stopped,
+        "failed" => DeploymentStatus::Failed,
+        _ => DeploymentStatus::Pending,
+    }
+}
+
+pub fn deployment_status_to_str(status: DeploymentStatus) -> &'static str {
+    match status {
+        DeploymentStatus::Pending => "pending",
+        DeploymentStatus::Running => "running",
+        DeploymentStatus::Stopped => "stopped",
+        DeploymentStatus::Failed => "failed",
+    }
+}
+
+/// Stable UUID for the `deployments` table from a gateway deployment id.
+pub fn deployment_db_uuid(deployment_id: &str) -> uuid::Uuid {
+    if let Some((_prefix, rest)) = deployment_id.split_once('-') {
+        if let Ok(u) = uuid::Uuid::parse_str(rest) {
+            return u;
+        }
+    }
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(deployment_id.as_bytes());
+    let bytes: [u8; 16] = hash[..16]
+        .try_into()
+        .expect("sha256 produces 32 bytes");
+    uuid::Uuid::from_bytes(bytes)
+}
+
+/// Resolve a bearer/API token from deploy credentials or an environment variable.
+pub fn resolve_api_token(
+    config: &crate::deploy::provider::DeployConfig,
+    env_var: &str,
+    label: &str,
+) -> clawz_core::Result<String> {
+    use clawz_core::error::ClawzError;
+    if let Some(ref creds) = config.credentials {
+        if let Some(token) = creds.api_token.clone() {
+            return Ok(token);
+        }
+    }
+    std::env::var(env_var).map_err(|_| {
+        ClawzError::Auth(format!(
+            "{label} token required: set config.credentials.api_token or {env_var}"
+        ))
+    })
+}
+
 /// Convert a map of environment variables into Docker `-e` CLI flags.
 ///
 /// Each key-value pair yields two entries: `["-e", "KEY=VALUE"]`.  The resulting
@@ -129,6 +243,8 @@ mod tests {
         let store = MemoryDeploymentStore::new();
         let info = DeploymentInfo {
             id: "dep-1".into(),
+            provider_id: "fly_io".into(),
+            external_resource: None,
             url: "https://example.com".into(),
             status: DeploymentStatus::Running,
         };
@@ -143,6 +259,8 @@ mod tests {
         let store = MemoryDeploymentStore::new();
         let info = DeploymentInfo {
             id: "dep-2".into(),
+            provider_id: "fly_io".into(),
+            external_resource: None,
             url: "https://example.com".into(),
             status: DeploymentStatus::Pending,
         };

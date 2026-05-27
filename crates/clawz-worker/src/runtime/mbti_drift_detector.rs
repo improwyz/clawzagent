@@ -21,10 +21,7 @@ impl MBTIDriftDetector {
             return None;
         }
 
-        let inferred_type = match self.infer_type_from_behaviour(&identity.state.behaviour) {
-            Some(t) => t,
-            None => return None,
-        };
+        let inferred_type = self.infer_type_from_behaviour(&identity.state.behaviour)?;
 
         if inferred_type != identity.core.mbti.as_str()
             && self.compute_confidence(&identity.state.behaviour, Some(inferred_type))
@@ -145,7 +142,7 @@ impl MBTIDriftDetector {
         // Normalize by total possible contributors (roughly 4 per dimension = 16, cap at 8)
         let max_relevant = if match_count < 1.0 { 1.0_f32 } else { 8.0_f32.min(match_count) };
         let confidence = match_count / max_relevant;
-        confidence.min(1.0).max(0.0)
+        confidence.clamp(0.0, 1.0)
     }
 }
 
