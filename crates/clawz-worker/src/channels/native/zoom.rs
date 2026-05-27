@@ -43,7 +43,7 @@ use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 // Dependency: canonical message types defined in core
 use clawz_core::types::channel::{ChannelCapabilities, IncomingMessage, OutgoingMessage};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 // Dependency: Arc + RwLock used for the token cache because ChannelPlugin is Send + Sync
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -51,7 +51,6 @@ use tokio::sync::RwLock;
 
 // Dependency: helper utilities from the parent plugin module (worker-internal)
 use crate::channels::plugin::{cred_str, map_http_error};
-
 
 /// Base URL for the Zoom REST API v2.
 const BASE: &str = "https://api.zoom.us/v2";
@@ -214,9 +213,19 @@ impl ChannelPlugin for ZoomChannel {
 
         let mut params: Vec<(&str, String)> = vec![("page_size", "50".to_string())];
         // Prefer contact filter; fall back to channel filter if no contact is set.
-        if let Some(contact) = ctx.config.credentials.get("to_contact").and_then(|v| v.as_str()) {
+        if let Some(contact) = ctx
+            .config
+            .credentials
+            .get("to_contact")
+            .and_then(|v| v.as_str())
+        {
             params.push(("to_contact", contact.to_string()));
-        } else if let Some(channel) = ctx.config.credentials.get("to_channel").and_then(|v| v.as_str()) {
+        } else if let Some(channel) = ctx
+            .config
+            .credentials
+            .get("to_channel")
+            .and_then(|v| v.as_str())
+        {
             params.push(("to_channel", channel.to_string()));
         }
 
@@ -243,7 +252,11 @@ impl ChannelPlugin for ZoomChannel {
 
         if let Some(msgs) = body.get("messages").and_then(|v| v.as_array()) {
             for m in msgs {
-                let msg_id = m.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let msg_id = m
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let content = m
                     .get("message")
                     .and_then(|v| v.as_str())
@@ -255,13 +268,10 @@ impl ChannelPlugin for ZoomChannel {
                     .unwrap_or("unknown")
                     .to_string();
 
-                let mut im = IncomingMessage::new(
-                    ctx.config.id,
-                    sender_id.clone(),
-                    sender_id,
-                    content,
-                );
-                im.metadata.insert("zoom_msg_id".to_string(), Value::String(msg_id));
+                let mut im =
+                    IncomingMessage::new(ctx.config.id, sender_id.clone(), sender_id, content);
+                im.metadata
+                    .insert("zoom_msg_id".to_string(), Value::String(msg_id));
                 messages.push(im);
             }
         }
@@ -285,9 +295,19 @@ impl ChannelPlugin for ZoomChannel {
         let mut body = json!({ "message": &msg.content });
 
         // Target: contact takes precedence over channel if both are configured.
-        if let Some(contact) = ctx.config.credentials.get("to_contact").and_then(|v| v.as_str()) {
+        if let Some(contact) = ctx
+            .config
+            .credentials
+            .get("to_contact")
+            .and_then(|v| v.as_str())
+        {
             body["to_contact"] = Value::String(contact.to_string());
-        } else if let Some(channel) = ctx.config.credentials.get("to_channel").and_then(|v| v.as_str()) {
+        } else if let Some(channel) = ctx
+            .config
+            .credentials
+            .get("to_channel")
+            .and_then(|v| v.as_str())
+        {
             body["to_channel"] = Value::String(channel.to_string());
         }
 
@@ -335,9 +355,10 @@ impl ChannelPlugin for ZoomChannel {
                 "Zoom".to_string(),
                 plaintoken.to_string(),
             );
-            dummy
-                .metadata
-                .insert("_zoom_challenge".to_string(), Value::String(plaintoken.to_string()));
+            dummy.metadata.insert(
+                "_zoom_challenge".to_string(),
+                Value::String(plaintoken.to_string()),
+            );
             return Ok(vec![dummy]);
         }
 

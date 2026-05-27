@@ -36,9 +36,11 @@ use clawz_core::error::{ClawzError, Result};
 // Dependency: ChannelPlugin trait lives in the shared core crate
 use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 // Dependency: canonical message and attachment types defined in core
-use clawz_core::types::channel::{Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage};
+use clawz_core::types::channel::{
+    Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage,
+};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // Dependency: helper utilities from the parent plugin module (worker-internal)
 use crate::channels::plugin::{cred_str, map_http_error};
@@ -89,7 +91,12 @@ impl WhatsAppChannel {
     /// the media ID endpoint). Returns `None` if the message lacks `id`, `type`,
     /// or `from` fields.
     #[allow(dead_code)]
-    fn parse_message(&self, ctx: &ChannelContext, msg: &Value, contact: Option<&Value>) -> Option<IncomingMessage> {
+    fn parse_message(
+        &self,
+        ctx: &ChannelContext,
+        msg: &Value,
+        contact: Option<&Value>,
+    ) -> Option<IncomingMessage> {
         let msg_id = msg.get("id")?.as_str()?.to_string();
         let msg_type = msg.get("type")?.as_str()?;
         let from = msg.get("from")?.as_str()?.to_string();
@@ -159,7 +166,8 @@ impl WhatsAppChannel {
 
         let mut im = IncomingMessage::new(ctx.config.id, from.clone(), sender_name, text);
         im.attachments = attachments;
-        im.metadata.insert("wa_msg_id".into(), Value::String(msg_id));
+        im.metadata
+            .insert("wa_msg_id".into(), Value::String(msg_id));
         im.metadata.insert("wa_from".into(), Value::String(from));
 
         Some(im)
@@ -239,31 +247,30 @@ impl ChannelPlugin for WhatsAppChannel {
             .to_string();
 
         // Template messages bypass the 24-hour session window but require pre-approval.
-        let body = if let Some(template) =
-            msg.metadata.get("template_name").and_then(|v| v.as_str())
-        {
-            let lang = msg
-                .metadata
-                .get("template_language")
-                .and_then(|v| v.as_str())
-                .unwrap_or("en_US");
-            json!({
-                "messaging_product": "whatsapp",
-                "to": to,
-                "type": "template",
-                "template": {
-                    "name": template,
-                    "language": { "code": lang }
-                }
-            })
-        } else {
-            json!({
-                "messaging_product": "whatsapp",
-                "to": to,
-                "type": "text",
-                "text": { "body": &msg.content }
-            })
-        };
+        let body =
+            if let Some(template) = msg.metadata.get("template_name").and_then(|v| v.as_str()) {
+                let lang = msg
+                    .metadata
+                    .get("template_language")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("en_US");
+                json!({
+                    "messaging_product": "whatsapp",
+                    "to": to,
+                    "type": "template",
+                    "template": {
+                        "name": template,
+                        "language": { "code": lang }
+                    }
+                })
+            } else {
+                json!({
+                    "messaging_product": "whatsapp",
+                    "to": to,
+                    "type": "text",
+                    "text": { "body": &msg.content }
+                })
+            };
 
         let resp = ctx
             .http_client
@@ -310,12 +317,14 @@ impl ChannelPlugin for WhatsAppChannel {
                 "WhatsApp".to_string(),
                 challenge.to_string(),
             );
-            dummy
-                .metadata
-                .insert("_wa_challenge".to_string(), Value::String(challenge.to_string()));
-            dummy
-                .metadata
-                .insert("_wa_verify_token".to_string(), Value::String(verify_token.to_string()));
+            dummy.metadata.insert(
+                "_wa_challenge".to_string(),
+                Value::String(challenge.to_string()),
+            );
+            dummy.metadata.insert(
+                "_wa_verify_token".to_string(),
+                Value::String(verify_token.to_string()),
+            );
             return Ok(vec![dummy]);
         }
 
@@ -335,7 +344,8 @@ impl ChannelPlugin for WhatsAppChannel {
 
                         if let Some(msgs_arr) = value.get("messages").and_then(|v| v.as_array()) {
                             for m in msgs_arr {
-                                let from = m.get("from").and_then(|v| v.as_str()).unwrap_or("unknown");
+                                let from =
+                                    m.get("from").and_then(|v| v.as_str()).unwrap_or("unknown");
                                 // Look up the contact profile that matches the `from` phone number.
                                 let contact = contacts.as_ref().and_then(|cs| {
                                     cs.iter().find(|c| {
@@ -344,18 +354,33 @@ impl ChannelPlugin for WhatsAppChannel {
                                 });
 
                                 // Parse message inline (webhook has no ctx)
-                                let msg_type = m.get("type").and_then(|v| v.as_str()).unwrap_or("text");
+                                let msg_type =
+                                    m.get("type").and_then(|v| v.as_str()).unwrap_or("text");
                                 let text = match msg_type {
-                                    "text" => m.pointer("/text/body").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                                    "text" => m
+                                        .pointer("/text/body")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_string(),
                                     "location" => {
-                                        let lat = m.pointer("/location/latitude").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                        let lon = m.pointer("/location/longitude").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                        let lat = m
+                                            .pointer("/location/latitude")
+                                            .and_then(|v| v.as_f64())
+                                            .unwrap_or(0.0);
+                                        let lon = m
+                                            .pointer("/location/longitude")
+                                            .and_then(|v| v.as_f64())
+                                            .unwrap_or(0.0);
                                         format!("[location: ({lat},{lon})]")
                                     }
                                     // Fallback for unsupported webhook types
                                     t => format!("[{t}]"),
                                 };
-                                let msg_id = m.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                                let msg_id = m
+                                    .get("id")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
                                 let sender_name = contact
                                     .and_then(|c| c.get("profile"))
                                     .and_then(|p| p.get("name"))
@@ -369,8 +394,10 @@ impl ChannelPlugin for WhatsAppChannel {
                                     sender_name,
                                     text,
                                 );
-                                im.metadata.insert("wa_msg_id".to_string(), Value::String(msg_id));
-                                im.metadata.insert("wa_from".to_string(), Value::String(from.to_string()));
+                                im.metadata
+                                    .insert("wa_msg_id".to_string(), Value::String(msg_id));
+                                im.metadata
+                                    .insert("wa_from".to_string(), Value::String(from.to_string()));
                                 messages.push(im);
                             }
                         }

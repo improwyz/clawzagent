@@ -22,7 +22,7 @@ use clawz_core::error::{ClawzError, Result};
 use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 use clawz_core::types::channel::{ChannelCapabilities, IncomingMessage, OutgoingMessage};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::HashMap;
 
 use crate::channels::plugin::{cred_str, map_http_error};
@@ -220,10 +220,7 @@ impl ChannelPlugin for TwilioChannel {
 
         let mut out = Vec::new();
         for item in items {
-            let direction = item
-                .get("direction")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let direction = item.get("direction").and_then(|v| v.as_str()).unwrap_or("");
             if direction != "inbound" {
                 continue;
             }
@@ -248,8 +245,7 @@ impl ChannelPlugin for TwilioChannel {
                 .to_string();
 
             let mut im = IncomingMessage::new(ctx.config.id, from.clone(), from, text);
-            im.metadata
-                .insert("twilio_sid".into(), Value::String(sid));
+            im.metadata.insert("twilio_sid".into(), Value::String(sid));
             im.metadata
                 .insert("twilio_kind".into(), Value::String("sms".into()));
             out.push(im);
@@ -327,11 +323,7 @@ impl ChannelPlugin for TwilioChannel {
                         ClawzError::Config("Twilio SMS: missing metadata.to or default_to".into())
                     })?;
 
-                let params = [
-                    ("To", to),
-                    ("From", from),
-                    ("Body", msg.content.as_str()),
-                ];
+                let params = [("To", to), ("From", from), ("Body", msg.content.as_str())];
                 let resp = Self::authed_post_form(ctx, "/Messages.json", &params)
                     .send()
                     .await
@@ -383,10 +375,9 @@ fn decode_form_component(s: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(byte) = u8::from_str_radix(
-                std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""),
-                16,
-            ) {
+            if let Ok(byte) =
+                u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16)
+            {
                 out.push(byte as char);
                 i += 3;
                 continue;

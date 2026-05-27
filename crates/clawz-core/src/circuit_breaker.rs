@@ -8,9 +8,9 @@
 //! // Dependency: used by worker::provider_router to avoid hammering
 //! // degraded backends.
 
+use parking_lot::Mutex;
 use std::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 use std::time::{Duration, Instant};
-use parking_lot::Mutex;
 
 /// The three possible circuit-breaker states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

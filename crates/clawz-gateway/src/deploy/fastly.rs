@@ -32,7 +32,10 @@ impl FastlyAdapter {
         content_type: Option<&str>,
     ) -> Result<reqwest::Response> {
         let url = self.api_url(path);
-        let mut req = self.client.request(method, &url).header("Fastly-Key", token);
+        let mut req = self
+            .client
+            .request(method, &url)
+            .header("Fastly-Key", token);
         if let Some(ct) = content_type {
             req = req.header("Content-Type", ct);
         }
@@ -95,15 +98,14 @@ impl DeployProvider for FastlyAdapter {
             _ => {
                 return Err(ClawzError::Validation(
                     "Fastly Compute only supports Wasm mode".into(),
-                ))
+                ));
             }
         }
 
         let token = resolve_api_token(config, "FASTLY_API_TOKEN", "Fastly")?;
         let id = generate_deployment_id("fastly");
-        let service_name = fastly_service_key(&id).ok_or_else(|| {
-            ClawzError::Internal("invalid Fastly deployment id suffix".into())
-        })?;
+        let service_name = fastly_service_key(&id)
+            .ok_or_else(|| ClawzError::Internal("invalid Fastly deployment id suffix".into()))?;
 
         let create_resp = self
             .fastly_request(
@@ -123,17 +125,18 @@ impl DeployProvider for FastlyAdapter {
             .await?;
 
         let create_status = create_resp.status();
-        let create_body: serde_json::Value = if create_status.is_success() || create_status.as_u16() == 409 {
-            create_resp
-                .json()
-                .await
-                .unwrap_or_else(|_| serde_json::json!({}))
-        } else {
-            let text = create_resp.text().await.unwrap_or_default();
-            return Err(ClawzError::Provider(format!(
-                "Fastly create service failed ({create_status}): {text}"
-            )));
-        };
+        let create_body: serde_json::Value =
+            if create_status.is_success() || create_status.as_u16() == 409 {
+                create_resp
+                    .json()
+                    .await
+                    .unwrap_or_else(|_| serde_json::json!({}))
+            } else {
+                let text = create_resp.text().await.unwrap_or_default();
+                return Err(ClawzError::Provider(format!(
+                    "Fastly create service failed ({create_status}): {text}"
+                )));
+            };
 
         let service_id = create_body["id"]
             .as_str()

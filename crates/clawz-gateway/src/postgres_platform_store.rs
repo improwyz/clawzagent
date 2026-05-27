@@ -4,11 +4,11 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use clawz_services::store::{PlatformStore, StoreError, StoreResult};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sqlx::PgPool;
 
-use crate::postgres_store;
 use crate::AgentRecord;
+use crate::postgres_store;
 
 /// Persistent store delegating to `clawz-core` repositories.
 pub struct PostgresPlatformStore {

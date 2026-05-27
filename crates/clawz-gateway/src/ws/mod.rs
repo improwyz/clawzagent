@@ -30,7 +30,7 @@
 pub mod handlers;
 
 // Dependency: axum Router and GET method used for route registration.
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use serde::{Deserialize, Serialize};
 
 /// Wire-format event emitted by the autonomous-activity WebSocket stream.
@@ -85,7 +85,6 @@ pub enum WsEvent {
     },
 
     // ── Multi-participant room events ───────────────────────────────────────
-
     /// A new message was appended to the room transcript.
     MessageAppend {
         room_id: String,
@@ -177,10 +176,7 @@ pub fn ws_routes() -> Router<crate::AppState> {
         // Legacy alias kept for older clients.
         .route("/agent/{id}/stream", get(handlers::agent_stream))
         // Dependency: handlers::autonomous_stream — autonomous multi-turn handler.
-        .route(
-            "/agents/{id}/stream",
-            get(handlers::autonomous_stream),
-        )
+        .route("/agents/{id}/stream", get(handlers::autonomous_stream))
         // Dependency: handlers::events — real-time event broadcast handler.
         .route("/events", get(handlers::events))
         // Dependency: handlers::metrics — operational metrics stream handler.

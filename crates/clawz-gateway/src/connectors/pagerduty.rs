@@ -91,11 +91,15 @@ impl SaaSConnector for PagerDutyConnector {
     }
 
     async fn auth_url(&self, _redirect: &str) -> Result<String> {
-        Err(ClawzError::Auth("PagerDuty uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "PagerDuty uses API key authentication".into(),
+        ))
     }
 
     async fn exchange_code(&self, _code: &str) -> Result<Credentials> {
-        Err(ClawzError::Auth("PagerDuty uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "PagerDuty uses API key authentication".into(),
+        ))
     }
 
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
@@ -107,9 +111,16 @@ impl SaaSConnector for PagerDutyConnector {
             "schedules" => format!("/schedules?limit={}", limit),
             "users" => format!("/users?limit={}", limit),
             "teams" => format!("/teams?limit={}", limit),
-            _ => return Err(ClawzError::Provider(format!("Unknown PagerDuty object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown PagerDuty object: {obj}"
+                )));
+            }
         };
-        let resp = self.get(&path).send().await
+        let resp = self
+            .get(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("PagerDuty list failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         Ok(json[obj].as_array().cloned().unwrap_or_default())
@@ -120,11 +131,19 @@ impl SaaSConnector for PagerDutyConnector {
             "incidents" => ("/incidents", "incident"),
             "services" => ("/services", "service"),
             "escalation_policies" => ("/escalation_policies", "escalation_policy"),
-            _ => return Err(ClawzError::Provider(format!("Unknown PagerDuty object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown PagerDuty object: {obj}"
+                )));
+            }
         };
         // PagerDuty expects a wrapper object (e.g. `{ "incident": { ... } }`).
         let body = serde_json::json!({ key: data });
-        let resp = self.post(path).json(&body).send().await
+        let resp = self
+            .post(path)
+            .json(&body)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("PagerDuty create failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         Ok(json[key].clone())
@@ -134,10 +153,18 @@ impl SaaSConnector for PagerDutyConnector {
         let (path, key) = match obj {
             "incidents" => (format!("/incidents/{}", id), "incident"),
             "services" => (format!("/services/{}", id), "service"),
-            _ => return Err(ClawzError::Provider(format!("Unknown PagerDuty object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown PagerDuty object: {obj}"
+                )));
+            }
         };
         let body = serde_json::json!({ key: data });
-        let resp = self.put(&path).json(&body).send().await
+        let resp = self
+            .put(&path)
+            .json(&body)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("PagerDuty update failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         Ok(json[key].clone())
@@ -147,9 +174,16 @@ impl SaaSConnector for PagerDutyConnector {
         let path = match obj {
             "services" => format!("/services/{}", id),
             "escalation_policies" => format!("/escalation_policies/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Cannot delete PagerDuty {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Cannot delete PagerDuty {obj}"
+                )));
+            }
         };
-        let resp = self.delete(&path).send().await
+        let resp = self
+            .delete(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("PagerDuty delete failed: {e}")))?;
         if resp.status().is_success() {
             Ok(())
@@ -165,28 +199,40 @@ impl SaaSConnector for PagerDutyConnector {
         match action {
             "acknowledge_incident" | "resolve_incident" => {
                 let id = params["id"].as_str().unwrap_or("");
-                let status = if action == "acknowledge_incident" { "acknowledged" } else { "resolved" };
+                let status = if action == "acknowledge_incident" {
+                    "acknowledged"
+                } else {
+                    "resolved"
+                };
                 let body = serde_json::json!({
                     "incident": { "type": "incident_reference", "status": status }
                 });
-                let resp = self.put(&format!("/incidents/{}", id))
+                let resp = self
+                    .put(&format!("/incidents/{}", id))
                     .json(&body)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("PagerDuty {} failed: {e}", action)))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("PagerDuty {} failed: {e}", action))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "create_override" => {
                 let schedule_id = params["schedule_id"].as_str().unwrap_or("");
                 let body = serde_json::json!({ "override": params });
-                let resp = self.post(&format!("/schedules/{}/overrides", schedule_id))
+                let resp = self
+                    .post(&format!("/schedules/{}/overrides", schedule_id))
                     .json(&body)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("PagerDuty create override failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("PagerDuty create override failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown PagerDuty action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown PagerDuty action: {action}"
+            ))),
         }
     }
 }

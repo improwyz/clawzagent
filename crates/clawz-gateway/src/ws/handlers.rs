@@ -15,20 +15,20 @@
 //! - `serde_json` — ad-hoc JSON payload construction.
 //! - `tokio` — async runtime, `select!` for concurrent timers and socket I/O.
 
+use crate::AppState;
+use crate::auth::resolve_request_auth;
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::Response,
 };
-use crate::auth::resolve_request_auth;
-use crate::AppState;
 // Dependency: chrono provides UTC timestamps for every outbound message.
 use chrono::Utc;
 // Dependency: serde_json used for lightweight JSON payload construction.
 use serde_json::json;
 // Dependency: tokio time utilities for interval-driven demo data.
-use tokio::time::{interval, Duration};
+use tokio::time::{Duration, interval};
 // Dependency: WsEvent / WsControl / RoomInbound wire shapes for streaming.
 use super::{RoomInbound, WsControl, WsEvent};
 
@@ -475,10 +475,7 @@ async fn handle_voice(mut socket: WebSocket) {
 /// Task 25 in the autonomous-activity plan. Once the worker exposes a
 /// per-session event sender, the canned sequence below will be replaced with
 /// `tokio::sync::broadcast::Receiver<WsEvent>` polling.
-pub async fn autonomous_stream(
-    Path(agent_id): Path<String>,
-    ws: WebSocketUpgrade,
-) -> Response {
+pub async fn autonomous_stream(Path(agent_id): Path<String>, ws: WebSocketUpgrade) -> Response {
     ws.on_upgrade(move |socket| handle_autonomous_stream(socket, agent_id))
 }
 
@@ -526,39 +523,35 @@ async fn handle_autonomous_stream(mut socket: WebSocket, agent_id: String) {
             _ => return,
         };
         match msg {
-            Message::Text(text) => {
-                match serde_json::from_str::<WsControl>(text.as_str()) {
-                    Ok(WsControl::Start) => started = true,
-                    Ok(WsControl::Stop) => {
-                        let _ = send_event(
-                            &mut socket,
-                            &WsEvent::SessionEnd {
-                                total_turns: 0,
-                                total_cost_usd: 0.0,
-                            },
-                        )
+            Message::Text(text) => match serde_json::from_str::<WsControl>(text.as_str()) {
+                Ok(WsControl::Start) => started = true,
+                Ok(WsControl::Stop) => {
+                    let _ = send_event(
+                        &mut socket,
+                        &WsEvent::SessionEnd {
+                            total_turns: 0,
+                            total_cost_usd: 0.0,
+                        },
+                    )
+                    .await;
+                    let _ = socket
+                        .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                            code: axum::extract::ws::close_code::NORMAL,
+                            reason: "stop requested".into(),
+                        })))
                         .await;
-                        let _ = socket
-                            .send(Message::Close(Some(
-                                axum::extract::ws::CloseFrame {
-                                    code: axum::extract::ws::close_code::NORMAL,
-                                    reason: "stop requested".into(),
-                                },
-                            )))
-                            .await;
-                        return;
-                    }
-                    Err(e) => {
-                        let _ = send_event(
-                            &mut socket,
-                            &WsEvent::Error {
-                                error: format!("invalid control message: {e}"),
-                            },
-                        )
-                        .await;
-                    }
+                    return;
                 }
-            }
+                Err(e) => {
+                    let _ = send_event(
+                        &mut socket,
+                        &WsEvent::Error {
+                            error: format!("invalid control message: {e}"),
+                        },
+                    )
+                    .await;
+                }
+            },
             Message::Ping(data) => {
                 let _ = socket.send(Message::Pong(data)).await;
             }

@@ -91,7 +91,10 @@ impl WorkersClient {
 
     /// Parse the standard Cloudflare API envelope.
     fn unwrap_cf_response(json: Value) -> Result<Value, ClawzError> {
-        let success = json.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+        let success = json
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if !success {
             let errors = json
                 .get("errors")

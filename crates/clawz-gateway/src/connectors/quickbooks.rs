@@ -54,12 +54,21 @@ impl QuickBooksConnector {
             "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
             vec!["com.intuit.quickbooks.accounting".into()],
         );
-        Self { oauth, credentials: None, realm_id: None, sandbox }
+        Self {
+            oauth,
+            credentials: None,
+            realm_id: None,
+            sandbox,
+        }
     }
 
     /// Build the per-realm base URL.
     fn base_url(&self) -> String {
-        let env = if self.sandbox { "sandbox-quickbooks" } else { "quickbooks" };
+        let env = if self.sandbox {
+            "sandbox-quickbooks"
+        } else {
+            "quickbooks"
+        };
         let realm = self.realm_id.as_deref().unwrap_or("");
         format!("https://{}.api.intuit.com/v3/company/{}", env, realm)
     }
@@ -108,7 +117,11 @@ impl SaaSConnector for QuickBooksConnector {
             "accounts" => "Account",
             "bills" => "Bill",
             "vendors" => "Vendor",
-            _ => return Err(ClawzError::Provider(format!("Unknown QuickBooks object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown QuickBooks object: {obj}"
+                )));
+            }
         };
         let query = format!("SELECT * FROM {} MAXRESULTS {}", entity, max_results);
         let resp = client
@@ -134,7 +147,11 @@ impl SaaSConnector for QuickBooksConnector {
             "payments" => "payment",
             "bills" => "bill",
             "vendors" => "vendor",
-            _ => return Err(ClawzError::Provider(format!("Unknown QuickBooks object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown QuickBooks object: {obj}"
+                )));
+            }
         };
         let resp = client
             .post(&format!("/{}", entity))
@@ -153,7 +170,11 @@ impl SaaSConnector for QuickBooksConnector {
             "invoices" => "invoice",
             "customers" => "customer",
             "payments" => "payment",
-            _ => return Err(ClawzError::Provider(format!("Unknown QuickBooks object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown QuickBooks object: {obj}"
+                )));
+            }
         };
         // QuickBooks requires sparse=true for partial updates; the minorversion and
         // operation query params signal an update rather than a create.
@@ -173,7 +194,11 @@ impl SaaSConnector for QuickBooksConnector {
         let entity = match obj {
             "invoices" => "invoice",
             "bills" => "bill",
-            _ => return Err(ClawzError::Provider(format!("Cannot delete QuickBooks {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Cannot delete QuickBooks {obj}"
+                )));
+            }
         };
         // QBO delete requires the Id and a SyncToken (0 is acceptable for deletes).
         let body = serde_json::json!({ "Id": id, "SyncToken": "0" });
@@ -207,7 +232,9 @@ impl SaaSConnector for QuickBooksConnector {
                     .header("Accept", "application/json")
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("QuickBooks send invoice failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("QuickBooks send invoice failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "void_invoice" => {
@@ -219,10 +246,14 @@ impl SaaSConnector for QuickBooksConnector {
                     .json(&body)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("QuickBooks void invoice failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("QuickBooks void invoice failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown QuickBooks action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown QuickBooks action: {action}"
+            ))),
         }
     }
 }

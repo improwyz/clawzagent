@@ -105,11 +105,15 @@ impl SaaSConnector for DatadogConnector {
     }
 
     async fn auth_url(&self, _redirect: &str) -> Result<String> {
-        Err(ClawzError::Auth("Datadog uses API + Application key authentication".into()))
+        Err(ClawzError::Auth(
+            "Datadog uses API + Application key authentication".into(),
+        ))
     }
 
     async fn exchange_code(&self, _code: &str) -> Result<Credentials> {
-        Err(ClawzError::Auth("Datadog uses API + Application key authentication".into()))
+        Err(ClawzError::Auth(
+            "Datadog uses API + Application key authentication".into(),
+        ))
     }
 
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
@@ -124,9 +128,16 @@ impl SaaSConnector for DatadogConnector {
             }
             "events" => format!("/api/v1/events?count={}", limit),
             "logs" => "/api/v2/logs/events".to_string(),
-            _ => return Err(ClawzError::Provider(format!("Unknown Datadog object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Datadog object: {obj}"
+                )));
+            }
         };
-        let resp = self.get(&path).send().await
+        let resp = self
+            .get(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("Datadog list failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         // Datadog uses different response keys per endpoint; normalize them here.
@@ -148,9 +159,17 @@ impl SaaSConnector for DatadogConnector {
             "dashboards" => "/api/v1/dashboard",
             "events" => "/api/v1/events",
             "downtimes" => "/api/v1/downtime",
-            _ => return Err(ClawzError::Provider(format!("Unknown Datadog object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Datadog object: {obj}"
+                )));
+            }
         };
-        let resp = self.post(path).json(&data).send().await
+        let resp = self
+            .post(path)
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("Datadog create failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }
@@ -159,9 +178,17 @@ impl SaaSConnector for DatadogConnector {
         let path = match obj {
             "monitors" => format!("/api/v1/monitor/{}", id),
             "dashboards" => format!("/api/v1/dashboard/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Datadog object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Datadog object: {obj}"
+                )));
+            }
         };
-        let resp = self.put(&path).json(&data).send().await
+        let resp = self
+            .put(&path)
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("Datadog update failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }
@@ -171,9 +198,16 @@ impl SaaSConnector for DatadogConnector {
             "monitors" => format!("/api/v1/monitor/{}", id),
             "dashboards" => format!("/api/v1/dashboard/{}", id),
             "downtimes" => format!("/api/v1/downtime/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Datadog object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Datadog object: {obj}"
+                )));
+            }
         };
-        let resp = self.delete(&path).send().await
+        let resp = self
+            .delete(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("Datadog delete failed: {e}")))?;
         if resp.status().is_success() {
             Ok(())
@@ -189,32 +223,46 @@ impl SaaSConnector for DatadogConnector {
         match action {
             "mute_monitor" => {
                 let id = params["id"].as_str().unwrap_or("");
-                let resp = self.post(&format!("/api/v1/monitor/{}/mute", id))
+                let resp = self
+                    .post(&format!("/api/v1/monitor/{}/mute", id))
                     .json(&params)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Datadog mute monitor failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Datadog mute monitor failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "query_metrics" => {
                 let from = params["from"].as_i64().unwrap_or(0);
                 let to = params["to"].as_i64().unwrap_or(0);
                 let query = params["query"].as_str().unwrap_or("");
-                let resp = self.get(&format!("/api/v1/query?from={}&to={}&query={}", from, to, query))
+                let resp = self
+                    .get(&format!(
+                        "/api/v1/query?from={}&to={}&query={}",
+                        from, to, query
+                    ))
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Datadog query metrics failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Datadog query metrics failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "submit_metrics" => {
-                let resp = self.post("/api/v2/series")
+                let resp = self
+                    .post("/api/v2/series")
                     .json(&params)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Datadog submit metrics failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Datadog submit metrics failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Datadog action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Datadog action: {action}"
+            ))),
         }
     }
 }

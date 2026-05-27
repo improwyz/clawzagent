@@ -112,7 +112,9 @@ impl From<reqwest::Error> for ClawzError {
         if e.is_status() {
             if let Some(status) = e.status() {
                 if status.as_u16() == 429 {
-                    return ClawzError::RateLimited { retry_after_secs: 60 };
+                    return ClawzError::RateLimited {
+                        retry_after_secs: 60,
+                    };
                 }
             }
         }

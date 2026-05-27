@@ -1,7 +1,7 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
@@ -78,7 +78,10 @@ impl FileOpsTool {
         for dir in self.resolve_sandbox_dirs() {
             if !dir.exists() {
                 std::fs::create_dir_all(&dir).map_err(|e| {
-                    ClawzError::Tool(format!("failed to create sandbox dir '{}': {e}", dir.display()))
+                    ClawzError::Tool(format!(
+                        "failed to create sandbox dir '{}': {e}",
+                        dir.display()
+                    ))
                 })?;
             }
         }
@@ -102,9 +105,12 @@ impl Tool for FileOpsTool {
         "File system operations: read, write, list directory, create directory, delete file. Sandboxed to allowed directories."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Write }
-    fn risk(&self) -> RiskLevel { RiskLevel::High }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Write
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::High
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "file_ops".into(),
@@ -141,11 +147,7 @@ impl Tool for FileOpsTool {
         }
     }
 
-    async fn execute(
-        &self,
-        _ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, _ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let operation = args["operation"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("operation required".into()))?;
@@ -161,8 +163,9 @@ impl Tool for FileOpsTool {
 
         let output = match operation {
             "read_file" => {
-                let metadata = std::fs::metadata(&safe_path)
-                    .map_err(|e| ClawzError::Tool(format!("cannot stat '{}': {e}", safe_path.display())))?;
+                let metadata = std::fs::metadata(&safe_path).map_err(|e| {
+                    ClawzError::Tool(format!("cannot stat '{}': {e}", safe_path.display()))
+                })?;
 
                 if metadata.len() as usize > MAX_READ_BYTES {
                     return Err(ClawzError::Tool(format!(
@@ -193,9 +196,9 @@ impl Tool for FileOpsTool {
             }
 
             "write_file" => {
-                let content = args["content"]
-                    .as_str()
-                    .ok_or_else(|| ClawzError::Validation("content required for write_file".into()))?;
+                let content = args["content"].as_str().ok_or_else(|| {
+                    ClawzError::Validation("content required for write_file".into())
+                })?;
 
                 if content.len() > MAX_WRITE_BYTES {
                     return Err(ClawzError::Tool(format!(
@@ -208,8 +211,9 @@ impl Tool for FileOpsTool {
                 // Ensure parent exists
                 if let Some(parent) = safe_path.parent() {
                     if !parent.exists() {
-                        std::fs::create_dir_all(parent)
-                            .map_err(|e| ClawzError::Tool(format!("cannot create parent dir: {e}")))?;
+                        std::fs::create_dir_all(parent).map_err(|e| {
+                            ClawzError::Tool(format!("cannot create parent dir: {e}"))
+                        })?;
                     }
                 }
 
@@ -234,8 +238,9 @@ impl Tool for FileOpsTool {
             }
 
             "list_directory" => {
-                let entries = std::fs::read_dir(&safe_path)
-                    .map_err(|e| ClawzError::Tool(format!("cannot read dir '{}': {e}", safe_path.display())))?;
+                let entries = std::fs::read_dir(&safe_path).map_err(|e| {
+                    ClawzError::Tool(format!("cannot read dir '{}': {e}", safe_path.display()))
+                })?;
 
                 let items: Vec<Value> = entries
                     .filter_map(|e| e.ok())
@@ -308,7 +313,10 @@ impl Tool for FileOpsTool {
             }
 
             other => {
-                return Err(ClawzError::Validation(format!("unknown operation: {}", other)));
+                return Err(ClawzError::Validation(format!(
+                    "unknown operation: {}",
+                    other
+                )));
             }
         };
 
@@ -417,7 +425,11 @@ mod tests {
             .await;
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("sandbox") || msg.contains("outside"), "msg: {}", msg);
+        assert!(
+            msg.contains("sandbox") || msg.contains("outside"),
+            "msg: {}",
+            msg
+        );
     }
 
     #[tokio::test]

@@ -4,8 +4,8 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::{
-    postgres_store, AppState, ConversationRecord, GatewayError, MessageRecord, RoomMessageRecord,
-    RoomParticipantRecord, RoomRecord,
+    AppState, ConversationRecord, GatewayError, MessageRecord, RoomMessageRecord,
+    RoomParticipantRecord, RoomRecord, postgres_store,
 };
 
 use super::room_turn::{self, QueueRoomTurnRequest};
@@ -80,21 +80,12 @@ pub async fn ensure_direct_room(
 ) -> Result<RoomRecord, GatewayError> {
     let existing = {
         let rooms = state.rooms.read().await;
-        rooms
-            .iter()
-            .find(|r| r.id == conversation.id)
-            .cloned()
+        rooms.iter().find(|r| r.id == conversation.id).cloned()
     };
 
     if let Some(room) = existing {
         if room.messages.is_empty() && !conversation.messages.is_empty() {
-            backfill_room_from_conversation(
-                state,
-                conversation,
-                tenant_id,
-                created_by,
-            )
-            .await?;
+            backfill_room_from_conversation(state, conversation, tenant_id, created_by).await?;
         }
         return Ok(state
             .rooms

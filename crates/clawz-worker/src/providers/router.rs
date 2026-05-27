@@ -31,9 +31,9 @@ use tokio::sync::RwLock;
 
 use super::{
     adapters::{
-        anthropic::AnthropicAdapter, azure::AzureAdapter, bedrock::BedrockAdapter,
-        deepseek::DeepSeekAdapter, gemini::GeminiAdapter, ollama::OllamaAdapter,
-        openai::OpenAiAdapter, stub::StubAdapter, AdapterConfig, ProviderAdapter,
+        AdapterConfig, ProviderAdapter, anthropic::AnthropicAdapter, azure::AzureAdapter,
+        bedrock::BedrockAdapter, deepseek::DeepSeekAdapter, gemini::GeminiAdapter,
+        ollama::OllamaAdapter, openai::OpenAiAdapter, stub::StubAdapter,
     },
     cost::CostTracker,
     registry::ProviderRegistry,
@@ -110,7 +110,11 @@ pub struct ProviderConfig {
 impl ProviderConfig {
     /// Resolve the API key, expanding environment-variable references.
     pub fn resolved_api_key(&self) -> String {
-        if let Some(var_name) = self.api_key.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
+        if let Some(var_name) = self
+            .api_key
+            .strip_prefix("${")
+            .and_then(|s| s.strip_suffix('}'))
+        {
             std::env::var(var_name).unwrap_or_default()
         } else {
             self.api_key.clone()
@@ -167,13 +171,27 @@ pub struct ReliabilityConfig {
     pub circuit_breaker_timeout_secs: u64,
 }
 
-fn default_max_retries() -> u32 { 3 }
-fn default_base_delay() -> u64 { 500 }
-fn default_max_delay() -> u64 { 30_000 }
-fn default_exp_base() -> f64 { 2.0 }
-fn default_jitter() -> f64 { 0.1 }
-fn default_cb_threshold() -> u32 { 5 }
-fn default_cb_timeout() -> u64 { 30 }
+fn default_max_retries() -> u32 {
+    3
+}
+fn default_base_delay() -> u64 {
+    500
+}
+fn default_max_delay() -> u64 {
+    30_000
+}
+fn default_exp_base() -> f64 {
+    2.0
+}
+fn default_jitter() -> f64 {
+    0.1
+}
+fn default_cb_threshold() -> u32 {
+    5
+}
+fn default_cb_timeout() -> u64 {
+    30
+}
 
 // ── Circuit breaker ───────────────────────────────────────────────────────────
 
@@ -354,7 +372,9 @@ impl ProviderRouter {
                     if let Some(b) = breakers.get_mut(provider_name) {
                         b.record_success();
                     }
-                    self.cost_tracker.record(provider_name, None, &response).await;
+                    self.cost_tracker
+                        .record(provider_name, None, &response)
+                        .await;
                     return Ok(response);
                 }
                 Err(e) => {
@@ -452,9 +472,7 @@ impl ProviderRouter {
             .or_else(|| base_cfg.map(|c| c.resolved_api_key()))
             .unwrap_or_default();
 
-        if key.is_empty()
-            && !matches!(provider_name.as_str(), "stub" | "local" | "ollama")
-        {
+        if key.is_empty() && !matches!(provider_name.as_str(), "stub" | "local" | "ollama") {
             return Err(ClawzError::Auth(format!(
                 "API key required for provider '{provider_name}'"
             )));
@@ -465,9 +483,7 @@ impl ProviderRouter {
             api_key: key,
             extra_headers: Vec::new(),
             extra_query: Vec::new(),
-            extras: base_cfg
-                .map(|c| c.extras.clone())
-                .unwrap_or_default(),
+            extras: base_cfg.map(|c| c.extras.clone()).unwrap_or_default(),
         };
 
         let model = base_cfg
@@ -475,9 +491,7 @@ impl ProviderRouter {
             .unwrap_or_else(|| default_probe_model(&provider_name));
 
         let request = ChatRequest::new(model, vec![Message::user("health check ping")]);
-        adapter
-            .chat(&self.client, &adapter_config, &request)
-            .await
+        adapter.chat(&self.client, &adapter_config, &request).await
     }
 
     // ── Internal helpers ──────────────────────────────────────────────────────
@@ -516,9 +530,7 @@ impl ProviderRouter {
                 }
                 Err(ClawzError::Auth(_)) => {
                     // Auth errors should NOT be retried
-                    return Err(ClawzError::Auth(format!(
-                        "auth error for {provider_name}"
-                    )));
+                    return Err(ClawzError::Auth(format!("auth error for {provider_name}")));
                 }
                 Err(e) => {
                     last_err = Some(e);
@@ -576,9 +588,7 @@ impl ProviderRouter {
                         Box::new(OpenAiAdapter)
                     }
                 } else {
-                    return Err(ClawzError::Provider(format!(
-                        "unknown provider: {other}"
-                    )));
+                    return Err(ClawzError::Provider(format!("unknown provider: {other}")));
                 }
             }
         };
@@ -739,7 +749,9 @@ mod tests {
     fn test_get_adapter_known_providers() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let router = rt.block_on(async {
-            ProviderRouter::new(ProviderRouterConfig::default()).await.unwrap()
+            ProviderRouter::new(ProviderRouterConfig::default())
+                .await
+                .unwrap()
         });
 
         assert!(router.get_adapter("openai").is_ok());

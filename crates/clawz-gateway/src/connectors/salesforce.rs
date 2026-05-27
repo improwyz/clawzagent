@@ -124,10 +124,7 @@ impl SaaSConnector for SalesforceConnector {
         let limit = filters.limit.unwrap_or(100);
         // Use FIELDS(STANDARD) so the query works for both standard and custom objects
         // without requiring an explicit field list.
-        let query = format!(
-            "SELECT FIELDS(STANDARD) FROM {} LIMIT {}",
-            obj, limit
-        );
+        let query = format!("SELECT FIELDS(STANDARD) FROM {} LIMIT {}", obj, limit);
         let resp = client
             .get("/services/data/v59.0/query")
             .query(&[("q", query)])

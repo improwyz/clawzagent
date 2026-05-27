@@ -5,8 +5,8 @@ use clawz_core::traits::ChannelPlugin;
 use crate::channels::native::{
     dialpad::DialpadChannel, discord::DiscordChannel, google_voice::GoogleVoiceChannel,
     ringcentral::RingCentralChannel, slack::SlackChannel, teams::TeamsChannel,
-    threecx::ThreeCXChannel, twilio::TwilioChannel, webex::WebexChannel,
-    webhook::WebhookChannel, whatsapp::WhatsAppChannel, zoom::ZoomChannel,
+    threecx::ThreeCXChannel, twilio::TwilioChannel, webex::WebexChannel, webhook::WebhookChannel,
+    whatsapp::WhatsAppChannel, zoom::ZoomChannel,
 };
 
 /// Construct a channel plugin for the given platform id.

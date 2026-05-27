@@ -1,9 +1,9 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
-use clawz_core::error::ClawzError;
-use clawz_core::types::{ToolResult, ToolSchema};
 use chrono::Utc;
+use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
+use clawz_core::types::{ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
@@ -62,13 +62,14 @@ impl EscalateTool {
     /// Persist the escalation event. Uses DB if available, otherwise logs it.
     async fn persist_escalation(event: &EscalationEvent) -> Result<(), ClawzError> {
         // Try to write to DB
-        if let Ok(db_url) = std::env::var("CLAWZ_DB_URL").or_else(|_| std::env::var("DATABASE_URL")) {
+        if let Ok(db_url) = std::env::var("CLAWZ_DB_URL").or_else(|_| std::env::var("DATABASE_URL"))
+        {
             let pool = sqlx::PgPool::connect(&db_url)
                 .await
                 .map_err(|e| ClawzError::Database(format!("DB connect failed: {e}")))?;
 
-            let context_json = serde_json::to_string(&event.context)
-                .unwrap_or_else(|_| "null".into());
+            let context_json =
+                serde_json::to_string(&event.context).unwrap_or_else(|_| "null".into());
 
             sqlx::query(
                 r#"
@@ -152,9 +153,12 @@ impl Tool for EscalateTool {
         "Mark the current task as needing human intervention. Records the escalation event with priority and reason, and optionally pauses execution."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Notify }
-    fn risk(&self) -> RiskLevel { RiskLevel::Medium }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Notify
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::Medium
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "escalate".into(),
@@ -185,11 +189,7 @@ impl Tool for EscalateTool {
         }
     }
 
-    async fn execute(
-        &self,
-        ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let reason = args["reason"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("reason required".into()))?;
@@ -296,8 +296,14 @@ mod tests {
 
     #[test]
     fn test_priority_from_str() {
-        assert_eq!(EscalationPriority::from_str("critical"), EscalationPriority::Critical);
+        assert_eq!(
+            EscalationPriority::from_str("critical"),
+            EscalationPriority::Critical
+        );
         assert_eq!(EscalationPriority::from_str("low"), EscalationPriority::Low);
-        assert_eq!(EscalationPriority::from_str("unknown"), EscalationPriority::Medium);
+        assert_eq!(
+            EscalationPriority::from_str("unknown"),
+            EscalationPriority::Medium
+        );
     }
 }

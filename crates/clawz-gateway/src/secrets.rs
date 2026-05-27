@@ -1,8 +1,8 @@
 //! Optional symmetric encryption for API keys at rest (`CLAWZ_SECRETS_KEY`).
 
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
     Aes256Gcm, Nonce,
+    aead::{Aead, AeadCore, KeyInit, OsRng},
 };
 use base64::Engine;
 use sha2::{Digest, Sha256};

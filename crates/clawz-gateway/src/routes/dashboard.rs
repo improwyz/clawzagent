@@ -1,8 +1,8 @@
 //! JSON dashboard metrics consumed by the web UI.
 
-use axum::{extract::State, routing::get, Json, Router};
+use axum::{Json, Router, extract::State, routing::get};
 use chrono::Utc;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::{AgentStatus, AppState};
 

@@ -12,14 +12,14 @@
 //!   messages to Postgres when `DATABASE_URL` is configured.
 
 use axum::{
+    Json, Router,
     extract::{Extension, Path, Query, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::Utc;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 // Dependency: AppState, ConversationRecord, GatewayError, MessageRecord defined in crate root.
@@ -140,9 +140,9 @@ async fn create_conversation(
     auth: Option<Extension<AuthContext>>,
     Json(body): Json<CreateConversationBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let agent_id = body.agent_id.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'agent_id' is required".to_string())
-    })?;
+    let agent_id = body
+        .agent_id
+        .ok_or_else(|| GatewayError::Unprocessable("field 'agent_id' is required".to_string()))?;
 
     // Verify the agent exists before allocating a conversation.
     // Dependency: reads AppState.agents from the agents domain.
@@ -264,9 +264,9 @@ async fn send_message(
     Path(id): Path<String>,
     Json(body): Json<SendMessageBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let content = body.content.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'content' is required".to_string())
-    })?;
+    let content = body
+        .content
+        .ok_or_else(|| GatewayError::Unprocessable("field 'content' is required".to_string()))?;
     let role = body.role.unwrap_or_else(|| "user".to_string());
 
     let tenant_id = auth
@@ -298,7 +298,11 @@ async fn send_message(
     .await?;
 
     let legacy = conversation_room::room_message_to_conversation(&room_msg);
-    let status = if turn_queued { "turn_queued" } else { "accepted" };
+    let status = if turn_queued {
+        "turn_queued"
+    } else {
+        "accepted"
+    };
 
     Ok((
         if role == "user" {

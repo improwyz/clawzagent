@@ -56,10 +56,7 @@ fn reliability_enum_serde() {
         serde_json::to_string(&Reliability::Medium).unwrap(),
         "\"medium\""
     );
-    assert_eq!(
-        serde_json::to_string(&Reliability::Low).unwrap(),
-        "\"low\""
-    );
+    assert_eq!(serde_json::to_string(&Reliability::Low).unwrap(), "\"low\"");
 
     let back: Reliability = serde_json::from_str("\"low\"").unwrap();
     assert_eq!(back, Reliability::Low);

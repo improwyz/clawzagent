@@ -1,7 +1,7 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde_json::Value;
 const MAX_PDF_BYTES: usize = 50 * 1024 * 1024; // 50 MB
@@ -40,11 +40,13 @@ impl PdfReadTool {
             }
 
             // Look for page markers
-            if i + 5 < bytes.len() && &bytes[i..i + 6] == b"/Page "
-                && !current_page_text.trim().is_empty() {
-                    pages.push(current_page_text.trim().to_string());
-                    current_page_text = String::new();
-                }
+            if i + 5 < bytes.len()
+                && &bytes[i..i + 6] == b"/Page "
+                && !current_page_text.trim().is_empty()
+            {
+                pages.push(current_page_text.trim().to_string());
+                current_page_text = String::new();
+            }
 
             i += 1;
         }
@@ -77,10 +79,15 @@ fn extract_pdf_text_ops(stream: &str) -> String {
             let mut s = String::new();
             for inner in chars.by_ref() {
                 match inner {
-                    '(' => { depth += 1; s.push('('); }
+                    '(' => {
+                        depth += 1;
+                        s.push('(');
+                    }
                     ')' => {
                         depth -= 1;
-                        if depth == 0 { break; }
+                        if depth == 0 {
+                            break;
+                        }
                         s.push(')');
                     }
                     '\\' => {
@@ -93,7 +100,10 @@ fn extract_pdf_text_ops(stream: &str) -> String {
             let rest: String = chars.clone().take(10).collect();
             let rest_trimmed = rest.trim_start();
             if rest_trimmed.starts_with("Tj") || rest_trimmed.starts_with("'") {
-                let printable: String = s.chars().filter(|c| c.is_ascii_graphic() || *c == ' ').collect();
+                let printable: String = s
+                    .chars()
+                    .filter(|c| c.is_ascii_graphic() || *c == ' ')
+                    .collect();
                 if !printable.is_empty() {
                     result.push_str(&printable);
                     result.push(' ');
@@ -145,9 +155,12 @@ impl Tool for PdfReadTool {
         "Read a PDF file from a path or URL and extract its text content page by page."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Read }
-    fn risk(&self) -> RiskLevel { RiskLevel::Low }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Read
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::Low
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "pdf_read".into(),
@@ -174,20 +187,18 @@ impl Tool for PdfReadTool {
         }
     }
 
-    async fn execute(
-        &self,
-        _ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, _ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let source = args["source"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("source required".into()))?;
 
         let max_pages = args["max_pages"].as_u64().unwrap_or(50) as usize;
 
-        let page_filter: Option<Vec<usize>> = args["pages"]
-            .as_array()
-            .map(|arr| arr.iter().filter_map(|v| v.as_u64().map(|n| n as usize)).collect());
+        let page_filter: Option<Vec<usize>> = args["pages"].as_array().map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_u64().map(|n| n as usize))
+                .collect()
+        });
 
         // Load PDF bytes
         let pdf_bytes = if source.starts_with("http://") || source.starts_with("https://") {

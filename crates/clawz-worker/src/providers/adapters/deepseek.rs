@@ -15,8 +15,8 @@ use clawz_core::{error::ClawzError, types::message::*};
 use futures_core::Stream;
 use reqwest::Client;
 
-use super::{AdapterConfig, ProviderAdapter};
 use super::openai::OpenAiAdapter;
+use super::{AdapterConfig, ProviderAdapter};
 
 /// Adapter for the DeepSeek API.
 pub struct DeepSeekAdapter;
@@ -28,11 +28,7 @@ impl ProviderAdapter for DeepSeekAdapter {
     }
 
     fn supported_models(&self) -> Vec<&'static str> {
-        vec![
-            "deepseek-chat",
-            "deepseek-coder",
-            "deepseek-reasoner",
-        ]
+        vec!["deepseek-chat", "deepseek-coder", "deepseek-reasoner"]
     }
 
     async fn chat(
@@ -73,8 +69,7 @@ impl ProviderAdapter for DeepSeekAdapter {
             "deepseek-reasoner" => (0.00055, 0.00219),
             _ => (0.00014, 0.00028),
         };
-        (input_tokens as f64 / 1_000.0) * in_per_1k
-            + (output_tokens as f64 / 1_000.0) * out_per_1k
+        (input_tokens as f64 / 1_000.0) * in_per_1k + (output_tokens as f64 / 1_000.0) * out_per_1k
     }
 }
 

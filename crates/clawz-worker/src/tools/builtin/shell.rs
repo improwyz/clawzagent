@@ -1,7 +1,7 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde_json::Value;
 use std::process::Stdio;
@@ -10,28 +10,100 @@ use tokio::process::Command;
 
 /// Default allowed commands. Operators can override via env var CLAWZ_SHELL_ALLOW.
 const DEFAULT_ALLOWED: &[&str] = &[
-    "echo", "cat", "ls", "pwd", "date", "env", "printenv",
-    "grep", "find", "wc", "sort", "uniq", "head", "tail",
-    "sed", "awk", "cut", "tr", "jq", "curl", "wget",
-    "python3", "python", "node", "ruby", "go",
-    "cargo", "npm", "yarn", "pip", "pip3",
-    "make", "cmake", "gcc", "g++", "rustc",
-    "git", "diff", "patch",
-    "tar", "zip", "unzip", "gzip", "gunzip",
-    "mkdir", "cp", "mv", "rm", "touch", "chmod", "chown",
-    "ps", "top", "kill", "sleep",
-    "openssl", "ssh", "scp", "rsync",
-    "docker", "kubectl", "helm",
-    "psql", "mysql", "redis-cli", "mongo",
+    "echo",
+    "cat",
+    "ls",
+    "pwd",
+    "date",
+    "env",
+    "printenv",
+    "grep",
+    "find",
+    "wc",
+    "sort",
+    "uniq",
+    "head",
+    "tail",
+    "sed",
+    "awk",
+    "cut",
+    "tr",
+    "jq",
+    "curl",
+    "wget",
+    "python3",
+    "python",
+    "node",
+    "ruby",
+    "go",
+    "cargo",
+    "npm",
+    "yarn",
+    "pip",
+    "pip3",
+    "make",
+    "cmake",
+    "gcc",
+    "g++",
+    "rustc",
+    "git",
+    "diff",
+    "patch",
+    "tar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    "mkdir",
+    "cp",
+    "mv",
+    "rm",
+    "touch",
+    "chmod",
+    "chown",
+    "ps",
+    "top",
+    "kill",
+    "sleep",
+    "openssl",
+    "ssh",
+    "scp",
+    "rsync",
+    "docker",
+    "kubectl",
+    "helm",
+    "psql",
+    "mysql",
+    "redis-cli",
+    "mongo",
 ];
 
 /// Commands that are always blocked.
 const BLOCKED_COMMANDS: &[&str] = &[
-    "sudo", "su", "passwd", "useradd", "userdel", "groupadd",
-    "visudo", "chroot", "mount", "umount", "fdisk", "mkfs",
-    "dd", "format", "shutdown", "reboot", "halt", "poweroff",
-    "iptables", "ufw", "firewall-cmd",
-    "nc", "netcat", "ncat",
+    "sudo",
+    "su",
+    "passwd",
+    "useradd",
+    "userdel",
+    "groupadd",
+    "visudo",
+    "chroot",
+    "mount",
+    "umount",
+    "fdisk",
+    "mkfs",
+    "dd",
+    "format",
+    "shutdown",
+    "reboot",
+    "halt",
+    "poweroff",
+    "iptables",
+    "ufw",
+    "firewall-cmd",
+    "nc",
+    "netcat",
+    "ncat",
     "crontab",
 ];
 
@@ -113,9 +185,12 @@ impl Tool for ShellTool {
         "Execute shell commands with configurable timeout and sandboxing. Returns stdout, stderr, and exit code."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Execute }
-    fn risk(&self) -> RiskLevel { RiskLevel::High }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Execute
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::High
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "shell".into(),
@@ -146,11 +221,7 @@ impl Tool for ShellTool {
         }
     }
 
-    async fn execute(
-        &self,
-        ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let command = args["command"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("command required".into()))?;
@@ -189,13 +260,13 @@ impl Tool for ShellTool {
             .map_err(|e| ClawzError::Tool(format!("failed to spawn command: {e}")))?;
 
         // Wait with timeout
-        let output = tokio::time::timeout(
-            Duration::from_secs(timeout_secs),
-            child.wait_with_output(),
-        )
-        .await
-        .map_err(|_| ClawzError::Tool(format!("command timed out after {}s", timeout_secs)))?
-        .map_err(|e| ClawzError::Tool(format!("command execution failed: {e}")))?;
+        let output =
+            tokio::time::timeout(Duration::from_secs(timeout_secs), child.wait_with_output())
+                .await
+                .map_err(|_| {
+                    ClawzError::Tool(format!("command timed out after {}s", timeout_secs))
+                })?
+                .map_err(|e| ClawzError::Tool(format!("command execution failed: {e}")))?;
 
         let stdout = truncate_output(&output.stdout);
         let stderr = truncate_output(&output.stderr);
@@ -283,10 +354,7 @@ mod tests {
         let tool = ShellTool::new();
         let ctx = make_ctx();
         let result = tool
-            .execute(
-                &ctx,
-                serde_json::json!({ "command": "echo hello_world" }),
-            )
+            .execute(&ctx, serde_json::json!({ "command": "echo hello_world" }))
             .await
             .unwrap();
         assert!(!result.is_error);
@@ -299,16 +367,17 @@ mod tests {
     async fn test_missing_command() {
         let tool = ShellTool::new();
         let ctx = make_ctx();
-        let result = tool
-            .execute(&ctx, serde_json::json!({}))
-            .await;
+        let result = tool.execute(&ctx, serde_json::json!({})).await;
         assert!(result.is_err());
     }
 
     #[test]
     fn test_extract_command_name() {
         assert_eq!(ShellTool::extract_command_name("echo hello"), "echo");
-        assert_eq!(ShellTool::extract_command_name("/usr/bin/python3 script.py"), "python3");
+        assert_eq!(
+            ShellTool::extract_command_name("/usr/bin/python3 script.py"),
+            "python3"
+        );
         assert_eq!(ShellTool::extract_command_name("  ls -la  "), "ls");
     }
 }

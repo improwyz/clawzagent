@@ -148,86 +148,147 @@ impl RuntimeDependencies {
 
     /// Builder-style method to set provider_router
     pub fn with_provider_router(mut self, r: Arc<ProviderRouter>) -> Self {
-        self.provider_router = r; self
+        self.provider_router = r;
+        self
     }
 
     /// Builder-style method to set memory
     pub fn with_memory(mut self, m: Arc<dyn MemoryBackend>) -> Self {
-        self.memory = m; self
+        self.memory = m;
+        self
     }
 
     /// Builder-style method to set governance
     pub fn with_governance(mut self, g: Arc<dyn GovernanceEngine>) -> Self {
-        self.governance = g; self
+        self.governance = g;
+        self
     }
 
     /// Builder-style method to set cost_tracker
     pub fn with_cost_tracker(mut self, c: Arc<CostTracker>) -> Self {
-        self.cost_tracker = c; self
+        self.cost_tracker = c;
+        self
     }
 
     /// Builder-style method to set approval_workflow
-    pub fn with_approval_workflow(mut self, w: Arc<crate::governance::approval::ApprovalWorkflow>) -> Self {
-        self.approval_workflow = Some(w); self
+    pub fn with_approval_workflow(
+        mut self,
+        w: Arc<crate::governance::approval::ApprovalWorkflow>,
+    ) -> Self {
+        self.approval_workflow = Some(w);
+        self
     }
     /// Builder-style method to set council
     pub fn with_council(mut self, c: Arc<crate::governance::council::Council>) -> Self {
-        self.council = Some(c); self
+        self.council = Some(c);
+        self
     }
     /// Builder-style method to set audit_logger
     pub fn with_audit_logger(mut self, a: Arc<crate::governance::audit::AuditLogger>) -> Self {
-        self.audit_logger = Some(a); self
+        self.audit_logger = Some(a);
+        self
     }
     /// Builder-style method to set trust_scorer
     pub fn with_trust_scorer(mut self, t: Arc<crate::governance::trust::TrustScorer>) -> Self {
-        self.trust_scorer = Some(t); self
+        self.trust_scorer = Some(t);
+        self
     }
     /// Builder-style method to set proposal_gatekeeper
-    pub fn with_proposal_gatekeeper(mut self, p: Arc<crate::governance::proposal_gate::ProposalGatekeeper>) -> Self {
-        self.proposal_gatekeeper = Some(p); self
+    pub fn with_proposal_gatekeeper(
+        mut self,
+        p: Arc<crate::governance::proposal_gate::ProposalGatekeeper>,
+    ) -> Self {
+        self.proposal_gatekeeper = Some(p);
+        self
     }
     /// Builder-style method to set skill_repository
-    pub fn with_skill_repository(mut self, r: Arc<dyn crate::governance::skill_repository::SkillRepository>) -> Self {
-        self.skill_repository = Some(r); self
+    pub fn with_skill_repository(
+        mut self,
+        r: Arc<dyn crate::governance::skill_repository::SkillRepository>,
+    ) -> Self {
+        self.skill_repository = Some(r);
+        self
     }
     /// Builder-style method to set spawner
     pub fn with_spawner(mut self, s: Arc<crate::runtime::spawner::AgentTreeSpawner>) -> Self {
-        self.spawner = Some(s); self
+        self.spawner = Some(s);
+        self
     }
     /// Builder-style method to set elasticity
-    pub fn with_elasticity(mut self, e: Arc<crate::deployment::elasticity::DeploymentElasticity>) -> Self {
-        self.elasticity = Some(e); self
+    pub fn with_elasticity(
+        mut self,
+        e: Arc<crate::deployment::elasticity::DeploymentElasticity>,
+    ) -> Self {
+        self.elasticity = Some(e);
+        self
     }
-    pub fn with_identity_store(mut self, s: Arc<crate::runtime::identity::AgentIdentityStore>) -> Self {
-        self.identity_store = Some(s); self
+    pub fn with_identity_store(
+        mut self,
+        s: Arc<crate::runtime::identity::AgentIdentityStore>,
+    ) -> Self {
+        self.identity_store = Some(s);
+        self
     }
-    pub fn with_idempotency_store(mut self, s: Arc<dyn clawz_core::traits::IdempotencyStore>) -> Self {
-        self.idempotency_store = Some(s); self
+    pub fn with_idempotency_store(
+        mut self,
+        s: Arc<dyn clawz_core::traits::IdempotencyStore>,
+    ) -> Self {
+        self.idempotency_store = Some(s);
+        self
     }
-    pub fn with_outcome_tracker(mut self, t: Arc<crate::memory::outcome_tracker::OutcomeTracker>) -> Self {
-        self.outcome_tracker = Some(t); self
+    pub fn with_outcome_tracker(
+        mut self,
+        t: Arc<crate::memory::outcome_tracker::OutcomeTracker>,
+    ) -> Self {
+        self.outcome_tracker = Some(t);
+        self
     }
-    pub fn with_complexity_analyzer(mut self, a: Arc<crate::runtime::complexity::TaskComplexityAnalyzer>) -> Self {
-        self.complexity_analyzer = Some(a); self
+    pub fn with_complexity_analyzer(
+        mut self,
+        a: Arc<crate::runtime::complexity::TaskComplexityAnalyzer>,
+    ) -> Self {
+        self.complexity_analyzer = Some(a);
+        self
     }
-    pub fn with_container_metrics(mut self, m: Arc<crate::reality::container_metrics::ContainerMetrics>) -> Self {
-        self.container_metrics = Some(m); self
+    pub fn with_container_metrics(
+        mut self,
+        m: Arc<crate::reality::container_metrics::ContainerMetrics>,
+    ) -> Self {
+        self.container_metrics = Some(m);
+        self
     }
-    pub fn with_negotiation_protocol(mut self, n: Arc<crate::runtime::negotiation::NegotiationProtocol>) -> Self {
-        self.negotiation_protocol = Some(n); self
+    pub fn with_negotiation_protocol(
+        mut self,
+        n: Arc<crate::runtime::negotiation::NegotiationProtocol>,
+    ) -> Self {
+        self.negotiation_protocol = Some(n);
+        self
     }
-    pub fn with_self_improvement_loop(mut self, l: Arc<crate::memory::improvement::SelfImprovementLoop>) -> Self {
-        self.self_improvement_loop = Some(l); self
+    pub fn with_self_improvement_loop(
+        mut self,
+        l: Arc<crate::memory::improvement::SelfImprovementLoop>,
+    ) -> Self {
+        self.self_improvement_loop = Some(l);
+        self
     }
     pub fn with_self_improvement_interval(mut self, n: usize) -> Self {
-        self.self_improvement_interval_turns = n; self
+        self.self_improvement_interval_turns = n;
+        self
     }
-    pub fn with_constitution(mut self, c: Arc<crate::governance::constitution::ConstitutionalConvention>) -> Self {
-        self.constitution = Some(c); self
+    pub fn with_constitution(
+        mut self,
+        c: Arc<crate::governance::constitution::ConstitutionalConvention>,
+    ) -> Self {
+        self.constitution = Some(c);
+        self
     }
     /// Builder-style method to set mbti_drift_detector
-    pub fn with_mbti_drift_detector(mut self, d: Arc<crate::runtime::mbti_drift_detector::MBTIDriftDetector>) -> Self {
-        self.mbti_drift_detector = Some(d); self
+    pub fn with_mbti_drift_detector(
+        mut self,
+        d: Arc<crate::runtime::mbti_drift_detector::MBTIDriftDetector>,
+    ) -> Self {
+        self.mbti_drift_detector = Some(d);
+        self
     }
 }
 
@@ -291,10 +352,8 @@ impl AgentRuntime {
     /// 6. **PersistState** — save messages and agent state to memory backend.
     /// 7. **StreamResponse** — yield the final response to the caller.
     fn build_pipeline(&self) -> Pipeline {
-        let retrieve = RetrieveContextStep::new(
-            self.deps.memory.clone(),
-            self.config.system_prompt.clone(),
-        );
+        let retrieve =
+            RetrieveContextStep::new(self.deps.memory.clone(), self.config.system_prompt.clone());
 
         let provider = crate::runtime::steps::provider::SelectProviderStep::new(
             self.deps.provider_router.clone(),
@@ -307,10 +366,7 @@ impl AgentRuntime {
             "conv-placeholder", // replaced at runtime by ctx.conversation_id
         );
 
-        let governance = ApplyGovernanceStep::new(
-            self.deps.governance.clone(),
-            "agent_chat",
-        );
+        let governance = ApplyGovernanceStep::new(self.deps.governance.clone(), "agent_chat");
 
         let persist = PersistStateStep::new(self.deps.memory.clone());
 
@@ -331,11 +387,7 @@ impl AgentRuntime {
     ///
     /// `message` is appended to `ctx.messages` before running.
     /// This is the inner primitive used by both `run` and `run_multi_turn`.
-    async fn run_turn(
-        &self,
-        ctx: &mut PipelineContext,
-        message: Message,
-    ) -> Result<StepOutcome> {
+    async fn run_turn(&self, ctx: &mut PipelineContext, message: Message) -> Result<StepOutcome> {
         ctx.messages.push(message);
         let pipeline = self.build_pipeline();
         let result = pipeline.execute(ctx).await?;
@@ -345,17 +397,24 @@ impl AgentRuntime {
             let outcome = match &result.outcome {
                 StepOutcome::Continue => crate::memory::outcome_tracker::TaskOutcome::Success,
                 StepOutcome::Halt => crate::memory::outcome_tracker::TaskOutcome::Failure,
-                StepOutcome::Delegate { .. } => crate::memory::outcome_tracker::TaskOutcome::Success,
+                StepOutcome::Delegate { .. } => {
+                    crate::memory::outcome_tracker::TaskOutcome::Success
+                }
             };
             let _ = tracker.record(&ctx.conversation_id, outcome).await;
         }
 
         // Record environmental metrics for reality awareness.
         if let Some(ref _metrics) = self.deps.container_metrics {
-            if let Ok(m) = crate::reality::container_metrics::ContainerMetrics::fetch(&ctx.agent_id).await {
+            if let Ok(m) =
+                crate::reality::container_metrics::ContainerMetrics::fetch(&ctx.agent_id).await
+            {
                 log::debug!(
                     "[agent_runtime] container {} — cpu={:.1}%, mem={:.1}%, queue={}",
-                    m.container_id, m.cpu_percent, m.memory_percent, m.queue_depth
+                    m.container_id,
+                    m.cpu_percent,
+                    m.memory_percent,
+                    m.queue_depth
                 );
             }
         }
@@ -423,13 +482,9 @@ impl AgentRuntime {
     ///    - `Halt` — stop immediately.
     ///    - `Delegate` — stop and let the caller handle delegation.
     /// 4. Before every turn, enforce the cost budget and max-turn guards.
-    pub async fn run_multi_turn(
-        &self,
-        initial_messages: Vec<Message>,
-    ) -> Result<Vec<Message>> {
+    pub async fn run_multi_turn(&self, initial_messages: Vec<Message>) -> Result<Vec<Message>> {
         let conversation_id = uuid::Uuid::new_v4().to_string();
-        let mut ctx =
-            PipelineContext::new(self.config.id.to_string(), conversation_id.clone());
+        let mut ctx = PipelineContext::new(self.config.id.to_string(), conversation_id.clone());
         ctx.agent_state = AgentState::running("multi-turn conversation");
 
         let mut turns = 0;
@@ -437,7 +492,10 @@ impl AgentRuntime {
         // Seed context with prior messages (all except the last user message).
         // This lets the model see the full conversation history before the
         // current turn, matching the chat-completions API semantics.
-        for msg in initial_messages.iter().take(initial_messages.len().saturating_sub(1)) {
+        for msg in initial_messages
+            .iter()
+            .take(initial_messages.len().saturating_sub(1))
+        {
             ctx.messages.push(msg.clone());
         }
 
@@ -474,10 +532,7 @@ impl AgentRuntime {
 
             // Max turns guard — prevents infinite tool-call loops.
             if turns >= self.max_turns {
-                log::warn!(
-                    "[agent_runtime] max turns ({}) reached",
-                    self.max_turns
-                );
+                log::warn!("[agent_runtime] max turns ({}) reached", self.max_turns);
                 break;
             }
 
@@ -572,7 +627,10 @@ impl AgentRuntime {
                         // Trigger self-healing: checkpoint current state when drift exceeds threshold
                         if identity.drift_score() > 0.75 {
                             let checkpoint_id = identity.compute_identity_version_hash();
-                            let checkpoint_path = std::path::PathBuf::from(format!("/tmp/drift_checkpoint_{}.json", agent_id));
+                            let checkpoint_path = std::path::PathBuf::from(format!(
+                                "/tmp/drift_checkpoint_{}.json",
+                                agent_id
+                            ));
                             let checkpoint = serde_json::json!({
                                 "agent_id": agent_id,
                                 "identity_version_hash": checkpoint_id,
@@ -581,16 +639,21 @@ impl AgentRuntime {
                             if let Some(parent) = checkpoint_path.parent() {
                                 let _ = std::fs::create_dir_all(parent);
                             }
-                            let _ = std::fs::write(&checkpoint_path, serde_json::to_string_pretty(&checkpoint).unwrap());
+                            let _ = std::fs::write(
+                                &checkpoint_path,
+                                serde_json::to_string_pretty(&checkpoint).unwrap(),
+                            );
                             log::warn!(
                                 "[agent_runtime] identity drift checkpoint written (score={:.2})",
                                 identity.drift_score()
                             );
                             // Emit governance event
-                            let _ = identity.emit(crate::runtime::identity::GovernanceEvent::IdentityDrift {
-                                drift_score: identity.drift_score(),
-                                checkpoint_id: checkpoint_path,
-                            }).await;
+                            let _ = identity
+                                .emit(crate::runtime::identity::GovernanceEvent::IdentityDrift {
+                                    drift_score: identity.drift_score(),
+                                    checkpoint_id: checkpoint_path,
+                                })
+                                .await;
                         }
                     }
                 }
@@ -615,7 +678,9 @@ impl AgentRuntime {
     /// Returns the capability registry if one was configured in
     /// [`RuntimeDependencies`], enabling agents to discover tools by
     /// keyword query at runtime.
-    pub fn get_capabilities(&self) -> Option<Arc<crate::tools::capability_registry::ToolCapabilityRegistry>> {
+    pub fn get_capabilities(
+        &self,
+    ) -> Option<Arc<crate::tools::capability_registry::ToolCapabilityRegistry>> {
         self.deps.capability_registry.clone()
     }
 
@@ -623,12 +688,16 @@ impl AgentRuntime {
     ///
     /// Returns the protocol if one was configured in [`RuntimeDependencies`],
     /// enabling agents to initiate multi-round negotiations during sessions.
-    pub fn get_negotiation_protocol(&self) -> Option<Arc<crate::runtime::negotiation::NegotiationProtocol>> {
+    pub fn get_negotiation_protocol(
+        &self,
+    ) -> Option<Arc<crate::runtime::negotiation::NegotiationProtocol>> {
         self.deps.negotiation_protocol.clone()
     }
 
     /// Get the constitutional convention for agent-authored rule amendments.
-    pub fn get_constitution(&self) -> Option<Arc<crate::governance::constitution::ConstitutionalConvention>> {
+    pub fn get_constitution(
+        &self,
+    ) -> Option<Arc<crate::governance::constitution::ConstitutionalConvention>> {
         self.deps.constitution.clone()
     }
 
@@ -737,25 +806,52 @@ mod tests {
     #[async_trait::async_trait]
     impl MemoryBackend for StubMemory {
         async fn store(
-            &self, _: &str, _: &str, _: serde_json::Value, _: Option<Vec<f32>>,
-        ) -> ClawzResult<()> { Ok(()) }
-        async fn retrieve(&self, _: &str, _: &str) -> ClawzResult<Option<serde_json::Value>> { Ok(None) }
-        async fn search(&self, _: &str, _: Vec<f32>, _: usize) -> ClawzResult<Vec<MemoryEntry>> { Ok(vec![]) }
-        async fn get_conversation_history(&self, _: &str, _: usize) -> ClawzResult<Vec<Message>> { Ok(vec![]) }
-        async fn save_message(&self, _: &str, _: &Message) -> ClawzResult<()> { Ok(()) }
-        async fn delete(&self, _: &str, _: &str) -> ClawzResult<()> { Ok(()) }
+            &self,
+            _: &str,
+            _: &str,
+            _: serde_json::Value,
+            _: Option<Vec<f32>>,
+        ) -> ClawzResult<()> {
+            Ok(())
+        }
+        async fn retrieve(&self, _: &str, _: &str) -> ClawzResult<Option<serde_json::Value>> {
+            Ok(None)
+        }
+        async fn search(&self, _: &str, _: Vec<f32>, _: usize) -> ClawzResult<Vec<MemoryEntry>> {
+            Ok(vec![])
+        }
+        async fn get_conversation_history(&self, _: &str, _: usize) -> ClawzResult<Vec<Message>> {
+            Ok(vec![])
+        }
+        async fn save_message(&self, _: &str, _: &Message) -> ClawzResult<()> {
+            Ok(())
+        }
+        async fn delete(&self, _: &str, _: &str) -> ClawzResult<()> {
+            Ok(())
+        }
     }
 
     // Stub governance engine — always allows everything.
     struct StubGovernance;
     #[async_trait::async_trait]
     impl GovernanceEngine for StubGovernance {
-        async fn evaluate(&self, _: &str, _: &str, _: &serde_json::Value) -> ClawzResult<GovernanceResult> {
+        async fn evaluate(
+            &self,
+            _: &str,
+            _: &str,
+            _: &serde_json::Value,
+        ) -> ClawzResult<GovernanceResult> {
             Ok(GovernanceResult::allow(0.8))
         }
-        async fn get_trust_score(&self, _: &str) -> ClawzResult<f64> { Ok(0.8) }
-        async fn update_trust(&self, _: &str, _: f64, _: &str) -> ClawzResult<()> { Ok(()) }
-        async fn check_policy(&self, _: &str, _: &str) -> ClawzResult<bool> { Ok(true) }
+        async fn get_trust_score(&self, _: &str) -> ClawzResult<f64> {
+            Ok(0.8)
+        }
+        async fn update_trust(&self, _: &str, _: f64, _: &str) -> ClawzResult<()> {
+            Ok(())
+        }
+        async fn check_policy(&self, _: &str, _: &str) -> ClawzResult<bool> {
+            Ok(true)
+        }
         async fn request_approval(&self, _: ApprovalRequest) -> ClawzResult<String> {
             Ok(uuid::Uuid::new_v4().to_string())
         }
@@ -766,10 +862,16 @@ mod tests {
         let config = AgentConfig::new("test-agent", "gpt-4");
         let deps = RuntimeDependencies {
             // Building a runtime inside a sync test requires blocking on the async router init.
-            provider_router: Arc::new(tokio::runtime::Builder::new_current_thread()
-                .enable_all().build().unwrap()
-                .block_on(ProviderRouter::new(crate::providers::ProviderRouterConfig::default()))
-                .unwrap()),
+            provider_router: Arc::new(
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap()
+                    .block_on(ProviderRouter::new(
+                        crate::providers::ProviderRouterConfig::default(),
+                    ))
+                    .unwrap(),
+            ),
             memory: Arc::new(StubMemory),
             governance: Arc::new(StubGovernance),
             cost_tracker: Arc::new(CostTracker::new()),

@@ -23,7 +23,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use super::{http_error, AdapterConfig, ProviderAdapter};
+use super::{AdapterConfig, ProviderAdapter, http_error};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -212,11 +212,9 @@ impl ProviderAdapter for BedrockAdapter {
         config: &AdapterConfig,
         request: &ChatRequest,
     ) -> Result<ChatResponse, ClawzError> {
-        let region = config
-            .extras
-            .get("region")
-            .cloned()
-            .unwrap_or_else(|| std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string()));
+        let region = config.extras.get("region").cloned().unwrap_or_else(|| {
+            std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string())
+        });
 
         let aws_key = config
             .extras
@@ -236,10 +234,7 @@ impl ProviderAdapter for BedrockAdapter {
 
         let model_id = url_encode_model(&request.model);
         let path = format!("/model/{}/converse", model_id);
-        let url = format!(
-            "https://bedrock-runtime.{}.amazonaws.com{}",
-            region, path
-        );
+        let url = format!("https://bedrock-runtime.{}.amazonaws.com{}", region, path);
 
         let body = build_request(request)?;
         let body_bytes =
@@ -287,11 +282,9 @@ impl ProviderAdapter for BedrockAdapter {
         request: &ChatRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ClawzError>> + Send>>, ClawzError>
     {
-        let region = config
-            .extras
-            .get("region")
-            .cloned()
-            .unwrap_or_else(|| std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string()));
+        let region = config.extras.get("region").cloned().unwrap_or_else(|| {
+            std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".to_string())
+        });
 
         let aws_key = config
             .extras
@@ -311,10 +304,7 @@ impl ProviderAdapter for BedrockAdapter {
 
         let model_id = url_encode_model(&request.model);
         let path = format!("/model/{}/converse-stream", model_id);
-        let url = format!(
-            "https://bedrock-runtime.{}.amazonaws.com{}",
-            region, path
-        );
+        let url = format!("https://bedrock-runtime.{}.amazonaws.com{}", region, path);
 
         let body = build_request(request)?;
         let body_bytes =
@@ -373,8 +363,7 @@ impl ProviderAdapter for BedrockAdapter {
         } else {
             (0.005, 0.015)
         };
-        (input_tokens as f64 / 1_000.0) * in_per_1k
-            + (output_tokens as f64 / 1_000.0) * out_per_1k
+        (input_tokens as f64 / 1_000.0) * in_per_1k + (output_tokens as f64 / 1_000.0) * out_per_1k
     }
 }
 
@@ -453,8 +442,8 @@ fn convert_content(content: &MessageContent) -> Result<Vec<BedrockContentBlock>,
                 })
             })
             .collect()),
-        MessageContent::ToolResult(result) => {
-            Ok(vec![BedrockContentBlock::ToolResult(BedrockToolResultBlock {
+        MessageContent::ToolResult(result) => Ok(vec![BedrockContentBlock::ToolResult(
+            BedrockToolResultBlock {
                 tool_result: BedrockToolResult {
                     tool_use_id: result.tool_call_id.clone(),
                     content: vec![BedrockResultContent {
@@ -466,15 +455,17 @@ fn convert_content(content: &MessageContent) -> Result<Vec<BedrockContentBlock>,
                         None
                     },
                 },
-            })])
-        }
+            },
+        )]),
         MessageContent::Multimodal(parts) => {
             let blocks: Vec<BedrockContentBlock> = parts
                 .iter()
                 .filter_map(|p| match p {
-                    ContentPart::Text { text } => Some(BedrockContentBlock::Text(BedrockTextBlock {
-                        text: text.clone(),
-                    })),
+                    ContentPart::Text { text } => {
+                        Some(BedrockContentBlock::Text(BedrockTextBlock {
+                            text: text.clone(),
+                        }))
+                    }
                     _ => None, // Binary data needs different handling
                 })
                 .collect();
@@ -506,11 +497,14 @@ fn parse_response(raw: BedrockConverseResponse, model: &str) -> ChatResponse {
     let message = raw.output.message;
     let content = parse_message_content(message.content);
 
-    let usage = raw.usage.map(|u| Usage {
-        prompt_tokens: u.input_tokens,
-        completion_tokens: u.output_tokens,
-        total_tokens: u.total_tokens,
-    }).unwrap_or_default();
+    let usage = raw
+        .usage
+        .map(|u| Usage {
+            prompt_tokens: u.input_tokens,
+            completion_tokens: u.output_tokens,
+            total_tokens: u.total_tokens,
+        })
+        .unwrap_or_default();
 
     ChatResponse {
         id: Uuid::new_v4().to_string(),
@@ -797,7 +791,10 @@ mod tests {
     #[test]
     fn test_context_window() {
         let adapter = BedrockAdapter;
-        assert_eq!(adapter.context_window("anthropic.claude-3-opus-20240229-v1:0"), 200_000);
+        assert_eq!(
+            adapter.context_window("anthropic.claude-3-opus-20240229-v1:0"),
+            200_000
+        );
         assert_eq!(adapter.context_window("amazon.titan-text-lite-v1"), 8_192);
     }
 
@@ -805,10 +802,7 @@ mod tests {
     fn test_build_request() {
         let request = ChatRequest {
             model: "anthropic.claude-3-haiku-20240307-v1:0".to_string(),
-            messages: vec![
-                Message::system("Be helpful."),
-                Message::user("Hello"),
-            ],
+            messages: vec![Message::system("Be helpful."), Message::user("Hello")],
             ..Default::default()
         };
         let body = build_request(&request).unwrap();

@@ -4,10 +4,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use clawz_core::{
     error::ClawzError,
-    types::{
-        message::*,
-        tool::ToolCall,
-    },
+    types::{message::*, tool::ToolCall},
 };
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -16,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::{http_error, AdapterConfig, ProviderAdapter};
+use super::{AdapterConfig, ProviderAdapter, http_error};
 
 // ── Wire types ────────────────────────────────────────────────────────────────
 
@@ -260,11 +257,17 @@ fn extract_ollama_content(
                 match p {
                     ContentPart::Text { text } => text_parts.push(text.clone()),
                     ContentPart::ImageBase64 { data, .. } => images.push(data.clone()),
-                    ContentPart::ImageUrl { url, .. } => text_parts.push(format!("[image: {}]", url)),
+                    ContentPart::ImageUrl { url, .. } => {
+                        text_parts.push(format!("[image: {}]", url))
+                    }
                     ContentPart::AudioBase64 { .. } => {}
                 }
             }
-            let imgs = if images.is_empty() { None } else { Some(images) };
+            let imgs = if images.is_empty() {
+                None
+            } else {
+                Some(images)
+            };
             (text_parts.join(""), None, imgs)
         }
     }
@@ -412,7 +415,10 @@ mod tests {
     #[test]
     fn test_zero_cost() {
         let adapter = OllamaAdapter;
-        assert_eq!(adapter.estimate_cost_usd("llama3", 1_000_000, 1_000_000), 0.0);
+        assert_eq!(
+            adapter.estimate_cost_usd("llama3", 1_000_000, 1_000_000),
+            0.0
+        );
     }
 
     #[test]

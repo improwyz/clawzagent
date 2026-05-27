@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use clawz_core::deployment::DeploymentMode;
 use clawz_core::traits::AgentScheduler;
-use clawz_services::execution::{ExecutionClient, HttpExecutionClient};
 use clawz_services::Platform;
+use clawz_services::execution::{ExecutionClient, HttpExecutionClient};
 use clawz_worker::client::InProcessExecutionClient;
 use clawz_worker::governance::approval::ApprovalWorkflow;
 use clawz_worker::orchestration::factory::create_scheduler;
@@ -23,21 +23,17 @@ pub async fn maybe_init_database() -> anyhow::Result<Option<sqlx::PgPool>> {
 }
 
 /// Build platform + shared approval workflow for gateway handlers.
-pub async fn build_platform_with_approval(
-) -> anyhow::Result<(Platform, Arc<ApprovalWorkflow>)> {
+pub async fn build_platform_with_approval() -> anyhow::Result<(Platform, Arc<ApprovalWorkflow>)> {
     let approval_workflow = Arc::new(ApprovalWorkflow::new());
 
-    let execution: Arc<dyn ExecutionClient> =
-        if let Ok(url) = std::env::var("WORKER_URL") {
-            tracing::info!("gateway using remote worker at {url}");
-            Arc::new(HttpExecutionClient::new(url))
-        } else {
-            tracing::info!("gateway using in-process worker (standalone mode)");
-            let service = Arc::new(
-                WorkerService::new_with_approval(approval_workflow.clone()).await?,
-            );
-            Arc::new(InProcessExecutionClient::new(service))
-        };
+    let execution: Arc<dyn ExecutionClient> = if let Ok(url) = std::env::var("WORKER_URL") {
+        tracing::info!("gateway using remote worker at {url}");
+        Arc::new(HttpExecutionClient::new(url))
+    } else {
+        tracing::info!("gateway using in-process worker (standalone mode)");
+        let service = Arc::new(WorkerService::new_with_approval(approval_workflow.clone()).await?);
+        Arc::new(InProcessExecutionClient::new(service))
+    };
 
     Ok((Platform::new(execution), approval_workflow))
 }

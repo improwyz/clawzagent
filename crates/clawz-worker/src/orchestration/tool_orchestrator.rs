@@ -4,20 +4,22 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
+use bollard::Docker;
 use bollard::container::{
     Config as ContainerConfig, CreateContainerOptions, InspectContainerOptions,
     RemoveContainerOptions, StartContainerOptions, StopContainerOptions,
 };
 use bollard::image::CreateImageOptions;
 use bollard::models::HostConfig;
-use bollard::Docker;
 use chrono::Utc;
 use futures_util::StreamExt;
 use uuid::Uuid;
 
 use clawz_core::error::{ClawzError, Result};
 use clawz_core::traits::ToolOrchestrator;
-use clawz_core::types::orchestration::{ContainerState, HealthStatus, SpawnConfig, ToolHandle, ToolType};
+use clawz_core::types::orchestration::{
+    ContainerState, HealthStatus, SpawnConfig, ToolHandle, ToolType,
+};
 
 // ---------------------------------------------------------------------------
 // DockerToolOrchestrator
@@ -72,9 +74,7 @@ impl DockerToolOrchestrator {
             | Some(bollard::models::ContainerStateStatusEnum::RESTARTING) => {
                 ContainerState::Starting
             }
-            Some(bollard::models::ContainerStateStatusEnum::REMOVING) => {
-                ContainerState::Stopping
-            }
+            Some(bollard::models::ContainerStateStatusEnum::REMOVING) => ContainerState::Stopping,
             _ => ContainerState::Stopped,
         }
     }
@@ -155,7 +155,12 @@ impl ToolOrchestrator for DockerToolOrchestrator {
         let container_config = ContainerConfig {
             image: Some(image.as_str()),
             env: Some(env.iter().map(|s| s.as_str()).collect()),
-            labels: Some(labels.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()),
+            labels: Some(
+                labels
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.as_str()))
+                    .collect(),
+            ),
             host_config: Some(host_config),
             ..Default::default()
         };
@@ -210,9 +215,10 @@ impl ToolOrchestrator for DockerToolOrchestrator {
             }
         }
 
-        let container_id = handle.container_id.as_ref().ok_or_else(|| {
-            ClawzError::Orchestration("tool has no container_id".into())
-        })?;
+        let container_id = handle
+            .container_id
+            .as_ref()
+            .ok_or_else(|| ClawzError::Orchestration("tool has no container_id".into()))?;
 
         self.docker
             .stop_container(container_id, Some(StopContainerOptions { t: 10 }))
@@ -238,9 +244,10 @@ impl ToolOrchestrator for DockerToolOrchestrator {
     }
 
     async fn health(&self, handle: &ToolHandle) -> Result<HealthStatus> {
-        let container_id = handle.container_id.as_ref().ok_or_else(|| {
-            ClawzError::Orchestration("tool has no container_id".into())
-        })?;
+        let container_id = handle
+            .container_id
+            .as_ref()
+            .ok_or_else(|| ClawzError::Orchestration("tool has no container_id".into()))?;
 
         let info = self
             .docker
@@ -305,7 +312,12 @@ impl ToolOrchestrator for DockerToolOrchestrator {
         for (_, cid_opt) in &to_remove {
             if let Some(cid) = cid_opt {
                 self.docker
-                    .stop_container(cid, Some(StopContainerOptions { t: grace_secs as i64 }))
+                    .stop_container(
+                        cid,
+                        Some(StopContainerOptions {
+                            t: grace_secs as i64,
+                        }),
+                    )
                     .await
                     .ok();
                 self.docker
@@ -352,11 +364,7 @@ impl InMemoryToolOrchestrator {
     }
 
     /// Spawn a tool synchronously (test helper).
-    pub fn spawn_tool_sync(
-        &self,
-        tool_type: ToolType,
-        config: SpawnConfig,
-    ) -> Result<ToolHandle> {
+    pub fn spawn_tool_sync(&self, tool_type: ToolType, config: SpawnConfig) -> Result<ToolHandle> {
         let owner_agent_id = config
             .labels
             .iter()
@@ -423,9 +431,10 @@ impl ToolOrchestrator for InMemoryToolOrchestrator {
 
     async fn health(&self, handle: &ToolHandle) -> Result<HealthStatus> {
         let tools = self.tools.read().unwrap();
-        let h = tools
-            .get(&handle.id)
-            .ok_or_else(|| ClawzError::NotFound { entity: "tool".into(), id: handle.id.to_string() })?;
+        let h = tools.get(&handle.id).ok_or_else(|| ClawzError::NotFound {
+            entity: "tool".into(),
+            id: handle.id.to_string(),
+        })?;
 
         let liveness = matches!(
             h.state,

@@ -1,16 +1,16 @@
 //! AgentIdentityStore — cross-session accumulated identity.
 
-use std::collections::HashMap;
-use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
-use sha2::{Digest, Sha256};
 use hex;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-use clawz_core::error::ClawzError;
 use super::*;
+use clawz_core::error::ClawzError;
 
 /// Fixed core identity — injected at startup, never mutable post-initialization.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -133,9 +133,21 @@ impl AgentIdentity {
     pub fn compute_identity_version_hash(&self) -> String {
         let mut hasher = Sha256::new();
         hasher.update(self.core.mbti.as_str().as_bytes());
-        hasher.update((self.core.temperament.reactivity * 1000.0).to_bits().to_be_bytes());
-        hasher.update((self.core.temperament.self_regulation * 1000.0).to_bits().to_be_bytes());
-        hasher.update((self.core.risk_posture.risk_tolerance * 1000.0).to_bits().to_be_bytes());
+        hasher.update(
+            (self.core.temperament.reactivity * 1000.0)
+                .to_bits()
+                .to_be_bytes(),
+        );
+        hasher.update(
+            (self.core.temperament.self_regulation * 1000.0)
+                .to_bits()
+                .to_be_bytes(),
+        );
+        hasher.update(
+            (self.core.risk_posture.risk_tolerance * 1000.0)
+                .to_bits()
+                .to_be_bytes(),
+        );
         hasher.update(format!("{:?}", self.core.processing_style).as_bytes());
         hasher.update(format!("{:?}", self.core.authority_orientation).as_bytes());
         for rule in &self.core.values.cardinal_rules {
@@ -147,7 +159,11 @@ impl AgentIdentity {
 
     pub fn record_task(&mut self, skill_name: &str, success: bool) {
         self.accumulated_experience += 1;
-        let entry = self.state.talent.entry(skill_name.to_string()).or_insert(0.0);
+        let entry = self
+            .state
+            .talent
+            .entry(skill_name.to_string())
+            .or_insert(0.0);
         if success {
             *entry = (*entry + 0.05).min(1.0);
         } else {
@@ -156,7 +172,10 @@ impl AgentIdentity {
     }
 
     pub fn update_trust(&mut self, other_agent_id: &str, delta: f64) {
-        let entry = self.trust_relationships.entry(other_agent_id.to_string()).or_insert(0.5);
+        let entry = self
+            .trust_relationships
+            .entry(other_agent_id.to_string())
+            .or_insert(0.5);
         *entry = (*entry + delta).clamp(0.0, 1.0);
     }
 
@@ -172,7 +191,7 @@ impl AgentIdentity {
             return 0.0;
         }
         // Score based on accumulated experience and drift label presence
-        
+
         (self.accumulated_experience as f64 / 100.0).min(1.0)
     }
 
@@ -232,7 +251,10 @@ impl IdentityBackend for InMemoryIdentityBackend {
     }
 
     async fn save(&self, identity: &AgentIdentity) -> Result<(), ClawzError> {
-        self.store.write().await.insert(identity.agent_id.clone(), identity.clone());
+        self.store
+            .write()
+            .await
+            .insert(identity.agent_id.clone(), identity.clone());
         Ok(())
     }
 }
@@ -334,7 +356,9 @@ mod tests {
     async fn test_identity_state_evolvable() {
         let mut state = IdentityState::default();
         assert!(state.behaviour.is_empty());
-        state.behaviour.insert(identity_types::BehaviourType::Cooperative, 0.8);
+        state
+            .behaviour
+            .insert(identity_types::BehaviourType::Cooperative, 0.8);
         assert!((state.self_esteem - 0.5).abs() < 1e-4);
         state.self_esteem = 0.7;
         assert!((state.self_esteem - 0.7).abs() < 1e-4);
@@ -373,16 +397,10 @@ mod tests {
     #[tokio::test]
     async fn trust_relationships_accumulate() {
         let store = AgentIdentityStore::new_in_memory();
-        store
-            .update_trust("agent-a", "agent-b", 0.1)
-            .await
-            .unwrap();
+        store.update_trust("agent-a", "agent-b", 0.1).await.unwrap();
         let identity = store.load("agent-a").await.unwrap();
         assert!((identity.trust_relationships.get("agent-b").unwrap() - 0.6).abs() < 1e-9);
-        store
-            .update_trust("agent-a", "agent-b", 0.1)
-            .await
-            .unwrap();
+        store.update_trust("agent-a", "agent-b", 0.1).await.unwrap();
         let identity = store.load("agent-a").await.unwrap();
         assert!((identity.trust_relationships.get("agent-b").unwrap() - 0.7).abs() < 1e-9);
     }
@@ -398,10 +416,7 @@ mod tests {
     #[tokio::test]
     async fn record_task_updates_experience_and_skill() {
         let store = AgentIdentityStore::new_in_memory();
-        store
-            .record_task("test-agent", "rust", true)
-            .await
-            .unwrap();
+        store.record_task("test-agent", "rust", true).await.unwrap();
         let identity = store.load("test-agent").await.unwrap();
         assert_eq!(identity.accumulated_experience, 1);
         assert_eq!(identity.state.talent.get("rust"), Some(&0.05));
@@ -411,10 +426,7 @@ mod tests {
     async fn proficiency_capped_at_one() {
         let store = AgentIdentityStore::new_in_memory();
         for _ in 0..25 {
-            store
-                .record_task("test-agent", "rust", true)
-                .await
-                .unwrap();
+            store.record_task("test-agent", "rust", true).await.unwrap();
         }
         let identity = store.load("test-agent").await.unwrap();
         assert_eq!(identity.state.talent.get("rust"), Some(&1.0));
@@ -423,9 +435,7 @@ mod tests {
     #[tokio::test]
     async fn trust_clamped_to_valid_range() {
         let store = AgentIdentityStore::new_in_memory();
-        store
-            .update_trust("agent-a", "agent-b", 5.0)
-            .await.unwrap();
+        store.update_trust("agent-a", "agent-b", 5.0).await.unwrap();
         let identity = store.load("agent-a").await.unwrap();
         assert!((identity.trust_relationships.get("agent-b").unwrap() - 1.0).abs() < 1e-9);
         store

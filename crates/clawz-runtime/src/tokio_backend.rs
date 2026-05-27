@@ -33,8 +33,8 @@ impl crate::RuntimeBackend for crate::TokioBackend {
 
 #[cfg(test)]
 mod tests {
-    use crate::TokioBackend;
     use crate::RuntimeBackend;
+    use crate::TokioBackend;
     use std::time::Duration;
 
     #[tokio::test]
@@ -42,9 +42,11 @@ mod tests {
         let backend = TokioBackend::new();
         let handled = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let flag = handled.clone();
-        backend.spawn(async move {
-            flag.store(true, std::sync::atomic::Ordering::SeqCst);
-        }).await;
+        backend
+            .spawn(async move {
+                flag.store(true, std::sync::atomic::Ordering::SeqCst);
+            })
+            .await;
         backend.sleep(Duration::from_millis(1)).await;
         assert!(handled.load(std::sync::atomic::Ordering::SeqCst));
     }

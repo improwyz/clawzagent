@@ -35,8 +35,8 @@ pub mod identity_types;
 pub mod agent;
 pub mod complexity;
 pub mod fan_out;
-pub mod identity;
 pub mod idempotency;
+pub mod identity;
 pub mod mbti_drift_detector;
 pub mod negotiation;
 pub mod orchestration;
@@ -44,17 +44,17 @@ pub mod pipeline;
 pub mod spawner;
 pub mod steps;
 pub mod subagent;
+pub mod swarm;
 pub mod team;
 pub mod turn_coordinator;
-pub mod swarm;
 
 /// Re-export the primary runtime entry point and its dependency bag.
 pub use agent::{AgentRuntime, RuntimeDependencies};
+/// Re-export the complexity analyzer for consumers that need to size sub-agent teams.
+pub use complexity::{ComplexityScore, TaskComplexity, TaskComplexityAnalyzer};
 /// Re-export the pipeline type for consumers that need to build custom pipelines.
 pub use pipeline::Pipeline;
 /// Re-export the spawner types for consumers that need scale decisions.
 pub use spawner::{AgentTreeSpawner, ScaleDecision, ScalePolicy};
-/// Re-export the complexity analyzer for consumers that need to size sub-agent teams.
-pub use complexity::{ComplexityScore, TaskComplexity, TaskComplexityAnalyzer};
 /// Re-export room turn coordination for multi-participant agent rooms.
 pub use turn_coordinator::{RoomRuntimeProvider, TurnCoordinator};

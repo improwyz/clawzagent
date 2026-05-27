@@ -18,14 +18,14 @@
 //! // Dependency: gateway HTTP router (crate root) mounts [`handle_mcp_request`].
 //! // Dependency: gateway services would be called by `execute_tool` and `read_resource` in production.
 
-use axum::extract::State;
 use axum::Json;
+use axum::extract::State;
 use chrono::Utc;
 // Dependency: `serde` and `serde_json` for JSON-RPC wire serialization.
-use serde::{Deserialize, Serialize};
 use crate::AppState;
 use clawz_services::dto::{ExecuteToolRequest, RunTurnRequest};
-use serde_json::{json, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 
 // ---------------------------------------------------------------------------
 // JSON-RPC 2.0 wire types
@@ -467,10 +467,7 @@ pub async fn handle_mcp_request(
 
         // ------------------------------------------------------------------
         // Return the full catalog of callable tools.
-        "tools/list" => JsonRpcResponse::ok(
-            req.id,
-            json!({ "tools": builtin_tools() }),
-        ),
+        "tools/list" => JsonRpcResponse::ok(req.id, json!({ "tools": builtin_tools() })),
 
         // ------------------------------------------------------------------
         // Invoke a single tool by name with the arguments supplied by the client.
@@ -482,15 +479,12 @@ pub async fn handle_mcp_request(
                         req.id,
                         -32602,
                         "Invalid params: missing \"name\"",
-                    ))
+                    ));
                 }
             };
             // Clone the arguments object so `execute_tool` owns its input;
             // this keeps the borrow checker happy while we continue using `params`.
-            let args = params
-                .get("arguments")
-                .cloned()
-                .unwrap_or(json!({}));
+            let args = params.get("arguments").cloned().unwrap_or(json!({}));
             let result = execute_tool(&state, &tool_name, &args).await;
             JsonRpcResponse::ok(
                 req.id,
@@ -508,10 +502,9 @@ pub async fn handle_mcp_request(
 
         // ------------------------------------------------------------------
         // Return the full catalog of readable resources.
-        "resources/list" => JsonRpcResponse::ok(
-            req.id,
-            json!({ "resources": builtin_resources() }),
-        ),
+        "resources/list" => {
+            JsonRpcResponse::ok(req.id, json!({ "resources": builtin_resources() }))
+        }
 
         // ------------------------------------------------------------------
         // Read a single resource by URI and return its contents.
@@ -523,7 +516,7 @@ pub async fn handle_mcp_request(
                         req.id,
                         -32602,
                         "Invalid params: missing \"uri\"",
-                    ))
+                    ));
                 }
             };
             match read_resource(&state, &uri).await {
@@ -540,11 +533,9 @@ pub async fn handle_mcp_request(
                         }]
                     }),
                 ),
-                None => JsonRpcResponse::err(
-                    req.id,
-                    -32001,
-                    format!("Resource not found: {}", uri),
-                ),
+                None => {
+                    JsonRpcResponse::err(req.id, -32001, format!("Resource not found: {}", uri))
+                }
             }
         }
 
@@ -558,11 +549,7 @@ pub async fn handle_mcp_request(
 
         // ------------------------------------------------------------------
         // Any method not listed above is unsupported.
-        _ => JsonRpcResponse::err(
-            req.id,
-            -32601,
-            format!("Method not found: {}", req.method),
-        ),
+        _ => JsonRpcResponse::err(req.id, -32601, format!("Method not found: {}", req.method)),
     };
 
     Json(response)
@@ -648,10 +635,7 @@ mod tests {
     #[tokio::test]
     async fn test_resources_read() {
         let resp = dispatch(
-            make_req(
-                "resources/read",
-                Some(json!({"uri": "clawz://agents"})),
-            ),
+            make_req("resources/read", Some(json!({"uri": "clawz://agents"}))),
             test_state(),
         )
         .await;

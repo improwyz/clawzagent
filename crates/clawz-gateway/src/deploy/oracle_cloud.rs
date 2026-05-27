@@ -20,9 +20,7 @@
 //! * `clawz_core::error` — error types.
 
 // Dependency: common helpers for deployment ID generation.
-use crate::deploy::common::{
-    destroy_http_ok, external_resource_name, generate_deployment_id,
-};
+use crate::deploy::common::{destroy_http_ok, external_resource_name, generate_deployment_id};
 // Dependency: provider trait and shared vocabulary.
 use crate::deploy::provider::{
     DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
@@ -86,7 +84,9 @@ impl DeployProvider for OracleCloudAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::NativeBinary,
         ]
     }
@@ -104,7 +104,10 @@ impl DeployProvider for OracleCloudAdapter {
         let resp = self
             .client
             .get(self.compute_url("/instances"))
-            .header("Authorization", format!("Signature version=1,{}:{}", api_key, api_secret))
+            .header(
+                "Authorization",
+                format!("Signature version=1,{}:{}", api_key, api_secret),
+            )
             .send()
             .await
             .map_err(|e| ClawzError::Provider(format!("Oracle Cloud API error: {e}")))?;
@@ -129,7 +132,10 @@ impl DeployProvider for OracleCloudAdapter {
             .unwrap_or_else(|| self.tenancy.clone());
 
         // Use the "region" config field to select the OCI VM shape.
-        let shape = config.region.clone().unwrap_or_else(|| "VM.Standard.E2.1.Micro".into());
+        let shape = config
+            .region
+            .clone()
+            .unwrap_or_else(|| "VM.Standard.E2.1.Micro".into());
 
         let display_name = external_resource_name(&id);
         let body = serde_json::json!({
@@ -175,24 +181,21 @@ impl DeployProvider for OracleCloudAdapter {
             .map_err(|e| ClawzError::Provider(format!("Oracle Cloud deploy error: {e}")))?;
 
         let http_status = resp.status();
-        let response_body: serde_json::Value = if http_status.is_success() || http_status.as_u16() == 409 {
-            resp.json().await.unwrap_or_default()
-        } else {
-            let text = resp.text().await.unwrap_or_default();
-            return Err(ClawzError::Provider(format!(
-                "Oracle create instance failed ({http_status}): {text}"
-            )));
-        };
+        let response_body: serde_json::Value =
+            if http_status.is_success() || http_status.as_u16() == 409 {
+                resp.json().await.unwrap_or_default()
+            } else {
+                let text = resp.text().await.unwrap_or_default();
+                return Err(ClawzError::Provider(format!(
+                    "Oracle create instance failed ({http_status}): {text}"
+                )));
+            };
 
         let status = DeploymentStatus::Pending;
         let instance_id = response_body["id"]
             .as_str()
             .map(str::to_string)
-            .or_else(|| {
-                response_body["data"]["id"]
-                    .as_str()
-                    .map(str::to_string)
-            });
+            .or_else(|| response_body["data"]["id"].as_str().map(str::to_string));
 
         Ok(DeploymentInfo {
             id,
@@ -213,8 +216,8 @@ impl DeployProvider for OracleCloudAdapter {
         let instance_id = if let Some(ocid) = external_resource {
             ocid.to_string()
         } else {
-            let compartment_id = std::env::var("OCI_COMPARTMENT_ID")
-                .unwrap_or_else(|_| self.tenancy.clone());
+            let compartment_id =
+                std::env::var("OCI_COMPARTMENT_ID").unwrap_or_else(|_| self.tenancy.clone());
             let display_name = external_resource_name(id);
             let encoded_compartment: String = compartment_id
                 .chars()
@@ -238,9 +241,10 @@ impl DeployProvider for OracleCloudAdapter {
                 .await
                 .map_err(|e| ClawzError::Provider(format!("Oracle list instances error: {e}")))?;
 
-            let list_body: serde_json::Value = list_resp.json().await.map_err(|e| {
-                ClawzError::Provider(format!("Oracle list parse error: {e}"))
-            })?;
+            let list_body: serde_json::Value = list_resp
+                .json()
+                .await
+                .map_err(|e| ClawzError::Provider(format!("Oracle list parse error: {e}")))?;
 
             list_body
                 .get("items")

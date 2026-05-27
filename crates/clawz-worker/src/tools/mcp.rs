@@ -146,7 +146,11 @@ struct StdioMcpClient {
 }
 
 impl StdioMcpClient {
-    fn spawn(command: &str, args: &[String], env: &HashMap<String, String>) -> Result<Self, ClawzError> {
+    fn spawn(
+        command: &str,
+        args: &[String],
+        env: &HashMap<String, String>,
+    ) -> Result<Self, ClawzError> {
         let mut cmd = std::process::Command::new(command);
         cmd.args(args)
             .stdin(Stdio::piped())
@@ -157,9 +161,9 @@ impl StdioMcpClient {
             cmd.env(k, v);
         }
 
-        let mut child = cmd
-            .spawn()
-            .map_err(|e| ClawzError::Tool(format!("failed to spawn MCP server '{}': {e}", command)))?;
+        let mut child = cmd.spawn().map_err(|e| {
+            ClawzError::Tool(format!("failed to spawn MCP server '{}': {e}", command))
+        })?;
 
         let stdin = child.stdin.take().expect("no stdin");
         let stdout = child.stdout.take().expect("no stdout");
@@ -183,7 +187,8 @@ impl StdioMcpClient {
         // Write JSON-RPC request + newline (NDJSON framing)
         writeln!(self.stdin, "{}", json)
             .map_err(|e| ClawzError::Tool(format!("MCP write error: {e}")))?;
-        self.stdin.flush()
+        self.stdin
+            .flush()
             .map_err(|e| ClawzError::Tool(format!("MCP flush error: {e}")))?;
 
         // Read response(s) until we get a matching id
@@ -202,8 +207,9 @@ impl StdioMcpClient {
                 continue;
             }
 
-            let resp: JsonRpcResponse = serde_json::from_str(line)
-                .map_err(|e| ClawzError::Tool(format!("MCP JSON parse error: {e} — line: {line}")))?;
+            let resp: JsonRpcResponse = serde_json::from_str(line).map_err(|e| {
+                ClawzError::Tool(format!("MCP JSON parse error: {e} — line: {line}"))
+            })?;
 
             // Check if this is our response
             if resp.id.as_u64() == Some(id) || resp.id.as_str() == Some(&id.to_string()) {
@@ -317,10 +323,7 @@ impl StdioMcpClient {
     }
 
     fn read_resource(&mut self, uri: &str) -> Result<String, ClawzError> {
-        let result = self.send_request(
-            "resources/read",
-            serde_json::json!({ "uri": uri }),
-        )?;
+        let result = self.send_request("resources/read", serde_json::json!({ "uri": uri }))?;
 
         // MCP returns contents as array of {type, text/blob}
         let content = result["contents"]
@@ -459,7 +462,9 @@ impl McpClient {
             }
             McpTransport::Http { base_url, headers } => {
                 let mut client = HttpMcpClient::new(base_url.clone(), headers.clone())?;
-                let result = client.send_request("tools/list", serde_json::json!({})).await?;
+                let result = client
+                    .send_request("tools/list", serde_json::json!({}))
+                    .await?;
                 let tools = result["tools"]
                     .as_array()
                     .unwrap_or(&vec![])
@@ -478,7 +483,11 @@ impl McpClient {
     /// Call a tool on the MCP server.
     pub async fn execute_tool(&self, tool_name: &str, args: Value) -> Result<Value, ClawzError> {
         match &self.transport {
-            McpTransport::Stdio { command, args: cmd_args, env } => {
+            McpTransport::Stdio {
+                command,
+                args: cmd_args,
+                env,
+            } => {
                 let mut client = StdioMcpClient::spawn(command, cmd_args, env)?;
                 client.initialize("clawz-worker")?;
                 client.call_tool(tool_name, args)
@@ -505,7 +514,9 @@ impl McpClient {
             }
             McpTransport::Http { base_url, headers } => {
                 let mut client = HttpMcpClient::new(base_url.clone(), headers.clone())?;
-                let result = client.send_request("resources/list", serde_json::json!({})).await?;
+                let result = client
+                    .send_request("resources/list", serde_json::json!({}))
+                    .await?;
                 let resources = result["resources"]
                     .as_array()
                     .unwrap_or(&vec![])
@@ -553,7 +564,9 @@ impl McpClient {
             }
             McpTransport::Http { base_url, headers } => {
                 let mut client = HttpMcpClient::new(base_url.clone(), headers.clone())?;
-                let result = client.send_request("prompts/list", serde_json::json!({})).await?;
+                let result = client
+                    .send_request("prompts/list", serde_json::json!({}))
+                    .await?;
                 let prompts = result["prompts"]
                     .as_array()
                     .unwrap_or(&vec![])
@@ -583,13 +596,8 @@ pub struct McpServerEntry {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum McpServerEntryTransport {
-    Stdio {
-        command: String,
-        args: Vec<String>,
-    },
-    Http {
-        url: String,
-    },
+    Stdio { command: String, args: Vec<String> },
+    Http { url: String },
 }
 
 // ── MCP Server Manager ────────────────────────────────────────────────────────
@@ -610,7 +618,10 @@ impl McpServerManager {
     }
 
     /// Register an MCP server and discover its tools.
-    pub async fn register_server(&self, entry: McpServerEntry) -> Result<Vec<ToolSchema>, ClawzError> {
+    pub async fn register_server(
+        &self,
+        entry: McpServerEntry,
+    ) -> Result<Vec<ToolSchema>, ClawzError> {
         let client = match &entry.transport {
             McpServerEntryTransport::Stdio { command, args } => {
                 McpClient::new_stdio(command.clone(), args.clone(), HashMap::new())
@@ -664,17 +675,19 @@ impl McpServerManager {
 
     /// Execute a tool by routing to the appropriate server.
     pub async fn execute_tool(&self, tool_name: &str, args: Value) -> Result<Value, ClawzError> {
-        let server = self.server_for_tool(tool_name).await.ok_or_else(|| {
-            ClawzError::NotFound {
+        let server = self
+            .server_for_tool(tool_name)
+            .await
+            .ok_or_else(|| ClawzError::NotFound {
                 entity: "MCP tool".into(),
                 id: tool_name.into(),
-            }
-        })?;
+            })?;
 
         let client = match &server.transport {
-            McpServerEntryTransport::Stdio { command, args: cmd_args } => {
-                McpClient::new_stdio(command.clone(), cmd_args.clone(), HashMap::new())
-            }
+            McpServerEntryTransport::Stdio {
+                command,
+                args: cmd_args,
+            } => McpClient::new_stdio(command.clone(), cmd_args.clone(), HashMap::new()),
             McpServerEntryTransport::Http { url } => {
                 McpClient::new_http(url.clone(), HashMap::new())
             }
@@ -719,9 +732,9 @@ impl Default for McpServerManager {
 // ── McpTool — wraps an MCP server tool as a local Tool ────────────────────────
 
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::types::ToolResult;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 
 /// Wraps an MCP server tool as a clawz-worker Tool.
 pub struct McpTool {
@@ -745,8 +758,12 @@ impl Tool for McpTool {
         &self.schema.description
     }
 
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Execute }
-    fn risk(&self) -> RiskLevel { RiskLevel::Medium }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Execute
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::Medium
+    }
 
     fn schema(&self) -> ToolSchema {
         self.schema.clone()
@@ -754,9 +771,11 @@ impl Tool for McpTool {
 
     async fn execute(&self, _ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let client = match &self.transport {
-            McpTransport::Stdio { command, args: cmd_args, env } => {
-                McpClient::new_stdio(command.clone(), cmd_args.clone(), env.clone())
-            }
+            McpTransport::Stdio {
+                command,
+                args: cmd_args,
+                env,
+            } => McpClient::new_stdio(command.clone(), cmd_args.clone(), env.clone()),
             McpTransport::Http { base_url, headers } => {
                 McpClient::new_http(base_url.clone(), headers.clone())
             }
@@ -805,7 +824,8 @@ mod tests {
 
     #[test]
     fn test_json_rpc_response_with_error() {
-        let resp_json = r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found"}}"#;
+        let resp_json =
+            r#"{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found"}}"#;
         let resp: JsonRpcResponse = serde_json::from_str(resp_json).unwrap();
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, -32601);
@@ -819,20 +839,14 @@ mod tests {
 
     #[test]
     fn test_mcp_client_http_creation() {
-        let client = McpClient::new_http(
-            "http://localhost:8080".into(),
-            HashMap::new(),
-        );
+        let client = McpClient::new_http("http://localhost:8080".into(), HashMap::new());
         let _ = client;
     }
 
     #[test]
     fn test_mcp_client_stdio_creation() {
-        let client = McpClient::new_stdio(
-            "mcp-server".into(),
-            vec!["--stdio".into()],
-            HashMap::new(),
-        );
+        let client =
+            McpClient::new_stdio("mcp-server".into(), vec!["--stdio".into()], HashMap::new());
         let _ = client;
     }
 

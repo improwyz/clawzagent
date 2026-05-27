@@ -40,7 +40,9 @@ impl DeployProvider for SliplaneAdapter {
     }
 
     fn supported_modes(&self) -> Vec<DeployMode> {
-        vec![DeployMode::Docker { image: String::new() }]
+        vec![DeployMode::Docker {
+            image: String::new(),
+        }]
     }
 
     async fn validate_credentials(&self, creds: &ProviderCredentials) -> Result<()> {
@@ -73,7 +75,7 @@ impl DeployProvider for SliplaneAdapter {
             _ => {
                 return Err(ClawzError::Validation(
                     "Sliplane only supports Docker mode".into(),
-                ))
+                ));
             }
         };
 

@@ -142,7 +142,9 @@ impl SaaSConnector for SlackConnector {
         if json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
             return Err(ClawzError::Provider(format!(
                 "Slack API error: {}",
-                json.get("error").and_then(|v| v.as_str()).unwrap_or("unknown")
+                json.get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
             )));
         }
         // Slack uses different top-level keys for different method responses.
@@ -215,7 +217,9 @@ impl SaaSConnector for SlackConnector {
         } else {
             Err(ClawzError::Provider(format!(
                 "Slack delete failed: {}",
-                json.get("error").and_then(|v| v.as_str()).unwrap_or("unknown")
+                json.get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
             )))
         }
     }

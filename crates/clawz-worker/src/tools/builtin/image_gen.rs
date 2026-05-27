@@ -1,7 +1,7 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde_json::Value;
 
@@ -29,9 +29,12 @@ impl Tool for ImageGenTool {
         "Generate images from text prompts using DALL-E (OpenAI) or Stable Diffusion. Returns a URL or base64-encoded PNG."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Transform }
-    fn risk(&self) -> RiskLevel { RiskLevel::Medium }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Transform
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::Medium
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "image_gen".into(),
@@ -78,11 +81,7 @@ impl Tool for ImageGenTool {
         }
     }
 
-    async fn execute(
-        &self,
-        _ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, _ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let prompt = args["prompt"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("prompt required".into()))?;
@@ -95,12 +94,8 @@ impl Tool for ImageGenTool {
         let response_format = args["response_format"].as_str().unwrap_or("url");
 
         match model {
-            "stable-diffusion" => {
-                generate_stable_diffusion(prompt, size, n, response_format).await
-            }
-            _ => {
-                generate_dalle(prompt, model, size, quality, style, n, response_format).await
-            }
+            "stable-diffusion" => generate_stable_diffusion(prompt, size, n, response_format).await,
+            _ => generate_dalle(prompt, model, size, quality, style, n, response_format).await,
         }
     }
 }
@@ -114,9 +109,8 @@ async fn generate_dalle(
     n: u64,
     response_format: &str,
 ) -> Result<ToolResult, ClawzError> {
-    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        ClawzError::Config("OPENAI_API_KEY environment variable not set".into())
-    })?;
+    let api_key = std::env::var("OPENAI_API_KEY")
+        .map_err(|_| ClawzError::Config("OPENAI_API_KEY environment variable not set".into()))?;
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
@@ -210,8 +204,8 @@ async fn generate_stable_diffusion(
             )
         })?;
 
-    let base_url = std::env::var("SD_API_URL")
-        .unwrap_or_else(|_| "https://api.stability.ai".into());
+    let base_url =
+        std::env::var("SD_API_URL").unwrap_or_else(|_| "https://api.stability.ai".into());
 
     let (width, height) = parse_size(size);
 
@@ -228,7 +222,10 @@ async fn generate_stable_diffusion(
         "steps": 30
     });
 
-    let url = format!("{}/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image", base_url);
+    let url = format!(
+        "{}/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
+        base_url
+    );
     let response = client
         .post(&url)
         .bearer_auth(&api_key)
@@ -341,10 +338,7 @@ mod tests {
         // Only test if key is not set
         if std::env::var("OPENAI_API_KEY").is_err() {
             let result = tool
-                .execute(
-                    &ctx,
-                    serde_json::json!({"prompt": "a red circle"}),
-                )
+                .execute(&ctx, serde_json::json!({"prompt": "a red circle"}))
                 .await;
             assert!(result.is_err());
         }

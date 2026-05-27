@@ -49,7 +49,10 @@ impl AsanaConnector {
             .credentials
             .as_ref()
             .ok_or_else(|| ClawzError::Auth("not authenticated".into()))?;
-        Ok(ApiClient::new("https://app.asana.com/api/1.0", creds.clone()))
+        Ok(ApiClient::new(
+            "https://app.asana.com/api/1.0",
+            creds.clone(),
+        ))
     }
 }
 
@@ -70,11 +73,15 @@ impl SaaSConnector for AsanaConnector {
     async fn auth_url(&self, _redirect: &str) -> Result<String> {
         // Asana supports OAuth2 in the wild, but this implementation is optimized
         // for personal access tokens, so we reject auth_url requests.
-        Err(ClawzError::Auth("Asana uses bearer token authentication".into()))
+        Err(ClawzError::Auth(
+            "Asana uses bearer token authentication".into(),
+        ))
     }
 
     async fn exchange_code(&self, _code: &str) -> Result<Credentials> {
-        Err(ClawzError::Auth("Asana uses bearer token authentication".into()))
+        Err(ClawzError::Auth(
+            "Asana uses bearer token authentication".into(),
+        ))
     }
 
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {

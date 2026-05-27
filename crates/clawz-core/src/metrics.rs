@@ -104,7 +104,9 @@ impl Histogram {
 
     /// Standard web/latency bucket boundaries in milliseconds.
     pub fn latency_buckets() -> Self {
-        Self::new(vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0])
+        Self::new(vec![
+            1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 5000.0,
+        ])
     }
 
     /// Record a single observation into the appropriate bucket.
@@ -132,7 +134,11 @@ impl Histogram {
 
     pub fn mean(&self) -> f64 {
         let c = self.count();
-        if c == 0 { 0.0 } else { self.sum() / c as f64 }
+        if c == 0 {
+            0.0
+        } else {
+            self.sum() / c as f64
+        }
     }
 
     /// Render as Prometheus text format lines.
@@ -153,7 +159,10 @@ impl Histogram {
             ));
         }
         running += self.counts[self.buckets.len()].load(Ordering::Relaxed);
-        out.push_str(&format!("{}_bucket{}{{le=\"+Inf\"}} {}\n", name, lbl, running));
+        out.push_str(&format!(
+            "{}_bucket{}{{le=\"+Inf\"}} {}\n",
+            name, lbl, running
+        ));
         out.push_str(&format!("{}_count{} {}\n", name, lbl, self.count()));
         out.push_str(&format!("{}_sum{} {}\n", name, lbl, self.sum()));
         out

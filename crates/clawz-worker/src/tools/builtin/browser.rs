@@ -1,7 +1,7 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde_json::Value;
 
@@ -31,9 +31,12 @@ impl Tool for BrowserTool {
         "Control a headless Chromium browser via Chrome DevTools Protocol. Supports navigation, screenshots, clicking, typing, JS evaluation, and link extraction."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Execute }
-    fn risk(&self) -> RiskLevel { RiskLevel::High }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Execute
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::High
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "browser".into(),
@@ -79,11 +82,7 @@ impl Tool for BrowserTool {
         }
     }
 
-    async fn execute(
-        &self,
-        _ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, _ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let action = args["action"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("action required".into()))?;
@@ -96,13 +95,13 @@ impl Tool for BrowserTool {
 /// Execute a CDP action against a headless Chrome instance.
 /// Chrome must be started with --remote-debugging-port=9222
 async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, ClawzError> {
-    use tokio_tungstenite::connect_async;
     use futures_util::SinkExt;
+    use tokio_tungstenite::connect_async;
     use tokio_tungstenite::tungstenite::Message;
 
     // Get the Chrome DevTools endpoint
-    let cdp_base = std::env::var("CHROME_CDP_URL")
-        .unwrap_or_else(|_| "http://localhost:9222".into());
+    let cdp_base =
+        std::env::var("CHROME_CDP_URL").unwrap_or_else(|_| "http://localhost:9222".into());
 
     // Fetch the list of targets to get a WebSocket debugger URL
     let client = reqwest::Client::new();
@@ -164,8 +163,11 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                 .map_err(|e| ClawzError::Tool(format!("CDP send error: {e}")))?;
 
             let resp = recv_cdp_result(&mut ws, 1).await?;
-            format!("navigated to {} — frameId: {}", url,
-                resp["result"]["frameId"].as_str().unwrap_or("unknown"))
+            format!(
+                "navigated to {} — frameId: {}",
+                url,
+                resp["result"]["frameId"].as_str().unwrap_or("unknown")
+            )
         }
 
         "get_content" => {
@@ -198,10 +200,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send error: {e}")))?;
             let resp = recv_cdp_result(&mut ws, 3).await?;
-            let data = resp["result"]["data"]
-                .as_str()
-                .unwrap_or("")
-                .to_string();
+            let data = resp["result"]["data"].as_str().unwrap_or("").to_string();
             format!("base64_png:{}", data)
         }
 
@@ -227,8 +226,12 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                 .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
             let find_resp = recv_cdp_result(&mut ws, 10).await?;
             let coords = &find_resp["result"]["result"]["value"];
-            let x = coords["x"].as_f64().ok_or_else(|| ClawzError::Tool(format!("selector '{}' not found", selector)))?;
-            let y = coords["y"].as_f64().ok_or_else(|| ClawzError::Tool("element has no y coord".into()))?;
+            let x = coords["x"]
+                .as_f64()
+                .ok_or_else(|| ClawzError::Tool(format!("selector '{}' not found", selector)))?;
+            let y = coords["y"]
+                .as_f64()
+                .ok_or_else(|| ClawzError::Tool("element has no y coord".into()))?;
 
             // Mouse press + release
             for (event_type, id) in [("mousePressed", 11u64), ("mouseReleased", 12u64)] {
@@ -405,9 +408,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
         }
     };
 
-    ws.close(None)
-        .await
-        .ok(); // best-effort close
+    ws.close(None).await.ok(); // best-effort close
 
     Ok(ToolResult {
         tool_call_id: String::new(),
@@ -428,14 +429,11 @@ async fn recv_cdp_result(
 
     // Read messages until we get a response with matching id
     loop {
-        let msg = tokio::time::timeout(
-            std::time::Duration::from_secs(30),
-            ws.next(),
-        )
-        .await
-        .map_err(|_| ClawzError::Tool("CDP response timeout".into()))?
-        .ok_or_else(|| ClawzError::Tool("CDP WebSocket closed".into()))?
-        .map_err(|e| ClawzError::Tool(format!("CDP WebSocket error: {e}")))?;
+        let msg = tokio::time::timeout(std::time::Duration::from_secs(30), ws.next())
+            .await
+            .map_err(|_| ClawzError::Tool("CDP response timeout".into()))?
+            .ok_or_else(|| ClawzError::Tool("CDP WebSocket closed".into()))?
+            .map_err(|e| ClawzError::Tool(format!("CDP WebSocket error: {e}")))?;
 
         if let Message::Text(text) = msg {
             let val: Value = serde_json::from_str(&text)
@@ -443,7 +441,10 @@ async fn recv_cdp_result(
 
             if val["id"].as_u64() == Some(expected_id) {
                 if let Some(err) = val["error"].as_object() {
-                    return Err(ClawzError::Tool(format!("CDP error: {}", err["message"].as_str().unwrap_or("unknown"))));
+                    return Err(ClawzError::Tool(format!(
+                        "CDP error: {}",
+                        err["message"].as_str().unwrap_or("unknown")
+                    )));
                 }
                 return Ok(val);
             }
@@ -478,9 +479,24 @@ mod tests {
         let schema = tool.schema();
         assert_eq!(schema.name, "browser");
         let actions = &schema.parameters["properties"]["action"]["enum"];
-        assert!(actions.as_array().unwrap().contains(&serde_json::json!("screenshot")));
-        assert!(actions.as_array().unwrap().contains(&serde_json::json!("navigate")));
-        assert!(actions.as_array().unwrap().contains(&serde_json::json!("evaluate_js")));
+        assert!(
+            actions
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("screenshot"))
+        );
+        assert!(
+            actions
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("navigate"))
+        );
+        assert!(
+            actions
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("evaluate_js"))
+        );
     }
 
     #[tokio::test]
@@ -500,15 +516,22 @@ mod tests {
         // With an unsupported action, the CDP connection attempt will fail or the action
         // matching will return Validation error
         let result = tool
-            .execute(&ctx, serde_json::json!({"action": "navigate", "url": "https://example.com"}))
+            .execute(
+                &ctx,
+                serde_json::json!({"action": "navigate", "url": "https://example.com"}),
+            )
             .await;
         // Either succeeds (Chrome running) or fails with Tool error (no Chrome)
         if let Err(e) = result {
             let msg = e.to_string();
             // Should be a tool/transport error, not a schema validation error
             assert!(
-                msg.contains("CDP") || msg.contains("Chrome") || msg.contains("refused")
-                    || msg.contains("not available") || msg.contains("connect") || msg.contains("tool"),
+                msg.contains("CDP")
+                    || msg.contains("Chrome")
+                    || msg.contains("refused")
+                    || msg.contains("not available")
+                    || msg.contains("connect")
+                    || msg.contains("tool"),
                 "unexpected error: {}",
                 msg
             );

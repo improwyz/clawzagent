@@ -26,20 +26,20 @@
 //! - `login` / `register` read and write `AppState.users` and `AppState.api_keys`.
 
 use axum::{
+    Json, Router,
     extract::State,
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::Utc;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 // Dependency: ApiKeyRecord, AppState, GatewayError, UserRecord defined in crate root.
-use crate::{ApiKeyRecord, AppState, GatewayError, UserRecord};
 use crate::password::{hash_password, verify_password};
 use crate::prism_check;
+use crate::{ApiKeyRecord, AppState, GatewayError, UserRecord};
 // Dependency: auth::jwt helper for token creation and validation.
 use crate::auth::jwt;
 
@@ -198,9 +198,10 @@ async fn system_metrics(State(state): State<AppState>) -> String {
     let nodes = state.fleet_nodes.read().await;
     let audit = state.audit_log.read().await;
 
-    let running_agents = agents.iter().filter(|a| {
-        matches!(a.status, crate::AgentStatus::Running)
-    }).count();
+    let running_agents = agents
+        .iter()
+        .filter(|a| matches!(a.status, crate::AgentStatus::Running))
+        .count();
 
     // Prometheus text format — each metric has a HELP and TYPE line followed
     // by the value line so scrapers can auto-discover semantics.
@@ -241,12 +242,12 @@ async fn login(
     State(state): State<AppState>,
     Json(body): Json<LoginBody>,
 ) -> Result<Json<Value>, GatewayError> {
-    let email = body.email.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'email' is required".to_string())
-    })?;
-    let password = body.password.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'password' is required".to_string())
-    })?;
+    let email = body
+        .email
+        .ok_or_else(|| GatewayError::Unprocessable("field 'email' is required".to_string()))?;
+    let password = body
+        .password
+        .ok_or_else(|| GatewayError::Unprocessable("field 'password' is required".to_string()))?;
     let tenant_id = body
         .tenant_id
         .unwrap_or_else(crate::postgres_store::default_tenant);
@@ -281,7 +282,9 @@ async fn login(
     };
 
     if !verify_password(&password, &user.password_hash) {
-        return Err(GatewayError::Unauthorized("Invalid email or password".to_string()));
+        return Err(GatewayError::Unauthorized(
+            "Invalid email or password".to_string(),
+        ));
     }
 
     let token = jwt::create_token_with_tenant(
@@ -315,12 +318,12 @@ async fn register(
     State(state): State<AppState>,
     Json(body): Json<RegisterBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let email = body.email.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'email' is required".to_string())
-    })?;
-    let password = body.password.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'password' is required".to_string())
-    })?;
+    let email = body
+        .email
+        .ok_or_else(|| GatewayError::Unprocessable("field 'email' is required".to_string()))?;
+    let password = body
+        .password
+        .ok_or_else(|| GatewayError::Unprocessable("field 'password' is required".to_string()))?;
 
     if password.len() < 8 {
         return Err(GatewayError::Unprocessable(
@@ -481,4 +484,3 @@ async fn create_pairing() -> Json<Value> {
 async fn delete_pairing() -> StatusCode {
     StatusCode::NO_CONTENT
 }
-

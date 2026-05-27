@@ -25,10 +25,7 @@ use async_trait::async_trait;
 use clawz_core::{
     error::{ClawzError, Result},
     traits::{MemoryBackend, PipelineContext, PipelineStep, StepOutcome},
-    types::{
-        agent::AgentStatus,
-        message::Role,
-    },
+    types::{agent::AgentStatus, message::Role},
 };
 
 /// Metadata key: number of messages persisted this turn.
@@ -150,33 +147,16 @@ mod tests {
         ) -> Result<()> {
             Ok(())
         }
-        async fn retrieve(
-            &self,
-            _: &str,
-            _: &str,
-        ) -> Result<Option<serde_json::Value>> {
+        async fn retrieve(&self, _: &str, _: &str) -> Result<Option<serde_json::Value>> {
             Ok(None)
         }
-        async fn search(
-            &self,
-            _: &str,
-            _: Vec<f32>,
-            _: usize,
-        ) -> Result<Vec<MemoryEntry>> {
+        async fn search(&self, _: &str, _: Vec<f32>, _: usize) -> Result<Vec<MemoryEntry>> {
             Ok(vec![])
         }
-        async fn get_conversation_history(
-            &self,
-            _: &str,
-            _: usize,
-        ) -> Result<Vec<Message>> {
+        async fn get_conversation_history(&self, _: &str, _: usize) -> Result<Vec<Message>> {
             Ok(vec![])
         }
-        async fn save_message(
-            &self,
-            conversation_id: &str,
-            _msg: &Message,
-        ) -> Result<()> {
+        async fn save_message(&self, conversation_id: &str, _msg: &Message) -> Result<()> {
             self.saved.lock().unwrap().push(conversation_id.to_string());
             Ok(())
         }

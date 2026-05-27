@@ -65,11 +65,15 @@ impl SaaSConnector for FreshsalesConnector {
     }
 
     async fn auth_url(&self, _redirect: &str) -> Result<String> {
-        Err(ClawzError::Auth("Freshsales uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "Freshsales uses API key authentication".into(),
+        ))
     }
 
     async fn exchange_code(&self, _code: &str) -> Result<Credentials> {
-        Err(ClawzError::Auth("Freshsales uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "Freshsales uses API key authentication".into(),
+        ))
     }
 
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
@@ -79,10 +83,15 @@ impl SaaSConnector for FreshsalesConnector {
             "leads" => "/leads",
             "accounts" => "/sales_accounts",
             "tasks" => "/tasks",
-            _ => return Err(ClawzError::Provider(format!("Unknown Freshsales object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Freshsales object: {obj}"
+                )));
+            }
         };
         let per_page = filters.limit.unwrap_or(100).min(100);
-        let resp = self.client
+        let resp = self
+            .client
             .get(format!("{}{}", self.base_url(), path))
             .header("Authorization", format!("Token token={}", self.api_key))
             .query(&[("per_page", per_page.to_string())])
@@ -104,11 +113,16 @@ impl SaaSConnector for FreshsalesConnector {
             "deals" => ("/deals", "deal"),
             "leads" => ("/leads", "lead"),
             "accounts" => ("/sales_accounts", "sales_account"),
-            _ => return Err(ClawzError::Provider(format!("Unknown Freshsales object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Freshsales object: {obj}"
+                )));
+            }
         };
         // Freshsales expects the object wrapped under its singular key.
         let body = serde_json::json!({ key: data });
-        let resp = self.client
+        let resp = self
+            .client
             .post(format!("{}{}", self.base_url(), path))
             .header("Authorization", format!("Token token={}", self.api_key))
             .json(&body)
@@ -125,10 +139,15 @@ impl SaaSConnector for FreshsalesConnector {
             "deals" => (format!("/deals/{}", id), "deal"),
             "leads" => (format!("/leads/{}", id), "lead"),
             "accounts" => (format!("/sales_accounts/{}", id), "sales_account"),
-            _ => return Err(ClawzError::Provider(format!("Unknown Freshsales object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Freshsales object: {obj}"
+                )));
+            }
         };
         let body = serde_json::json!({ key: data });
-        let resp = self.client
+        let resp = self
+            .client
             .put(format!("{}{}", self.base_url(), path))
             .header("Authorization", format!("Token token={}", self.api_key))
             .json(&body)
@@ -145,9 +164,14 @@ impl SaaSConnector for FreshsalesConnector {
             "deals" => format!("/deals/{}", id),
             "leads" => format!("/leads/{}", id),
             "accounts" => format!("/sales_accounts/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Freshsales object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Freshsales object: {obj}"
+                )));
+            }
         };
-        let resp = self.client
+        let resp = self
+            .client
             .delete(format!("{}{}", self.base_url(), path))
             .header("Authorization", format!("Token token={}", self.api_key))
             .send()
@@ -169,10 +193,14 @@ impl SaaSConnector for FreshsalesConnector {
                 let q = params["q"].as_str().unwrap_or("");
                 format!("/search?q={}", q)
             }
-            "bulk_destroy" => format!("/{}/bulk_destroy", params["type"].as_str().unwrap_or("contacts")),
+            "bulk_destroy" => format!(
+                "/{}/bulk_destroy",
+                params["type"].as_str().unwrap_or("contacts")
+            ),
             _ => format!("/{}", action),
         };
-        let resp = self.client
+        let resp = self
+            .client
             .post(format!("{}{}", self.base_url(), path))
             .header("Authorization", format!("Token token={}", self.api_key))
             .json(&params)

@@ -193,11 +193,14 @@ impl PeerDiscovery {
                 DiscoveryMethod::Mdns => 2,
                 DiscoveryMethod::Static => 1,
             };
-            let existing_priority = by_id.get(&id).map(|p| match p.method {
-                DiscoveryMethod::Api => 3,
-                DiscoveryMethod::Mdns => 2,
-                DiscoveryMethod::Static => 1,
-            }).unwrap_or(0);
+            let existing_priority = by_id
+                .get(&id)
+                .map(|p| match p.method {
+                    DiscoveryMethod::Api => 3,
+                    DiscoveryMethod::Mdns => 2,
+                    DiscoveryMethod::Static => 1,
+                })
+                .unwrap_or(0);
             if priority > existing_priority {
                 by_id.insert(id, peer);
             }
@@ -255,15 +258,15 @@ impl PeerDiscovery {
         const BIND_ADDR: &str = "0.0.0.0:0";
         const LISTEN_MS: u64 = 500;
 
-        let socket = UdpSocket::bind(BIND_ADDR).await.map_err(|e| {
-            ClawzError::Mesh(format!("mDNS bind failed: {e}"))
-        })?;
+        let socket = UdpSocket::bind(BIND_ADDR)
+            .await
+            .map_err(|e| ClawzError::Mesh(format!("mDNS bind failed: {e}")))?;
 
         socket.set_multicast_ttl_v4(255).ok();
 
-        let multicast_addr: SocketAddr = MDNS_ADDR.parse().map_err(|e| {
-            ClawzError::Mesh(format!("mDNS addr parse failed: {e}"))
-        })?;
+        let multicast_addr: SocketAddr = MDNS_ADDR
+            .parse()
+            .map_err(|e| ClawzError::Mesh(format!("mDNS addr parse failed: {e}")))?;
 
         let query = build_mdns_query();
         socket

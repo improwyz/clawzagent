@@ -128,11 +128,7 @@ impl PipelineStep for ExecuteToolsStep {
         // enhancement could allow per-tool approval granularity.
         let needs_approval: Vec<&str> = calls
             .iter()
-            .filter(|c| {
-                self.approval_required
-                    .iter()
-                    .any(|ar| ar == &c.name)
-            })
+            .filter(|c| self.approval_required.iter().any(|ar| ar == &c.name))
             .map(|c| c.name.as_str())
             .collect();
 
@@ -141,14 +137,10 @@ impl PipelineStep for ExecuteToolsStep {
                 "[execute_tools] tools requiring approval: {:?}",
                 needs_approval
             );
-            ctx.insert_meta(
-                META_TOOL_APPROVAL_PENDING,
-                serde_json::Value::Bool(true),
-            );
+            ctx.insert_meta(META_TOOL_APPROVAL_PENDING, serde_json::Value::Bool(true));
             ctx.insert_meta(
                 META_TOOLS_REQUIRING_APPROVAL,
-                serde_json::to_value(&needs_approval)
-                    .unwrap_or(serde_json::Value::Array(vec![])),
+                serde_json::to_value(&needs_approval).unwrap_or(serde_json::Value::Array(vec![])),
             );
             return Ok(StepOutcome::Halt);
         }
@@ -166,13 +158,13 @@ impl PipelineStep for ExecuteToolsStep {
                         call.name,
                         call.id
                     );
-                    match tool.execute(&self.tool_context, call.arguments.clone()).await {
+                    match tool
+                        .execute(&self.tool_context, call.arguments.clone())
+                        .await
+                    {
                         Ok(r) => r,
                         Err(e) => {
-                            log::error!(
-                                "[execute_tools] tool '{}' failed: {e}",
-                                call.name
-                            );
+                            log::error!("[execute_tools] tool '{}' failed: {e}", call.name);
                             ToolResult::err(&call.id, e.to_string())
                         }
                     }
@@ -189,10 +181,8 @@ impl PipelineStep for ExecuteToolsStep {
         // The model expects tool results to follow the assistant message that
         // requested them, which is why we push in order after the assistant msg.
         for result in results {
-            ctx.messages.push(Message::new(
-                Role::Tool,
-                MessageContent::ToolResult(result),
-            ));
+            ctx.messages
+                .push(Message::new(Role::Tool, MessageContent::ToolResult(result)));
         }
 
         Ok(StepOutcome::Continue)
@@ -226,11 +216,7 @@ mod tests {
         fn schema(&self) -> ToolSchema {
             ToolSchema::no_args("echo", "echo")
         }
-        async fn execute(
-            &self,
-            _ctx: &ToolContext,
-            args: serde_json::Value,
-        ) -> Result<ToolResult> {
+        async fn execute(&self, _ctx: &ToolContext, args: serde_json::Value) -> Result<ToolResult> {
             Ok(ToolResult::ok("0", args.to_string()))
         }
     }
@@ -287,8 +273,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_approval_required_halts() {
-        let step = ExecuteToolsStep::new("agent-1", "conv-1")
-            .require_approval_for("dangerous_tool");
+        let step =
+            ExecuteToolsStep::new("agent-1", "conv-1").require_approval_for("dangerous_tool");
         let call = ToolCall::new("id-3", "dangerous_tool", json!({}));
         let mut ctx = make_ctx_with_tool_calls(vec![call]);
 

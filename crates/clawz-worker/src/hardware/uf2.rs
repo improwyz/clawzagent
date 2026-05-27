@@ -302,7 +302,9 @@ impl FirmwareFlasher {
                 return Ok(FlashVerification {
                     success: false,
                     device_path: device_path.to_string(),
-                    message: "Bootloader still mounted with UF2 file present; flash may be in progress".to_string(),
+                    message:
+                        "Bootloader still mounted with UF2 file present; flash may be in progress"
+                            .to_string(),
                 });
             }
 
@@ -317,7 +319,9 @@ impl FirmwareFlasher {
         Ok(FlashVerification {
             success: true,
             device_path: device_path.to_string(),
-            message: "Bootloader volume unmounted; device appears to have re-enumerated successfully".to_string(),
+            message:
+                "Bootloader volume unmounted; device appears to have re-enumerated successfully"
+                    .to_string(),
         })
     }
 }
@@ -492,7 +496,7 @@ fn detect_bootloader_linux() -> Option<PathBuf> {
         "METROBOOT",
         "GEMMABOOT",
         "TRINKETBOOT",
-        "PYBFLASH",   // MicroPython
+        "PYBFLASH", // MicroPython
     ];
 
     for line in mounts.lines() {
@@ -536,10 +540,7 @@ fn detect_bootloader_macos() -> Option<PathBuf> {
 
     for entry in rd.flatten() {
         let path = entry.path();
-        let name = entry
-            .file_name()
-            .to_string_lossy()
-            .to_uppercase();
+        let name = entry.file_name().to_string_lossy().to_uppercase();
 
         if known_names.iter().any(|n| name.contains(n)) {
             return Some(path);
@@ -558,16 +559,18 @@ fn detect_bootloader_macos() -> Option<PathBuf> {
 
 /// Try to extract a version string from the filename, e.g. "firmware_v1.2.3.uf2" → "v1.2.3"
 fn extract_version_from_name(path: &Path) -> String {
-    let name = path
-        .file_stem()
-        .and_then(|n| n.to_str())
-        .unwrap_or("");
+    let name = path.file_stem().and_then(|n| n.to_str()).unwrap_or("");
 
     // Look for patterns like "_v1.2.3", "-v1.2", "_1.2.3"
     for part in name.split(['_', '-']) {
         if part.starts_with('v') || part.starts_with('V') {
             let rest = &part[1..];
-            if rest.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            if rest
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+            {
                 return part.to_string();
             }
         }
@@ -634,13 +637,7 @@ mod tests {
         let mut data = Vec::new();
         for i in 0..num_blocks {
             let payload = vec![0xAA_u8; 256];
-            let block = build_uf2_block(
-                i,
-                num_blocks,
-                0x10000000 + i * 256,
-                family_id,
-                &payload,
-            );
+            let block = build_uf2_block(i, num_blocks, 0x10000000 + i * 256, family_id, &payload);
             data.extend_from_slice(&block);
         }
         data

@@ -47,7 +47,10 @@ impl BoxConnector {
             "https://api.box.com/oauth2/token",
             vec!["root_readwrite".into()],
         );
-        Self { oauth, credentials: None }
+        Self {
+            oauth,
+            credentials: None,
+        }
     }
 
     /// Base URL for metadata and management calls.
@@ -105,7 +108,12 @@ impl SaaSConnector for BoxConnector {
         let folder_id = filters.search.as_deref().unwrap_or("0");
         let path = match obj {
             "files" | "folders" | "items" => {
-                format!("{}/folders/{}/items?limit={}", self.base_url(), folder_id, limit)
+                format!(
+                    "{}/folders/{}/items?limit={}",
+                    self.base_url(),
+                    folder_id,
+                    limit
+                )
             }
             "collaborations" => format!("{}/folders/{}/collaborations", self.base_url(), folder_id),
             "search" => {
@@ -114,7 +122,8 @@ impl SaaSConnector for BoxConnector {
             }
             _ => return Err(ClawzError::Provider(format!("Unknown Box object: {obj}"))),
         };
-        let resp = self.client()
+        let resp = self
+            .client()
             .get(&path)
             .bearer_auth(&token)
             .send()
@@ -122,14 +131,22 @@ impl SaaSConnector for BoxConnector {
             .map_err(|e| ClawzError::Provider(format!("Box list failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         // Box returns results under "entries" or "items" depending on endpoint.
-        let entries = json["entries"].as_array().cloned()
+        let entries = json["entries"]
+            .as_array()
+            .cloned()
             .or_else(|| json["items"].as_array().cloned())
             .unwrap_or_default();
         // Post-filter by type when the user asked for a specific subtype.
         if obj == "files" {
-            Ok(entries.into_iter().filter(|e| e["type"].as_str() == Some("file")).collect())
+            Ok(entries
+                .into_iter()
+                .filter(|e| e["type"].as_str() == Some("file"))
+                .collect())
         } else if obj == "folders" {
-            Ok(entries.into_iter().filter(|e| e["type"].as_str() == Some("folder")).collect())
+            Ok(entries
+                .into_iter()
+                .filter(|e| e["type"].as_str() == Some("folder"))
+                .collect())
         } else {
             Ok(entries)
         }
@@ -172,7 +189,8 @@ impl SaaSConnector for BoxConnector {
                     "name": name,
                     "parent": { "id": parent_id }
                 });
-                let resp = self.client()
+                let resp = self
+                    .client()
                     .post(format!("{}/folders", self.base_url()))
                     .bearer_auth(&token)
                     .json(&body)
@@ -182,13 +200,16 @@ impl SaaSConnector for BoxConnector {
                 crate::connectors::common::parse_json(resp).await
             }
             "collaboration" => {
-                let resp = self.client()
+                let resp = self
+                    .client()
                     .post(format!("{}/collaborations", self.base_url()))
                     .bearer_auth(&token)
                     .json(&data)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Box create collaboration failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Box create collaboration failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "shared_link" => {
@@ -200,13 +221,16 @@ impl SaaSConnector for BoxConnector {
                         "access": data["access"].as_str().unwrap_or("open")
                     }
                 });
-                let resp = self.client()
+                let resp = self
+                    .client()
                     .put(format!("{}/{}", self.base_url(), path))
                     .bearer_auth(&token)
                     .json(&body)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Box create shared link failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Box create shared link failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             _ => Err(ClawzError::Provider(format!("Unknown Box object: {obj}"))),
@@ -220,7 +244,8 @@ impl SaaSConnector for BoxConnector {
             "folder" => format!("{}/folders/{}", self.base_url(), id),
             _ => return Err(ClawzError::Provider(format!("Unknown Box object: {obj}"))),
         };
-        let resp = self.client()
+        let resp = self
+            .client()
             .put(&path)
             .bearer_auth(&token)
             .json(&data)
@@ -239,7 +264,8 @@ impl SaaSConnector for BoxConnector {
             "collaboration" => format!("{}/collaborations/{}", self.base_url(), id),
             _ => return Err(ClawzError::Provider(format!("Unknown Box object: {obj}"))),
         };
-        let resp = self.client()
+        let resp = self
+            .client()
             .delete(&path)
             .bearer_auth(&token)
             .send()
@@ -260,7 +286,8 @@ impl SaaSConnector for BoxConnector {
         match action {
             "copy_file" => {
                 let file_id = params["file_id"].as_str().unwrap_or("");
-                let resp = self.client()
+                let resp = self
+                    .client()
                     .post(format!("{}/files/{}/copy", self.base_url(), file_id))
                     .bearer_auth(&token)
                     .json(&params)
@@ -273,7 +300,8 @@ impl SaaSConnector for BoxConnector {
                 let file_id = params["file_id"].as_str().unwrap_or("");
                 let parent_id = params["parent_id"].as_str().unwrap_or("0");
                 let body = serde_json::json!({ "parent": { "id": parent_id } });
-                let resp = self.client()
+                let resp = self
+                    .client()
                     .put(format!("{}/files/{}", self.base_url(), file_id))
                     .bearer_auth(&token)
                     .json(&body)
@@ -284,7 +312,8 @@ impl SaaSConnector for BoxConnector {
             }
             "get_file_info" => {
                 let file_id = params["file_id"].as_str().unwrap_or("");
-                let resp = self.client()
+                let resp = self
+                    .client()
                     .get(format!("{}/files/{}", self.base_url(), file_id))
                     .bearer_auth(&token)
                     .send()
@@ -292,7 +321,9 @@ impl SaaSConnector for BoxConnector {
                     .map_err(|e| ClawzError::Provider(format!("Box get file info failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Box action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Box action: {action}"
+            ))),
         }
     }
 }

@@ -49,8 +49,14 @@ impl Microsoft365Connector {
             client_id,
             client_secret,
             redirect_uri,
-            format!("https://login.microsoftonline.com/{}/oauth2/v2.0/authorize", tenant),
-            format!("https://login.microsoftonline.com/{}/oauth2/v2.0/token", tenant),
+            format!(
+                "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize",
+                tenant
+            ),
+            format!(
+                "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
+                tenant
+            ),
             vec![
                 "https://graph.microsoft.com/User.Read".into(),
                 "https://graph.microsoft.com/Mail.Read".into(),
@@ -71,7 +77,10 @@ impl Microsoft365Connector {
             .credentials
             .as_ref()
             .ok_or_else(|| ClawzError::Auth("not authenticated".into()))?;
-        Ok(ApiClient::new("https://graph.microsoft.com/v1.0", creds.clone()))
+        Ok(ApiClient::new(
+            "https://graph.microsoft.com/v1.0",
+            creds.clone(),
+        ))
     }
 }
 
@@ -187,7 +196,14 @@ impl SaaSConnector for Microsoft365Connector {
         let client = self.client()?;
         let path = match action {
             "sendMail" => "/me/sendMail".to_string(),
-            "sendMessage" => format!("/teams/{}/channels/{}/messages", params.get("teamId").and_then(|v| v.as_str()).unwrap_or(""), params.get("channelId").and_then(|v| v.as_str()).unwrap_or("")),
+            "sendMessage" => format!(
+                "/teams/{}/channels/{}/messages",
+                params.get("teamId").and_then(|v| v.as_str()).unwrap_or(""),
+                params
+                    .get("channelId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
             "search" => "/me/microsoft.graph.search".to_string(),
             _ => format!("/me/{}", action),
         };

@@ -304,13 +304,7 @@ impl AuditLogger {
         let agent_id_str = agent_id.into();
         let action_str = action.into();
 
-        let canonical = Self::canonical(
-            &id,
-            &timestamp,
-            &agent_id_str,
-            &action_str,
-            &result,
-        );
+        let canonical = Self::canonical(&id, &timestamp, &agent_id_str, &action_str, &result);
         let current_hash = Self::compute_hash(&prev_hash, &canonical);
 
         let entry = AuditEntry {
@@ -370,8 +364,7 @@ impl AuditLogger {
                 &entry.action,
                 &entry.result,
             );
-            let expected_hash =
-                Self::compute_hash(&entry.prev_hash, &canonical);
+            let expected_hash = Self::compute_hash(&entry.prev_hash, &canonical);
 
             if entry.current_hash != expected_hash {
                 return Err(ClawzError::Governance(format!(
@@ -448,7 +441,12 @@ mod tests {
     fn test_append_and_verify_chain() {
         let logger = AuditLogger::new();
         logger.append("agent-1", "chat", AuditResult::Allow, serde_json::json!({}));
-        logger.append("agent-1", "deploy", AuditResult::Deny, serde_json::json!({}));
+        logger.append(
+            "agent-1",
+            "deploy",
+            AuditResult::Deny,
+            serde_json::json!({}),
+        );
         logger.append("agent-2", "read", AuditResult::Allow, serde_json::json!({}));
 
         assert_eq!(logger.entry_count(), 3);
@@ -474,7 +472,12 @@ mod tests {
     fn test_filter_by_agent() {
         let logger = AuditLogger::new();
         logger.append("agent-1", "chat", AuditResult::Allow, serde_json::json!({}));
-        logger.append("agent-2", "deploy", AuditResult::Deny, serde_json::json!({}));
+        logger.append(
+            "agent-2",
+            "deploy",
+            AuditResult::Deny,
+            serde_json::json!({}),
+        );
 
         let filter = AuditFilter::new().for_agent("agent-1");
         let entries = logger.get_entries(&filter);

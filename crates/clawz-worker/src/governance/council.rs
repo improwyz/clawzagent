@@ -73,8 +73,8 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use clawz_core::error::{ClawzError, Result};
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 use uuid::Uuid;
 
 // ── Roles and votes ───────────────────────────────────────────────────────────
@@ -290,7 +290,10 @@ impl Council {
     /// Add a new member to the council.  Members can be added at any time,
     /// but votes cast before a member joins will not be retroactively applied.
     pub async fn add_member(&self, id: impl Into<String>, role: CouncilRole) {
-        self.members.write().await.push(CouncilMember::new(id, role));
+        self.members
+            .write()
+            .await
+            .push(CouncilMember::new(id, role));
     }
 
     /// Return the current number of members (including arbiters).
@@ -339,9 +342,7 @@ impl Council {
         let members = self.members.read().await;
 
         if members.is_empty() {
-            return Err(ClawzError::Validation(
-                "council has no members".into(),
-            ));
+            return Err(ClawzError::Validation("council has no members".into()));
         }
 
         // Non-arbiter members count toward the primary vote.
@@ -370,9 +371,9 @@ impl Council {
         let reasoning: Vec<String> = members
             .iter()
             .filter_map(|m| {
-                m.reasoning.as_ref().map(|r| {
-                    format!("[{}({:?})]: {}", m.id, m.vote.unwrap_or(Vote::Abstain), r)
-                })
+                m.reasoning
+                    .as_ref()
+                    .map(|r| format!("[{}({:?})]: {}", m.id, m.vote.unwrap_or(Vote::Abstain), r))
             })
             .collect();
 

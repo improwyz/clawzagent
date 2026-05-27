@@ -43,7 +43,9 @@ impl DeployProvider for VercelAdapter {
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
             DeployMode::NativeBinary,
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
         ]
     }
 
@@ -111,11 +113,10 @@ impl DeployProvider for VercelAdapter {
                 "env": env_vercel,
                 "regions": [region],
             }),
-            DeployMode::Wasm => {
-                return Err(ClawzError::Validation(
-                    "Vercel does not support direct Wasm deployment; embed Wasm in a JS edge function".into(),
-                ))
-            }
+            DeployMode::Wasm => return Err(ClawzError::Validation(
+                "Vercel does not support direct Wasm deployment; embed Wasm in a JS edge function"
+                    .into(),
+            )),
         };
 
         let resp = self
@@ -193,6 +194,10 @@ mod tests {
     #[test]
     fn test_api_url_with_team() {
         let adapter = VercelAdapter::new(Some("team_abc"));
-        assert!(adapter.api_url("/v13/deployments").contains("teamId=team_abc"));
+        assert!(
+            adapter
+                .api_url("/v13/deployments")
+                .contains("teamId=team_abc")
+        );
     }
 }

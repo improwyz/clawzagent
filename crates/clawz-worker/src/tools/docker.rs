@@ -22,8 +22,7 @@
 use bollard::Docker;
 use bollard::container::{
     Config, CreateContainerOptions, ListContainersOptions, LogOutput, LogsOptions,
-    RemoveContainerOptions, RestartContainerOptions, StartContainerOptions,
-    StopContainerOptions,
+    RemoveContainerOptions, RestartContainerOptions, StartContainerOptions, StopContainerOptions,
 };
 use bollard::image::CreateImageOptions;
 use bollard::models::{ContainerStateStatusEnum, HostConfig, PortBinding, RestartPolicy};
@@ -170,13 +169,7 @@ pub struct DockerToolEntry {
 }
 
 impl DockerToolEntry {
-    fn simple(
-        name: &str,
-        image: &str,
-        ports: Vec<u16>,
-        category: &str,
-        description: &str,
-    ) -> Self {
+    fn simple(name: &str, image: &str, ports: Vec<u16>, category: &str, description: &str) -> Self {
         Self {
             name: name.into(),
             image: image.into(),
@@ -221,132 +214,170 @@ pub fn docker_tool_library() -> Vec<DockerToolEntry> {
     vec![
         // Databases
         DockerToolEntry::simple(
-            "postgres", "postgres:16-alpine", vec![5432], "database",
-            "PostgreSQL relational database"
+            "postgres",
+            "postgres:16-alpine",
+            vec![5432],
+            "database",
+            "PostgreSQL relational database",
         )
         .with_env("POSTGRES_PASSWORD", "clawz")
         .with_env("POSTGRES_USER", "clawz")
         .with_env("POSTGRES_DB", "clawz"),
-
         DockerToolEntry::simple(
-            "redis", "redis:7-alpine", vec![6379], "database",
-            "Redis in-memory data store"
+            "redis",
+            "redis:7-alpine",
+            vec![6379],
+            "database",
+            "Redis in-memory data store",
         ),
-
         DockerToolEntry::simple(
-            "mongodb", "mongo:7", vec![27017], "database",
-            "MongoDB document database"
+            "mongodb",
+            "mongo:7",
+            vec![27017],
+            "database",
+            "MongoDB document database",
         )
         .with_env("MONGO_INITDB_ROOT_USERNAME", "clawz")
         .with_env("MONGO_INITDB_ROOT_PASSWORD", "clawz"),
-
         DockerToolEntry::simple(
-            "elasticsearch", "elasticsearch:8.13.0", vec![9200, 9300], "search",
-            "Elasticsearch full-text search engine"
+            "elasticsearch",
+            "elasticsearch:8.13.0",
+            vec![9200, 9300],
+            "search",
+            "Elasticsearch full-text search engine",
         )
         .with_env("discovery.type", "single-node")
         .with_env("xpack.security.enabled", "false"),
-
         // Message Queues
         DockerToolEntry::simple(
-            "rabbitmq", "rabbitmq:3-management-alpine", vec![5672, 15672], "queue",
-            "RabbitMQ message broker with management UI"
+            "rabbitmq",
+            "rabbitmq:3-management-alpine",
+            vec![5672, 15672],
+            "queue",
+            "RabbitMQ message broker with management UI",
         ),
-
         DockerToolEntry::simple(
-            "nats", "nats:2-alpine", vec![4222, 8222], "queue",
-            "NATS lightweight messaging system"
+            "nats",
+            "nats:2-alpine",
+            vec![4222, 8222],
+            "queue",
+            "NATS lightweight messaging system",
         ),
-
         // Monitoring
         DockerToolEntry::simple(
-            "prometheus", "prom/prometheus:latest", vec![9090], "monitoring",
-            "Prometheus metrics collection"
+            "prometheus",
+            "prom/prometheus:latest",
+            vec![9090],
+            "monitoring",
+            "Prometheus metrics collection",
         ),
-
         DockerToolEntry::simple(
-            "grafana", "grafana/grafana:latest", vec![3000], "monitoring",
-            "Grafana observability dashboards"
+            "grafana",
+            "grafana/grafana:latest",
+            vec![3000],
+            "monitoring",
+            "Grafana observability dashboards",
         )
         .with_env("GF_SECURITY_ADMIN_PASSWORD", "clawz"),
-
         DockerToolEntry::simple(
-            "jaeger", "jaegertracing/all-in-one:latest",
-            vec![16686, 14268, 6831, 6832], "monitoring",
-            "Jaeger distributed tracing"
+            "jaeger",
+            "jaegertracing/all-in-one:latest",
+            vec![16686, 14268, 6831, 6832],
+            "monitoring",
+            "Jaeger distributed tracing",
         ),
-
         // Web / Proxy
         DockerToolEntry::simple(
-            "nginx", "nginx:alpine", vec![80, 443], "web",
-            "NGINX web server and reverse proxy"
+            "nginx",
+            "nginx:alpine",
+            vec![80, 443],
+            "web",
+            "NGINX web server and reverse proxy",
         ),
-
         // Storage
         DockerToolEntry::simple(
-            "minio", "quay.io/minio/minio:latest", vec![9000, 9001], "storage",
-            "MinIO S3-compatible object storage"
+            "minio",
+            "quay.io/minio/minio:latest",
+            vec![9000, 9001],
+            "storage",
+            "MinIO S3-compatible object storage",
         )
         .with_env("MINIO_ROOT_USER", "minioadmin")
         .with_env("MINIO_ROOT_PASSWORD", "minioadmin"),
-
         // Security
         DockerToolEntry::simple(
-            "vault", "hashicorp/vault:latest", vec![8200], "security",
-            "HashiCorp Vault secrets management"
+            "vault",
+            "hashicorp/vault:latest",
+            vec![8200],
+            "security",
+            "HashiCorp Vault secrets management",
         )
         .with_env("VAULT_DEV_ROOT_TOKEN_ID", "clawz-dev-token"),
-
         // Communication / Testing
         DockerToolEntry::simple(
-            "mailhog", "mailhog/mailhog:latest", vec![1025, 8025], "communication",
-            "MailHog email testing tool"
+            "mailhog",
+            "mailhog/mailhog:latest",
+            vec![1025, 8025],
+            "communication",
+            "MailHog email testing tool",
         ),
-
         // Code Quality
         DockerToolEntry::simple(
-            "sonarqube", "sonarqube:community", vec![9000], "code_analysis",
-            "SonarQube code quality analysis"
+            "sonarqube",
+            "sonarqube:community",
+            vec![9000],
+            "code_analysis",
+            "SonarQube code quality analysis",
         ),
-
         // AI / ML
         DockerToolEntry::simple(
-            "ollama", "ollama/ollama:latest", vec![11434], "ai",
-            "Ollama local LLM inference server"
+            "ollama",
+            "ollama/ollama:latest",
+            vec![11434],
+            "ai",
+            "Ollama local LLM inference server",
         ),
-
         DockerToolEntry::simple(
-            "chromadb", "chromadb/chroma:latest", vec![8000], "ai",
-            "ChromaDB vector database"
+            "chromadb",
+            "chromadb/chroma:latest",
+            vec![8000],
+            "ai",
+            "ChromaDB vector database",
         ),
-
         // Additional useful tools
         DockerToolEntry::simple(
-            "postgres-timescale", "timescale/timescaledb-ha:pg16-latest",
-            vec![5432], "database",
-            "TimescaleDB + pgvector on PostgreSQL 16"
+            "postgres-timescale",
+            "timescale/timescaledb-ha:pg16-latest",
+            vec![5432],
+            "database",
+            "TimescaleDB + pgvector on PostgreSQL 16",
         )
         .with_env("POSTGRES_PASSWORD", "clawz")
         .with_env("POSTGRES_USER", "clawz")
         .with_env("POSTGRES_DB", "clawz"),
-
         DockerToolEntry::simple(
-            "qdrant", "qdrant/qdrant:latest", vec![6333, 6334], "ai",
-            "Qdrant vector similarity search"
+            "qdrant",
+            "qdrant/qdrant:latest",
+            vec![6333, 6334],
+            "ai",
+            "Qdrant vector similarity search",
         ),
-
         DockerToolEntry::simple(
-            "kafka", "confluentinc/cp-kafka:7.7.0",
-            vec![9092], "queue",
-            "Apache Kafka distributed event streaming"
+            "kafka",
+            "confluentinc/cp-kafka:7.7.0",
+            vec![9092],
+            "queue",
+            "Apache Kafka distributed event streaming",
         )
         .with_env("KAFKA_BROKER_ID", "1")
         .with_env("KAFKA_ZOOKEEPER_CONNECT", "zookeeper:2181")
         .with_env("KAFKA_ADVERTISED_LISTENERS", "PLAINTEXT://localhost:9092"),
-
         DockerToolEntry::simple(
-            "traefik", "traefik:v3", vec![80, 443, 8080], "web",
-            "Traefik cloud-native API gateway"
+            "traefik",
+            "traefik:v3",
+            vec![80, 443, 8080],
+            "web",
+            "Traefik cloud-native API gateway",
         ),
     ]
 }
@@ -416,10 +447,7 @@ impl DockerToolManager {
 
     /// Deploy a containerized tool.
     /// Auto-pulls the image if not present. Returns the container ID.
-    pub async fn deploy_tool(
-        &self,
-        config: ToolContainerConfig,
-    ) -> Result<String, ClawzError> {
+    pub async fn deploy_tool(&self, config: ToolContainerConfig) -> Result<String, ClawzError> {
         let image = &config.image;
 
         // Check if image exists locally; pull if not
@@ -478,8 +506,12 @@ impl DockerToolManager {
             name: Some(match &config.restart_policy {
                 ContainerRestartPolicy::No => bollard::models::RestartPolicyNameEnum::NO,
                 ContainerRestartPolicy::Always => bollard::models::RestartPolicyNameEnum::ALWAYS,
-                ContainerRestartPolicy::OnFailure => bollard::models::RestartPolicyNameEnum::ON_FAILURE,
-                ContainerRestartPolicy::UnlessStopped => bollard::models::RestartPolicyNameEnum::UNLESS_STOPPED,
+                ContainerRestartPolicy::OnFailure => {
+                    bollard::models::RestartPolicyNameEnum::ON_FAILURE
+                }
+                ContainerRestartPolicy::UnlessStopped => {
+                    bollard::models::RestartPolicyNameEnum::UNLESS_STOPPED
+                }
             }),
             maximum_retry_count: Some(5),
         };
@@ -511,20 +543,35 @@ impl DockerToolManager {
             exposed_ports: if exposed_ports.is_empty() {
                 None
             } else {
-                Some(exposed_ports.iter().map(|(k, v)| (k.as_str(), v.clone())).collect())
+                Some(
+                    exposed_ports
+                        .iter()
+                        .map(|(k, v)| (k.as_str(), v.clone()))
+                        .collect(),
+                )
             },
             host_config: Some(host_config),
-            labels: Some(labels.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()),
-            cmd: config.command.as_ref().map(|c| c.iter().map(|s| s.as_str()).collect()),
+            labels: Some(
+                labels
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.as_str()))
+                    .collect(),
+            ),
+            cmd: config
+                .command
+                .as_ref()
+                .map(|c| c.iter().map(|s| s.as_str()).collect()),
             ..Default::default()
         };
 
         let container_name = config.name.as_deref().map(|n| n.to_string());
 
-        let create_opts = container_name.as_deref().map(|name| CreateContainerOptions {
-            name,
-            platform: None,
-        });
+        let create_opts = container_name
+            .as_deref()
+            .map(|name| CreateContainerOptions {
+                name,
+                platform: None,
+            });
 
         let response = self
             .docker
@@ -546,10 +593,7 @@ impl DockerToolManager {
     /// Stop a running container.
     pub async fn stop_tool(&self, container_id: &str) -> Result<(), ClawzError> {
         self.docker
-            .stop_container(
-                container_id,
-                Some(StopContainerOptions { t: 10 }),
-            )
+            .stop_container(container_id, Some(StopContainerOptions { t: 10 }))
             .await
             .map_err(|e| ClawzError::Tool(format!("failed to stop container: {e}")))?;
 
@@ -559,10 +603,7 @@ impl DockerToolManager {
     /// Restart a container.
     pub async fn restart_tool(&self, container_id: &str) -> Result<(), ClawzError> {
         self.docker
-            .restart_container(
-                container_id,
-                Some(RestartContainerOptions { t: 10 }),
-            )
+            .restart_container(container_id, Some(RestartContainerOptions { t: 10 }))
             .await
             .map_err(|e| ClawzError::Tool(format!("failed to restart container: {e}")))?;
 
@@ -578,7 +619,7 @@ impl DockerToolManager {
             .remove_container(
                 container_id,
                 Some(RemoveContainerOptions {
-                    v: true,  // remove volumes
+                    v: true, // remove volumes
                     force: true,
                     link: false,
                 }),
@@ -622,13 +663,14 @@ impl DockerToolManager {
                 .unwrap_or_default()
                 .iter()
                 .map(|p| MappedPort {
-                        container_port: p.private_port,
-                        host_port: p.public_port.unwrap_or(0),
-                        protocol: p.typ
-                            .as_ref()
-                            .map(|t| format!("{:?}", t).to_lowercase())
-                            .unwrap_or_else(|| "tcp".into()),
-                    })
+                    container_port: p.private_port,
+                    host_port: p.public_port.unwrap_or(0),
+                    protocol: p
+                        .typ
+                        .as_ref()
+                        .map(|t| format!("{:?}", t).to_lowercase())
+                        .unwrap_or_else(|| "tcp".into()),
+                })
                 .collect();
 
             let health = self.health_check(&container_id).await;
@@ -659,9 +701,15 @@ impl DockerToolManager {
                                 // Check health if available
                                 if let Some(health) = state.health {
                                     match health.status {
-                                        Some(bollard::models::HealthStatusEnum::HEALTHY) => ToolHealth::Healthy,
-                                        Some(bollard::models::HealthStatusEnum::UNHEALTHY) => ToolHealth::Unhealthy,
-                                        Some(bollard::models::HealthStatusEnum::STARTING) => ToolHealth::Starting,
+                                        Some(bollard::models::HealthStatusEnum::HEALTHY) => {
+                                            ToolHealth::Healthy
+                                        }
+                                        Some(bollard::models::HealthStatusEnum::UNHEALTHY) => {
+                                            ToolHealth::Unhealthy
+                                        }
+                                        Some(bollard::models::HealthStatusEnum::STARTING) => {
+                                            ToolHealth::Starting
+                                        }
                                         _ => ToolHealth::Healthy, // running without healthcheck = healthy
                                     }
                                 } else {
@@ -699,10 +747,16 @@ impl DockerToolManager {
         while let Some(output) = stream.next().await {
             match output {
                 Ok(LogOutput::StdOut { message }) => {
-                    log_lines.push(format!("STDOUT: {}", String::from_utf8_lossy(&message).trim()));
+                    log_lines.push(format!(
+                        "STDOUT: {}",
+                        String::from_utf8_lossy(&message).trim()
+                    ));
                 }
                 Ok(LogOutput::StdErr { message }) => {
-                    log_lines.push(format!("STDERR: {}", String::from_utf8_lossy(&message).trim()));
+                    log_lines.push(format!(
+                        "STDERR: {}",
+                        String::from_utf8_lossy(&message).trim()
+                    ));
                 }
                 Ok(_) => {}
                 Err(e) => {
@@ -747,11 +801,9 @@ impl DockerToolManager {
         tool_name: &str,
         name_override: Option<String>,
     ) -> Result<String, ClawzError> {
-        let entry = ToolCatalog::find(tool_name).ok_or_else(|| {
-            ClawzError::NotFound {
-                entity: "Docker tool".into(),
-                id: tool_name.into(),
-            }
+        let entry = ToolCatalog::find(tool_name).ok_or_else(|| ClawzError::NotFound {
+            entity: "Docker tool".into(),
+            id: tool_name.into(),
         })?;
 
         let port_mappings = entry
@@ -820,7 +872,10 @@ mod tests {
     #[test]
     fn test_restart_policy_names() {
         assert_eq!(ContainerRestartPolicy::Always.to_bollard_policy(), "always");
-        assert_eq!(ContainerRestartPolicy::OnFailure.to_bollard_policy(), "on-failure");
+        assert_eq!(
+            ContainerRestartPolicy::OnFailure.to_bollard_policy(),
+            "on-failure"
+        );
         assert_eq!(ContainerRestartPolicy::No.to_bollard_policy(), "no");
     }
 

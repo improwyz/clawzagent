@@ -42,7 +42,10 @@ impl TwilioConnector {
 
     /// Build the per-account Twilio API base URL.
     fn base_url(&self) -> String {
-        format!("https://api.twilio.com/2010-04-01/Accounts/{}", self.account_sid)
+        format!(
+            "https://api.twilio.com/2010-04-01/Accounts/{}",
+            self.account_sid
+        )
     }
 
     /// Start a GET request with Basic Auth already applied.
@@ -97,9 +100,14 @@ impl SaaSConnector for TwilioConnector {
             "calls" => "/Calls.json",
             "phone_numbers" => "/IncomingPhoneNumbers.json",
             "recordings" => "/Recordings.json",
-            _ => return Err(ClawzError::Provider(format!("Unknown Twilio object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Twilio object: {obj}"
+                )));
+            }
         };
-        let resp = self.get(path)
+        let resp = self
+            .get(path)
             .query(&[("PageSize", page_size.to_string())])
             .send()
             .await
@@ -124,11 +132,14 @@ impl SaaSConnector for TwilioConnector {
                 let from = data["from"].as_str().unwrap_or("");
                 let body = data["body"].as_str().unwrap_or("");
                 let params = [("To", to), ("From", from), ("Body", body)];
-                let resp = self.post("/Messages.json")
+                let resp = self
+                    .post("/Messages.json")
                     .form(&params)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Twilio send message failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Twilio send message failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "calls" => {
@@ -136,14 +147,17 @@ impl SaaSConnector for TwilioConnector {
                 let from = data["from"].as_str().unwrap_or("");
                 let url = data["url"].as_str().unwrap_or("");
                 let params = [("To", to), ("From", from), ("Url", url)];
-                let resp = self.post("/Calls.json")
+                let resp = self
+                    .post("/Calls.json")
                     .form(&params)
                     .send()
                     .await
                     .map_err(|e| ClawzError::Provider(format!("Twilio make call failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Twilio object: {obj}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Twilio object: {obj}"
+            ))),
         }
     }
 
@@ -152,14 +166,17 @@ impl SaaSConnector for TwilioConnector {
             "calls" => {
                 let status = data["status"].as_str().unwrap_or("completed");
                 let params = [("Status", status)];
-                let resp = self.post(&format!("/Calls/{}.json", id))
+                let resp = self
+                    .post(&format!("/Calls/{}.json", id))
                     .form(&params)
                     .send()
                     .await
                     .map_err(|e| ClawzError::Provider(format!("Twilio update call failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Twilio object: {obj}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Twilio object: {obj}"
+            ))),
         }
     }
 
@@ -167,9 +184,16 @@ impl SaaSConnector for TwilioConnector {
         let path = match obj {
             "messages" => format!("/Messages/{}.json", id),
             "recordings" => format!("/Recordings/{}.json", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Twilio object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Twilio object: {obj}"
+                )));
+            }
         };
-        let resp = self.delete(&path).send().await
+        let resp = self
+            .delete(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("Twilio delete failed: {e}")))?;
         if resp.status().is_success() {
             Ok(())
@@ -189,14 +213,17 @@ impl SaaSConnector for TwilioConnector {
                 let from = format!("whatsapp:{}", params["from"].as_str().unwrap_or(""));
                 let body = params["body"].as_str().unwrap_or("");
                 let form_params = [("To", to.as_str()), ("From", from.as_str()), ("Body", body)];
-                let resp = self.post("/Messages.json")
+                let resp = self
+                    .post("/Messages.json")
                     .form(&form_params)
                     .send()
                     .await
                     .map_err(|e| ClawzError::Provider(format!("Twilio WhatsApp failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Twilio action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Twilio action: {action}"
+            ))),
         }
     }
 }

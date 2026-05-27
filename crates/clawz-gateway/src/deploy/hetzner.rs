@@ -63,7 +63,9 @@ impl DeployProvider for HetznerAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::NativeBinary,
         ]
     }
@@ -97,10 +99,7 @@ impl DeployProvider for HetznerAdapter {
 
         // Hetzner uses "region" field to mean server type (e.g. cx21, cpx31).
         // This is a pragmatic overload because DeployConfig has no dedicated "server_type" field.
-        let server_type = config
-            .region
-            .clone()
-            .unwrap_or_else(|| "cx21".into());
+        let server_type = config.region.clone().unwrap_or_else(|| "cx21".into());
 
         let token = resolve_api_token(config, "HETZNER_API_TOKEN", "Hetzner")?;
         let server_name = external_resource_name(&id);
@@ -178,9 +177,10 @@ impl DeployProvider for HetznerAdapter {
                 .await
                 .map_err(|e| ClawzError::Provider(format!("Hetzner list servers error: {e}")))?;
 
-            let body: serde_json::Value = list.json().await.map_err(|e| {
-                ClawzError::Provider(format!("Hetzner list parse error: {e}"))
-            })?;
+            let body: serde_json::Value = list
+                .json()
+                .await
+                .map_err(|e| ClawzError::Provider(format!("Hetzner list parse error: {e}")))?;
 
             body["servers"]
                 .as_array()

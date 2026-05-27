@@ -95,11 +95,15 @@ impl SaaSConnector for IntercomConnector {
     }
 
     async fn auth_url(&self, _redirect: &str) -> Result<String> {
-        Err(ClawzError::Auth("Intercom uses bearer token authentication".into()))
+        Err(ClawzError::Auth(
+            "Intercom uses bearer token authentication".into(),
+        ))
     }
 
     async fn exchange_code(&self, _code: &str) -> Result<Credentials> {
-        Err(ClawzError::Auth("Intercom uses bearer token authentication".into()))
+        Err(ClawzError::Auth(
+            "Intercom uses bearer token authentication".into(),
+        ))
     }
 
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
@@ -111,9 +115,16 @@ impl SaaSConnector for IntercomConnector {
             "companies" => format!("/companies?per_page={}", per_page),
             "admins" => "/admins".to_string(),
             "tags" => "/tags".to_string(),
-            _ => return Err(ClawzError::Provider(format!("Unknown Intercom object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Intercom object: {obj}"
+                )));
+            }
         };
-        let resp = self.get(&path).send().await
+        let resp = self
+            .get(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("Intercom list failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         // Intercom nests list results under "data" except for admins.
@@ -132,17 +143,28 @@ impl SaaSConnector for IntercomConnector {
             "notes" => {
                 let contact_id = data["contact_id"].as_str().unwrap_or("");
                 return {
-                    let resp = self.post(&format!("/contacts/{}/notes", contact_id))
+                    let resp = self
+                        .post(&format!("/contacts/{}/notes", contact_id))
                         .json(&data)
                         .send()
                         .await
-                        .map_err(|e| ClawzError::Provider(format!("Intercom create note failed: {e}")))?;
+                        .map_err(|e| {
+                            ClawzError::Provider(format!("Intercom create note failed: {e}"))
+                        })?;
                     crate::connectors::common::parse_json(resp).await
                 };
             }
-            _ => return Err(ClawzError::Provider(format!("Unknown Intercom object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Intercom object: {obj}"
+                )));
+            }
         };
-        let resp = self.post(path).json(&data).send().await
+        let resp = self
+            .post(path)
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("Intercom create failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }
@@ -152,9 +174,17 @@ impl SaaSConnector for IntercomConnector {
             "contacts" => format!("/contacts/{}", id),
             "conversations" => format!("/conversations/{}", id),
             "companies" => format!("/companies/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Intercom object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Intercom object: {obj}"
+                )));
+            }
         };
-        let resp = self.put(&path).json(&data).send().await
+        let resp = self
+            .put(&path)
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("Intercom update failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }
@@ -163,9 +193,16 @@ impl SaaSConnector for IntercomConnector {
         let path = match obj {
             "contacts" => format!("/contacts/{}", id),
             "companies" => format!("/companies/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Intercom object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Intercom object: {obj}"
+                )));
+            }
         };
-        let resp = self.delete(&path).send().await
+        let resp = self
+            .delete(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("Intercom delete failed: {e}")))?;
         if resp.status().is_success() {
             Ok(())
@@ -181,7 +218,8 @@ impl SaaSConnector for IntercomConnector {
         match action {
             "reply_to_conversation" => {
                 let conv_id = params["conversation_id"].as_str().unwrap_or("");
-                let resp = self.post(&format!("/conversations/{}/reply", conv_id))
+                let resp = self
+                    .post(&format!("/conversations/{}/reply", conv_id))
                     .json(&params)
                     .send()
                     .await
@@ -189,7 +227,8 @@ impl SaaSConnector for IntercomConnector {
                 crate::connectors::common::parse_json(resp).await
             }
             "tag_contact" => {
-                let resp = self.post("/contacts/tag")
+                let resp = self
+                    .post("/contacts/tag")
                     .json(&params)
                     .send()
                     .await
@@ -197,14 +236,17 @@ impl SaaSConnector for IntercomConnector {
                 crate::connectors::common::parse_json(resp).await
             }
             "search" => {
-                let resp = self.post("/contacts/search")
+                let resp = self
+                    .post("/contacts/search")
                     .json(&params)
                     .send()
                     .await
                     .map_err(|e| ClawzError::Provider(format!("Intercom search failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Intercom action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Intercom action: {action}"
+            ))),
         }
     }
 }

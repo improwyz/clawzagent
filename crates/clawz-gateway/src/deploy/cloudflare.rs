@@ -65,7 +65,9 @@ impl DeployProvider for CloudflareAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::Wasm,
         ]
     }
@@ -116,7 +118,8 @@ impl DeployProvider for CloudflareAdapter {
             .or_else(|| std::env::var("CLOUDFLARE_ACCOUNT_ID").ok())
             .ok_or_else(|| {
                 ClawzError::Auth(
-                    "Cloudflare account_id required in credentials.extra or CLOUDFLARE_ACCOUNT_ID".into(),
+                    "Cloudflare account_id required in credentials.extra or CLOUDFLARE_ACCOUNT_ID"
+                        .into(),
                 )
             })?;
 
@@ -134,15 +137,13 @@ impl DeployProvider for CloudflareAdapter {
                 }
             }
             DeployMode::Docker { image } => {
-                format!(
-                    "export default {{ fetch() {{ return new Response('docker:{image}'); }} }}"
-                )
-                .into_bytes()
+                format!("export default {{ fetch() {{ return new Response('docker:{image}'); }} }}")
+                    .into_bytes()
             }
             _ => {
                 return Err(ClawzError::Validation(
                     "Cloudflare only supports Docker and Wasm modes".into(),
-                ))
+                ));
             }
         };
 
@@ -151,9 +152,7 @@ impl DeployProvider for CloudflareAdapter {
         );
 
         let content_type = match &config.mode {
-            DeployMode::Wasm if config.env_vars.contains_key("__WASM_B64") => {
-                "application/wasm"
-            }
+            DeployMode::Wasm if config.env_vars.contains_key("__WASM_B64") => "application/wasm",
             _ => "application/javascript+module",
         };
 

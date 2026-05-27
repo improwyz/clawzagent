@@ -142,7 +142,9 @@ impl DeployProvider for KubernetesAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::NativeBinary,
         ]
     }
@@ -188,12 +190,8 @@ impl DeployProvider for KubernetesAdapter {
         let id = generate_deployment_id("k8s");
         let deploy_name = k8s_resource_name(&id);
 
-        let deployment = self.deployment_manifest(
-            &deploy_name,
-            &image,
-            config.replicas,
-            &config.env_vars,
-        );
+        let deployment =
+            self.deployment_manifest(&deploy_name, &image, config.replicas, &config.env_vars);
         let service = self.service_manifest(&deploy_name);
 
         let token = resolve_api_token(config, "KUBERNETES_TOKEN", "Kubernetes")?;
@@ -265,7 +263,9 @@ impl DeployProvider for KubernetesAdapter {
             .bearer_auth(&token)
             .send()
             .await
-            .map_err(|e| ClawzError::Provider(format!("Kubernetes delete deployment error: {e}")))?;
+            .map_err(|e| {
+                ClawzError::Provider(format!("Kubernetes delete deployment error: {e}"))
+            })?;
 
         let svc_url = format!(
             "{}/api/v1/namespaces/{}/services/{name}",

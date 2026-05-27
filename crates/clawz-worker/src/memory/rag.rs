@@ -108,20 +108,12 @@ impl RagPipeline {
     /// Ingest a document: chunk, embed each chunk, and store all chunks.
     ///
     /// Returns the number of chunks stored.
-    pub async fn ingest(
-        &self,
-        agent_id: &str,
-        doc_id: &str,
-        content: &str,
-    ) -> Result<usize> {
+    pub async fn ingest(&self, agent_id: &str, doc_id: &str, content: &str) -> Result<usize> {
         let chunks = self.chunker.chunk(content);
         let chunk_refs: Vec<&str> = chunks.iter().map(|s| s.as_str()).collect();
 
         // Batch embed all chunks.
-        let embeddings = self
-            .embedding_provider
-            .embed_batch(&chunk_refs)
-            .await?;
+        let embeddings = self.embedding_provider.embed_batch(&chunk_refs).await?;
 
         for (idx, (chunk_text, embedding)) in chunks.iter().zip(embeddings.iter()).enumerate() {
             let key = format!("{doc_id}:chunk:{idx}");

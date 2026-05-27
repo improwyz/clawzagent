@@ -17,15 +17,15 @@
 //! // Dependency: `clawz_core::traits::MemoryBackend` defines the contract
 //! // implemented by both [`PostgresMemoryBackend`] and [`InMemoryBackend`].
 
+pub mod archive;
+pub mod behavioral_adaptor;
 pub mod blackboard;
+pub mod cache;
 pub mod conversation;
 pub mod embedding;
-pub mod rag;
-pub mod archive;
-pub mod cache;
 pub mod improvement;
 pub mod outcome_tracker;
-pub mod behavioral_adaptor;
+pub mod rag;
 pub mod store;
 
 // Re-export the most commonly used types at the module level.

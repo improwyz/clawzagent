@@ -52,7 +52,10 @@ pub enum PathHealthStatus {
 impl PathHealthStatus {
     /// Return true if this path may still carry traffic.
     pub fn is_usable(self) -> bool {
-        matches!(self, PathHealthStatus::Active | PathHealthStatus::Recovering)
+        matches!(
+            self,
+            PathHealthStatus::Active | PathHealthStatus::Recovering
+        )
     }
 }
 
@@ -185,7 +188,11 @@ impl PeerHeartbeats {
         self.paths
             .values()
             .filter(|s| s.is_usable() && s.rtt_ms > 0.0)
-            .min_by(|a, b| a.rtt_ms.partial_cmp(&b.rtt_ms).unwrap_or(std::cmp::Ordering::Equal))
+            .min_by(|a, b| {
+                a.rtt_ms
+                    .partial_cmp(&b.rtt_ms)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .or_else(|| {
                 // Fall back to any active/recovering path with no RTT data yet.
                 self.paths.values().find(|s| s.is_usable())
@@ -206,9 +213,11 @@ impl PeerHeartbeats {
 
     /// Overall peer health: Online if any path is active, Suspect if best is suspect, Down if all down.
     pub fn overall_status(&self) -> PeerOverallStatus {
-        let statuses: Vec<PathHealthStatus> =
-            self.paths.values().map(|s| s.status).collect();
-        if statuses.iter().any(|s| matches!(s, PathHealthStatus::Active)) {
+        let statuses: Vec<PathHealthStatus> = self.paths.values().map(|s| s.status).collect();
+        if statuses
+            .iter()
+            .any(|s| matches!(s, PathHealthStatus::Active))
+        {
             PeerOverallStatus::Online
         } else if statuses
             .iter()
@@ -387,7 +396,10 @@ impl HeartbeatProtocol {
     /// Return a snapshot of heartbeat state for a specific peer.
     ///
     /// Each tuple is `(path_name, status, rtt_ms, missed_count)`.
-    pub async fn snapshot(&self, peer_id: &Uuid) -> Option<Vec<(String, PathHealthStatus, f64, u32)>> {
+    pub async fn snapshot(
+        &self,
+        peer_id: &Uuid,
+    ) -> Option<Vec<(String, PathHealthStatus, f64, u32)>> {
         let peers = self.peers.read().await;
         peers.get(peer_id).map(|p| {
             p.paths

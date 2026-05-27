@@ -1,13 +1,13 @@
 //! Cloud provider deployment API (`/api/v1/cloud/*`).
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::deploy::{DeployConfig, DeployMode, ProviderCredentials};
 use crate::{AppState, GatewayError};

@@ -68,7 +68,9 @@ impl DeployProvider for GoogleCloudRunAdapter {
     }
 
     fn supported_modes(&self) -> Vec<DeployMode> {
-        vec![DeployMode::Docker { image: String::new() }]
+        vec![DeployMode::Docker {
+            image: String::new(),
+        }]
     }
 
     async fn validate_credentials(&self, creds: &ProviderCredentials) -> Result<()> {
@@ -101,7 +103,7 @@ impl DeployProvider for GoogleCloudRunAdapter {
             _ => {
                 return Err(ClawzError::Validation(
                     "Google Cloud Run only supports Docker deployments".into(),
-                ))
+                ));
             }
         };
 

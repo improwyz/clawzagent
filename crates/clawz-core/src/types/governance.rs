@@ -354,9 +354,7 @@ impl OversightLevel {
     pub fn requires_human_decision(&self) -> bool {
         matches!(
             self,
-            OversightLevel::HumanInTheLoop
-                | OversightLevel::HumanDirected
-                | OversightLevel::Manual
+            OversightLevel::HumanInTheLoop | OversightLevel::HumanDirected | OversightLevel::Manual
         )
     }
 }

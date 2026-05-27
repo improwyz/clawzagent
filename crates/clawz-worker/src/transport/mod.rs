@@ -90,23 +90,13 @@ impl std::fmt::Display for TransportType {
 /// * `InProcess` → returns an [`InProcessTransport`].
 pub fn create_transport(config: &TransportConfig) -> Result<Box<dyn Transport>> {
     match config.mode {
-        TransportMode::Auto => {
-            Ok(Box::new(TransportSelector::from_config(config)?))
-        }
-        TransportMode::Grpc => {
-            Ok(Box::new(GrpcTransport::new(config.grpc.clone())))
-        }
-        TransportMode::Quic => {
-            Ok(Box::new(QuicTransport::new(config.quic.clone())?))
-        }
-        TransportMode::Wss => {
-            Ok(Box::new(WssTransport::new(config.wss.clone())))
-        }
-        TransportMode::InProcess => {
-            Ok(Box::new(InProcessTransport::new(
-                config.wss.request_timeout_ms,
-            )))
-        }
+        TransportMode::Auto => Ok(Box::new(TransportSelector::from_config(config)?)),
+        TransportMode::Grpc => Ok(Box::new(GrpcTransport::new(config.grpc.clone()))),
+        TransportMode::Quic => Ok(Box::new(QuicTransport::new(config.quic.clone())?)),
+        TransportMode::Wss => Ok(Box::new(WssTransport::new(config.wss.clone()))),
+        TransportMode::InProcess => Ok(Box::new(InProcessTransport::new(
+            config.wss.request_timeout_ms,
+        ))),
     }
 }
 

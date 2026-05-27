@@ -11,10 +11,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use clawz_core::{
     error::ClawzError,
-    types::{
-        message::*,
-        tool::ToolCall,
-    },
+    types::{message::*, tool::ToolCall},
 };
 use futures_core::Stream;
 use futures_util::StreamExt;
@@ -24,8 +21,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use super::{
-    http_error, to_wire_message, to_wire_tools, AdapterConfig, ProviderAdapter,
-    WireToolCall,
+    AdapterConfig, ProviderAdapter, WireToolCall, http_error, to_wire_message, to_wire_tools,
 };
 
 // ── Request body ──────────────────────────────────────────────────────────────
@@ -163,10 +159,7 @@ impl ProviderAdapter for OpenAiAdapter {
         let body = build_request(request, false);
         let url = format!("{}/chat/completions", config.endpoint.trim_end_matches('/'));
 
-        let mut req = client
-            .post(&url)
-            .bearer_auth(&config.api_key)
-            .json(&body);
+        let mut req = client.post(&url).bearer_auth(&config.api_key).json(&body);
 
         for (k, v) in &config.extra_headers {
             req = req.header(k.as_str(), v.as_str());
@@ -196,10 +189,7 @@ impl ProviderAdapter for OpenAiAdapter {
         let body = build_request(request, true);
         let url = format!("{}/chat/completions", config.endpoint.trim_end_matches('/'));
 
-        let mut req = client
-            .post(&url)
-            .bearer_auth(&config.api_key)
-            .json(&body);
+        let mut req = client.post(&url).bearer_auth(&config.api_key).json(&body);
 
         for (k, v) in &config.extra_headers {
             req = req.header(k.as_str(), v.as_str());
@@ -240,8 +230,7 @@ impl ProviderAdapter for OpenAiAdapter {
             m if m.starts_with("o3") => (0.010, 0.040),
             _ => (0.005, 0.015),
         };
-        (input_tokens as f64 / 1_000.0) * in_per_1k
-            + (output_tokens as f64 / 1_000.0) * out_per_1k
+        (input_tokens as f64 / 1_000.0) * in_per_1k + (output_tokens as f64 / 1_000.0) * out_per_1k
     }
 }
 
@@ -301,11 +290,14 @@ fn parse_response(raw: OpenAiResponse) -> ChatResponse {
         })
         .collect();
 
-    let usage = raw.usage.map(|u| Usage {
-        prompt_tokens: u.prompt_tokens,
-        completion_tokens: u.completion_tokens,
-        total_tokens: u.total_tokens,
-    }).unwrap_or_default();
+    let usage = raw
+        .usage
+        .map(|u| Usage {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+        })
+        .unwrap_or_default();
 
     ChatResponse {
         id: raw.id,

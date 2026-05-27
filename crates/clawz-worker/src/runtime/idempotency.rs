@@ -16,7 +16,9 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 
-use clawz_core::traits::{IdempotencyKey, IdempotencyResult, IdempotencyStore as CoreIdempotencyStore};
+use clawz_core::traits::{
+    IdempotencyKey, IdempotencyResult, IdempotencyStore as CoreIdempotencyStore,
+};
 use clawz_core::types::tool::ToolResult;
 
 // ── InMemoryIdempotencyStore ──────────────────────────────────────────────────
@@ -61,12 +63,19 @@ impl Default for InMemoryIdempotencyStore {
 }
 
 fn cache_key(key: &IdempotencyKey) -> String {
-    format!("{}:{}:{}:{}", key.task_id, key.action_name, key.date, key.nonce)
+    format!(
+        "{}:{}:{}:{}",
+        key.task_id, key.action_name, key.date, key.nonce
+    )
 }
 
 #[async_trait]
 impl CoreIdempotencyStore for InMemoryIdempotencyStore {
-    async fn check_and_record(&self, key: &IdempotencyKey, result: ToolResult) -> IdempotencyResult {
+    async fn check_and_record(
+        &self,
+        key: &IdempotencyKey,
+        result: ToolResult,
+    ) -> IdempotencyResult {
         let ck = cache_key(key);
 
         // Read-then-write: hold the read guard briefly to check for an existing entry.

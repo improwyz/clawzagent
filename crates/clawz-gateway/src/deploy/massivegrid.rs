@@ -52,15 +52,16 @@ impl MassiveGridAdapter {
     /// Build a generic Jelastic API URL for a service and method.
     #[allow(dead_code)]
     fn api_url(&self, service: &str, method: &str) -> String {
-        format!("{}/1.0/{}", self.api_endpoint, method)
-            .replace("{service}", service)
+        format!("{}/1.0/{}", self.api_endpoint, method).replace("{service}", service)
     }
 
     /// URL for the Jelastic environment creation endpoint.
     fn create_env_url(&self) -> String {
-        format!("{}/1.0/environment/control/rest/createenvironment", self.api_endpoint)
+        format!(
+            "{}/1.0/environment/control/rest/createenvironment",
+            self.api_endpoint
+        )
     }
-
 }
 
 #[async_trait]
@@ -74,9 +75,9 @@ impl DeployProvider for MassiveGridAdapter {
     }
 
     fn supported_modes(&self) -> Vec<DeployMode> {
-        vec![
-            DeployMode::Docker { image: String::new() },
-        ]
+        vec![DeployMode::Docker {
+            image: String::new(),
+        }]
     }
 
     async fn validate_credentials(&self, creds: &ProviderCredentials) -> Result<()> {
@@ -98,10 +99,9 @@ impl DeployProvider for MassiveGridAdapter {
             .map_err(|e| ClawzError::Provider(format!("MassiveGrid API error: {e}")))?;
 
         if resp.status().is_success() {
-            let body: serde_json::Value = resp
-                .json()
-                .await
-                .map_err(|e| ClawzError::Provider(format!("MassiveGrid response parse error: {e}")))?;
+            let body: serde_json::Value = resp.json().await.map_err(|e| {
+                ClawzError::Provider(format!("MassiveGrid response parse error: {e}"))
+            })?;
             // Jelastic uses result==0 to indicate success.
             if body["result"].as_i64().unwrap_or(1) == 0 {
                 Ok(())
@@ -125,7 +125,7 @@ impl DeployProvider for MassiveGridAdapter {
             _ => {
                 return Err(ClawzError::Validation(
                     "MassiveGrid Jelastic only supports Docker mode".into(),
-                ))
+                ));
             }
         };
 
@@ -193,7 +193,9 @@ impl DeployProvider for MassiveGridAdapter {
 
     async fn destroy(&self, id: &str, external_resource: Option<&str>) -> Result<()> {
         let session = std::env::var("MASSIVEGRID_SESSION").map_err(|_| {
-            ClawzError::Auth("MASSIVEGRID_SESSION required to destroy MassiveGrid environments".into())
+            ClawzError::Auth(
+                "MASSIVEGRID_SESSION required to destroy MassiveGrid environments".into(),
+            )
         })?;
         let env_name = external_resource
             .map(str::to_string)

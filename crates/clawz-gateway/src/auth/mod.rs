@@ -202,10 +202,7 @@ pub fn resolve_request_auth(
         .or_else(|_| std::env::var("JWT_SECRET"))
         .unwrap_or_else(|_| "changeme".to_string());
 
-    if let Some(auth_header) = headers
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok())
-    {
+    if let Some(auth_header) = headers.get("Authorization").and_then(|v| v.to_str().ok()) {
         if let Some(token) = auth_header.strip_prefix("Bearer ") {
             return match jwt::verify_token(token, &secret) {
                 Ok(claims) => {
@@ -308,9 +305,7 @@ async fn try_api_key(
 fn extract_api_key_param(query: &str) -> Option<String> {
     for pair in query.split('&') {
         if let Some(value) = pair.strip_prefix("api_key=") {
-            return Some(
-                percent_decode(value),
-            );
+            return Some(percent_decode(value));
         }
     }
     None

@@ -14,14 +14,14 @@ use clawz_services::dto::{
     OrchestrateResponse, ProviderHealthRequest, ProviderHealthResponse, RunTurnRequest,
     RunTurnResponse, TestChannelRequest, TestChannelResponse,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::governance::engine::{ClawzGovernanceEngine, GovernanceEngineConfig};
 use crate::memory::store::{InMemoryBackend, PostgresMemoryBackend};
-use crate::providers::router::{ProviderRouter, ProviderRouterConfig, ReliabilityConfig};
 use crate::providers::CostTracker;
+use crate::providers::router::{ProviderRouter, ProviderRouterConfig, ReliabilityConfig};
 use crate::runtime::agent::{AgentRuntime, RuntimeDependencies};
 use crate::runtime::fan_out::{AggregationStrategy, FanOut, FanOutConfig};
 use crate::runtime::team::{Task, Team, TeamRole};
@@ -168,10 +168,7 @@ impl WorkerService {
             config: ToolConfig::default(),
         };
 
-        let result = self
-            .tools
-            .execute(&req.tool_name, &ctx, req.args)
-            .await?;
+        let result = self.tools.execute(&req.tool_name, &ctx, req.args).await?;
 
         Ok(ExecuteToolResponse {
             tool_name: req.tool_name,
@@ -223,7 +220,10 @@ impl WorkerService {
         })
     }
 
-    pub async fn test_provider(&self, req: ProviderHealthRequest) -> Result<ProviderHealthResponse> {
+    pub async fn test_provider(
+        &self,
+        req: ProviderHealthRequest,
+    ) -> Result<ProviderHealthResponse> {
         let start = Instant::now();
         let probe = self
             .provider_router
@@ -231,10 +231,7 @@ impl WorkerService {
             .await;
 
         let (ok, message) = match probe {
-            Ok(_) => (
-                true,
-                format!("provider '{}' responded", req.provider_id),
-            ),
+            Ok(_) => (true, format!("provider '{}' responded", req.provider_id)),
             Err(e) => (false, e.to_string()),
         };
 
@@ -267,7 +264,10 @@ impl WorkerService {
 
         let fan = FanOut::new(self.provider_router.clone(), config);
         let base = ChatRequest::new(
-            models.first().cloned().unwrap_or_else(|| "claude-sonnet-4-5".into()),
+            models
+                .first()
+                .cloned()
+                .unwrap_or_else(|| "claude-sonnet-4-5".into()),
             vec![Message::user(req.prompt)],
         );
         let result = fan.execute(base).await;
@@ -421,8 +421,7 @@ impl WorkerService {
             });
         }
 
-        let mut test_msg =
-            OutgoingMessage::new(ctx.config.id, "ClawZ channel connectivity test");
+        let mut test_msg = OutgoingMessage::new(ctx.config.id, "ClawZ channel connectivity test");
         if let Some(to) = req
             .config
             .get("default_to")
@@ -434,7 +433,9 @@ impl WorkerService {
                 .insert("to".into(), serde_json::Value::String(to.to_string()));
         }
 
-        let send_result = if let Some(plugin) = crate::channels::resolve::plugin_for_platform(&platform) {
+        let send_result = if let Some(plugin) =
+            crate::channels::resolve::plugin_for_platform(&platform)
+        {
             plugin.send(&ctx, test_msg).await
         } else if ctx.config.webhook_url.is_some() {
             crate::channels::native::webhook::WebhookChannel::new()
@@ -572,7 +573,8 @@ impl RoomRuntimeProvider for WorkerService {
             .as_deref()
             .ok_or_else(|| ClawzError::Validation("room_id required for room turn".into()))?;
 
-        if let Some(cap) = crate::runtime::turn_coordinator::room_budget_cap(req.room_snapshot.as_ref())
+        if let Some(cap) =
+            crate::runtime::turn_coordinator::room_budget_cap(req.room_snapshot.as_ref())
         {
             let spent = runtime.cost_tracker().room_total(room_id).await;
             if spent >= cap {

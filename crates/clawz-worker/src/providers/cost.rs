@@ -151,12 +151,7 @@ impl CostTracker {
     // ── Recording ─────────────────────────────────────────────────────────────
 
     /// Record a cost entry from a [`ChatResponse`].
-    pub async fn record(
-        &self,
-        provider: &str,
-        agent_id: Option<Uuid>,
-        response: &ChatResponse,
-    ) {
+    pub async fn record(&self, provider: &str, agent_id: Option<Uuid>, response: &ChatResponse) {
         let input = response.usage.prompt_tokens as u64;
         let output = response.usage.completion_tokens as u64;
         let cost = self.calculate_cost(&response.model, input, output);
@@ -284,9 +279,7 @@ impl CostTracker {
         let entries = self.entries.read().await;
         entries
             .iter()
-            .filter(|e| {
-                e.timestamp.year() == now.year() && e.timestamp.month() == now.month()
-            })
+            .filter(|e| e.timestamp.year() == now.year() && e.timestamp.month() == now.month())
             .map(|e| e.cost_usd)
             .sum()
     }
@@ -326,11 +319,35 @@ fn build_pricing_table() -> HashMap<String, ModelPricing> {
         ModelPricing::new("claude-opus-4-5", "anthropic", 0.015, 0.075, 200_000),
         ModelPricing::new("claude-sonnet-4-5", "anthropic", 0.003, 0.015, 200_000),
         ModelPricing::new("claude-haiku-3", "anthropic", 0.00025, 0.00125, 200_000),
-        ModelPricing::new("claude-3-5-sonnet-20241022", "anthropic", 0.003, 0.015, 200_000),
-        ModelPricing::new("claude-3-5-haiku-20241022", "anthropic", 0.00025, 0.00125, 200_000),
+        ModelPricing::new(
+            "claude-3-5-sonnet-20241022",
+            "anthropic",
+            0.003,
+            0.015,
+            200_000,
+        ),
+        ModelPricing::new(
+            "claude-3-5-haiku-20241022",
+            "anthropic",
+            0.00025,
+            0.00125,
+            200_000,
+        ),
         ModelPricing::new("claude-3-opus-20240229", "anthropic", 0.015, 0.075, 200_000),
-        ModelPricing::new("claude-3-sonnet-20240229", "anthropic", 0.003, 0.015, 200_000),
-        ModelPricing::new("claude-3-haiku-20240307", "anthropic", 0.00025, 0.00125, 200_000),
+        ModelPricing::new(
+            "claude-3-sonnet-20240229",
+            "anthropic",
+            0.003,
+            0.015,
+            200_000,
+        ),
+        ModelPricing::new(
+            "claude-3-haiku-20240307",
+            "anthropic",
+            0.00025,
+            0.00125,
+            200_000,
+        ),
         // Google
         ModelPricing::new("gemini-1.5-pro", "google", 0.00125, 0.005, 1_000_000),
         ModelPricing::new("gemini-1.5-flash", "google", 0.000075, 0.0003, 1_000_000),
@@ -445,8 +462,7 @@ mod tests {
     fn test_build_record() {
         let tracker = CostTracker::new();
         let agent_id = Uuid::new_v4();
-        let record =
-            tracker.build_record(agent_id, "openai", "gpt-4o", 1_000, 500);
+        let record = tracker.build_record(agent_id, "openai", "gpt-4o", 1_000, 500);
         assert_eq!(record.provider, "openai");
         assert_eq!(record.model, "gpt-4o");
         assert!(record.cost_usd > 0.0);

@@ -45,11 +45,17 @@ impl BehavioralAdaptor {
     /// Apply an approved improvement proposal.
     /// Parses the suggestion strings and applies each change via the skill repository.
     /// Returns the list of concrete changes applied.
-    pub async fn apply(&self, proposal: &ImprovementProposal) -> Result<Vec<AppliedChange>, clawz_core::ClawzError> {
+    pub async fn apply(
+        &self,
+        proposal: &ImprovementProposal,
+    ) -> Result<Vec<AppliedChange>, clawz_core::ClawzError> {
         let mut applied = Vec::new();
 
         for suggestion in &proposal.suggested_changes {
-            if let Some(change) = self.parse_and_apply(suggestion, proposal.proposal_id).await? {
+            if let Some(change) = self
+                .parse_and_apply(suggestion, proposal.proposal_id)
+                .await?
+            {
                 applied.push(change);
             }
         }
@@ -58,7 +64,11 @@ impl BehavioralAdaptor {
     }
 
     /// Parse a suggestion string and apply the corresponding change.
-    async fn parse_and_apply(&self, suggestion: &str, proposal_id: Uuid) -> Result<Option<AppliedChange>, clawz_core::ClawzError> {
+    async fn parse_and_apply(
+        &self,
+        suggestion: &str,
+        proposal_id: Uuid,
+    ) -> Result<Option<AppliedChange>, clawz_core::ClawzError> {
         let suggestion = suggestion.trim();
 
         // Format: "set <target> <value>"
@@ -146,7 +156,12 @@ impl BehavioralAdaptor {
         Ok(Some(change))
     }
 
-    async fn apply_set(&self, target: &str, value: &str, proposal_id: Uuid) -> Result<AppliedChange, clawz_core::ClawzError> {
+    async fn apply_set(
+        &self,
+        target: &str,
+        value: &str,
+        proposal_id: Uuid,
+    ) -> Result<AppliedChange, clawz_core::ClawzError> {
         let change_type = match target {
             "tool_timeout" | "tool_timeout_secs" | "timeout" => ChangeType::ToolTimeout,
             "max_retries" | "retry" | "retries" => ChangeType::RetryPolicy,
@@ -155,7 +170,8 @@ impl BehavioralAdaptor {
             _ => ChangeType::Custom(target.to_string()),
         };
 
-        let json_value: serde_json::Value = value.parse().unwrap_or_else(|_| serde_json::json!(value));
+        let json_value: serde_json::Value =
+            value.parse().unwrap_or_else(|_| serde_json::json!(value));
 
         Ok(AppliedChange {
             proposal_id,
@@ -188,16 +204,23 @@ impl BehavioralAdaptor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clawz_core::metrics::PerfDimension;
     use crate::governance::skill_repository::SkillBundle;
+    use clawz_core::metrics::PerfDimension;
 
     struct DummySkillRepo;
     #[async_trait::async_trait]
     impl SkillRepository for DummySkillRepo {
-        async fn get_skill(&self, _agent_id: &str) -> Result<Option<SkillBundle>, clawz_core::ClawzError> {
+        async fn get_skill(
+            &self,
+            _agent_id: &str,
+        ) -> Result<Option<SkillBundle>, clawz_core::ClawzError> {
             Ok(None)
         }
-        async fn update_skill(&self, _agent_id: &str, _bundle: SkillBundle) -> Result<(), clawz_core::ClawzError> {
+        async fn update_skill(
+            &self,
+            _agent_id: &str,
+            _bundle: SkillBundle,
+        ) -> Result<(), clawz_core::ClawzError> {
             Ok(())
         }
     }

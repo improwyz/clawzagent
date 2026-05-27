@@ -26,13 +26,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
+use bollard::Docker;
 use bollard::container::{
     Config as ContainerConfig, CreateContainerOptions, InspectContainerOptions,
     RemoveContainerOptions, StartContainerOptions, StopContainerOptions,
 };
 use bollard::image::CreateImageOptions;
 use bollard::models::HostConfig;
-use bollard::Docker;
 use chrono::Utc;
 use futures_util::StreamExt;
 use uuid::Uuid;
@@ -130,7 +130,12 @@ impl BollardScheduler {
     ///
     /// Labels are used for filtering and attribution in external tooling
     /// (e.g. `docker ps --filter label=managed-by=clawz`).
-    fn build_labels(&self, tenant_id: &str, agent_id: &str, parent_id: Option<&String>) -> HashMap<String, String> {
+    fn build_labels(
+        &self,
+        tenant_id: &str,
+        agent_id: &str,
+        parent_id: Option<&String>,
+    ) -> HashMap<String, String> {
         let mut labels = HashMap::new();
         labels.insert("managed-by".to_string(), "clawz".to_string());
         labels.insert("clawz-scheduler".to_string(), "bollard".to_string());
@@ -272,7 +277,12 @@ impl AgentScheduler for BollardScheduler {
         let container_config = ContainerConfig {
             image: Some(spec.image.as_str()),
             env: Some(env.iter().map(|s| s.as_str()).collect()),
-            labels: Some(labels.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect()),
+            labels: Some(
+                labels
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.as_str()))
+                    .collect(),
+            ),
             host_config: Some(host_config),
             ..Default::default()
         };
@@ -385,7 +395,9 @@ impl AgentScheduler for BollardScheduler {
                 continue;
             }
             // Subset check: the agent must offer every requested capability.
-            let has_all = capabilities.iter().all(|cap| handle.capabilities.contains(cap));
+            let has_all = capabilities
+                .iter()
+                .all(|cap| handle.capabilities.contains(cap));
             if has_all {
                 return Some(handle.clone());
             }
@@ -710,9 +722,7 @@ mod tests {
             let s = scheduler.clone();
             let c = ctx.clone();
             let sp = spec.clone();
-            handles.push(tokio::spawn(async move {
-                s.spawn_agent(&c, sp).await
-            }));
+            handles.push(tokio::spawn(async move { s.spawn_agent(&c, sp).await }));
         }
 
         let results = futures_util::future::join_all(handles).await;

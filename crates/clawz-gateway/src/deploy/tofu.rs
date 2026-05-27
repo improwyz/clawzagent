@@ -27,7 +27,8 @@ impl TofuRunner {
             .map_err(|e| {
                 if e.kind() == std::io::ErrorKind::NotFound {
                     ClawzError::Internal(
-                        "OpenTofu (tofu) not found in PATH. Install from https://opentofu.org".into(),
+                        "OpenTofu (tofu) not found in PATH. Install from https://opentofu.org"
+                            .into(),
                     )
                 } else {
                     ClawzError::Io(e)
@@ -36,7 +37,10 @@ impl TofuRunner {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(ClawzError::Internal(format!("tofu init failed: {}", stderr)));
+            return Err(ClawzError::Internal(format!(
+                "tofu init failed: {}",
+                stderr
+            )));
         }
 
         Ok(())
@@ -57,7 +61,10 @@ impl TofuRunner {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(ClawzError::Internal(format!("tofu plan failed: {}", stderr)));
+            return Err(ClawzError::Internal(format!(
+                "tofu plan failed: {}",
+                stderr
+            )));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -167,31 +174,24 @@ impl TofuRunner {
             )));
         }
 
-        serde_json::from_slice(&output.stdout)
-            .map_err(|e| ClawzError::Serialization(e.to_string()))
+        serde_json::from_slice(&output.stdout).map_err(|e| ClawzError::Serialization(e.to_string()))
     }
 
     pub async fn write_main_tf(&self, content: &str) -> Result<()> {
         let path = self.work_dir.join("main.tf");
-        fs::write(&path, content)
-            .await
-            .map_err(ClawzError::Io)?;
+        fs::write(&path, content).await.map_err(ClawzError::Io)?;
         Ok(())
     }
 
     pub async fn write_variables_tf(&self, content: &str) -> Result<()> {
         let path = self.work_dir.join("variables.tf");
-        fs::write(&path, content)
-            .await
-            .map_err(ClawzError::Io)?;
+        fs::write(&path, content).await.map_err(ClawzError::Io)?;
         Ok(())
     }
 
     pub async fn write_tfvars(&self, content: &str) -> Result<()> {
         let path = self.work_dir.join("terraform.tfvars");
-        fs::write(&path, content)
-            .await
-            .map_err(ClawzError::Io)?;
+        fs::write(&path, content).await.map_err(ClawzError::Io)?;
         Ok(())
     }
 }
@@ -225,10 +225,7 @@ resource "docker_container" "app" {{
   }}
 }}
 "#,
-        image,
-        replicas,
-        port,
-        port
+        image, replicas, port, port
     )
 }
 
@@ -257,7 +254,9 @@ impl DeployProvider for TofuDeployAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::NativeBinary,
         ]
     }
@@ -282,7 +281,9 @@ impl DeployProvider for TofuDeployAdapter {
     async fn deploy(&self, config: &DeployConfig) -> Result<DeploymentInfo> {
         let id = generate_deployment_id("tofu");
         let work_dir = self.base_work_dir.join(id.replace('/', "_"));
-        fs::create_dir_all(&work_dir).await.map_err(ClawzError::Io)?;
+        fs::create_dir_all(&work_dir)
+            .await
+            .map_err(ClawzError::Io)?;
 
         let runner = TofuRunner::new(&work_dir);
         let main_tf = if let Some(custom) = config.env_vars.get("__MAIN_TF") {
@@ -294,7 +295,7 @@ impl DeployProvider for TofuDeployAdapter {
                 DeployMode::Wasm => {
                     return Err(ClawzError::Validation(
                         "OpenTofu adapter does not support Wasm; use Fastly or Cloudflare".into(),
-                    ))
+                    ));
                 }
             };
             generate_docker_service_tf(&image, 8080, config.replicas.max(1))

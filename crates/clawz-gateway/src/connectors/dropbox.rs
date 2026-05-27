@@ -46,9 +46,16 @@ impl DropboxConnector {
             redirect_uri,
             "https://www.dropbox.com/oauth2/authorize",
             "https://api.dropboxapi.com/oauth2/token",
-            vec!["account_info.read".into(), "files.content.read".into(), "files.content.write".into()],
+            vec![
+                "account_info.read".into(),
+                "files.content.read".into(),
+                "files.content.write".into(),
+            ],
         );
-        Self { oauth, credentials: None }
+        Self {
+            oauth,
+            credentials: None,
+        }
     }
 
     /// Extract the access token from stored credentials.
@@ -61,14 +68,12 @@ impl DropboxConnector {
 
     /// Build an RPC POST request to the metadata API.
     fn rpc_post(&self, endpoint: &str) -> reqwest::RequestBuilder {
-        reqwest::Client::new()
-            .post(format!("https://api.dropboxapi.com/2/{}", endpoint))
+        reqwest::Client::new().post(format!("https://api.dropboxapi.com/2/{}", endpoint))
     }
 
     /// Build a content POST request to the upload/download API.
     fn content_post(&self, endpoint: &str) -> reqwest::RequestBuilder {
-        reqwest::Client::new()
-            .post(format!("https://content.dropboxapi.com/2/{}", endpoint))
+        reqwest::Client::new().post(format!("https://content.dropboxapi.com/2/{}", endpoint))
     }
 }
 
@@ -102,7 +107,8 @@ impl SaaSConnector for DropboxConnector {
         match obj {
             "files" | "folders" => {
                 let body = serde_json::json!({ "path": path });
-                let resp = self.rpc_post("files/list_folder")
+                let resp = self
+                    .rpc_post("files/list_folder")
                     .bearer_auth(&token)
                     .json(&body)
                     .send()
@@ -125,16 +131,21 @@ impl SaaSConnector for DropboxConnector {
                 Ok(entries)
             }
             "shared_links" => {
-                let resp = self.rpc_post("sharing/list_shared_links")
+                let resp = self
+                    .rpc_post("sharing/list_shared_links")
                     .bearer_auth(&token)
                     .json(&serde_json::json!({}))
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Dropbox list shared links failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Dropbox list shared links failed: {e}"))
+                    })?;
                 let json: Value = crate::connectors::common::parse_json(resp).await?;
                 Ok(json["links"].as_array().cloned().unwrap_or_default())
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Dropbox object: {obj}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Dropbox object: {obj}"
+            ))),
         }
     }
 
@@ -143,22 +154,28 @@ impl SaaSConnector for DropboxConnector {
         match obj {
             "folder" => {
                 let path = data["path"].as_str().unwrap_or("");
-                let resp = self.rpc_post("files/create_folder_v2")
+                let resp = self
+                    .rpc_post("files/create_folder_v2")
                     .bearer_auth(&token)
                     .json(&serde_json::json!({ "path": path, "autorename": false }))
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Dropbox create folder failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Dropbox create folder failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "shared_link" => {
                 let path = data["path"].as_str().unwrap_or("");
-                let resp = self.rpc_post("sharing/create_shared_link_with_settings")
+                let resp = self
+                    .rpc_post("sharing/create_shared_link_with_settings")
                     .bearer_auth(&token)
                     .json(&serde_json::json!({ "path": path }))
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Dropbox create shared link failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Dropbox create shared link failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "file" => {
@@ -169,7 +186,8 @@ impl SaaSConnector for DropboxConnector {
                     "mode": "add",
                     "autorename": true
                 });
-                let resp = self.content_post("files/upload")
+                let resp = self
+                    .content_post("files/upload")
                     .bearer_auth(&token)
                     .header("Dropbox-API-Arg", api_arg.to_string())
                     .header("Content-Type", "application/octet-stream")
@@ -179,7 +197,9 @@ impl SaaSConnector for DropboxConnector {
                     .map_err(|e| ClawzError::Provider(format!("Dropbox upload failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Dropbox object: {obj}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Dropbox object: {obj}"
+            ))),
         }
     }
 
@@ -189,7 +209,8 @@ impl SaaSConnector for DropboxConnector {
             "file" => {
                 // Dropbox "update" for files is implemented as a move/rename.
                 let to_path = data["to_path"].as_str().unwrap_or(id);
-                let resp = self.rpc_post("files/move_v2")
+                let resp = self
+                    .rpc_post("files/move_v2")
                     .bearer_auth(&token)
                     .json(&serde_json::json!({ "from_path": id, "to_path": to_path }))
                     .send()
@@ -197,13 +218,16 @@ impl SaaSConnector for DropboxConnector {
                     .map_err(|e| ClawzError::Provider(format!("Dropbox move failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Dropbox object: {obj}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Dropbox object: {obj}"
+            ))),
         }
     }
 
     async fn delete_object(&self, _obj: &str, id: &str) -> Result<()> {
         let token = self.token()?;
-        let resp = self.rpc_post("files/delete_v2")
+        let resp = self
+            .rpc_post("files/delete_v2")
             .bearer_auth(&token)
             .json(&serde_json::json!({ "path": id }))
             .send()
@@ -223,7 +247,8 @@ impl SaaSConnector for DropboxConnector {
         let token = self.token()?;
         match action {
             "copy" => {
-                let resp = self.rpc_post("files/copy_v2")
+                let resp = self
+                    .rpc_post("files/copy_v2")
                     .bearer_auth(&token)
                     .json(&params)
                     .send()
@@ -232,16 +257,20 @@ impl SaaSConnector for DropboxConnector {
                 crate::connectors::common::parse_json(resp).await
             }
             "get_metadata" => {
-                let resp = self.rpc_post("files/get_metadata")
+                let resp = self
+                    .rpc_post("files/get_metadata")
                     .bearer_auth(&token)
                     .json(&params)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Dropbox get metadata failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Dropbox get metadata failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "search" => {
-                let resp = self.rpc_post("files/search_v2")
+                let resp = self
+                    .rpc_post("files/search_v2")
                     .bearer_auth(&token)
                     .json(&params)
                     .send()
@@ -249,7 +278,9 @@ impl SaaSConnector for DropboxConnector {
                     .map_err(|e| ClawzError::Provider(format!("Dropbox search failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Dropbox action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Dropbox action: {action}"
+            ))),
         }
     }
 }

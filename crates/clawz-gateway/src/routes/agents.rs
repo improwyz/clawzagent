@@ -17,19 +17,17 @@
 //!   so scoped read / write locks are used to avoid deadlocks.
 
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::Utc;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
-use clawz_services::dto::{
-    A2aInvokeRequest, FanOutRequest, OrchestrateRequest, RunTurnRequest,
-};
+use clawz_services::dto::{A2aInvokeRequest, FanOutRequest, OrchestrateRequest, RunTurnRequest};
 
 // Dependency: AgentRecord, AgentStatus, AppState, GatewayError are defined in the crate root.
 // Dependency: ConversationRecord, MessageRecord are defined in the crate root (shared with conversations module).
@@ -44,7 +42,10 @@ use crate::{
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_agents).post(create_agent))
-        .route("/{id}", get(get_agent).put(update_agent).delete(delete_agent))
+        .route(
+            "/{id}",
+            get(get_agent).put(update_agent).delete(delete_agent),
+        )
         .route("/{id}/run", post(run_agent))
         .route("/{id}/stop", post(stop_agent))
         .route("/{id}/autonomous", post(run_autonomous))
@@ -52,7 +53,10 @@ pub fn routes() -> Router<AppState> {
         // Legacy / extra routes kept for backward compatibility with older SDK versions.
         .route("/{id}/start", post(start_agent))
         .route("/{id}/status", get(agent_status))
-        .route("/{id}/personality", get(get_personality).put(update_personality))
+        .route(
+            "/{id}/personality",
+            get(get_personality).put(update_personality),
+        )
         .route("/{id}/identity/hash", get(get_agent_identity_hash))
         .route("/onboard", post(run_onboard))
         .route("/orchestrate", post(orchestrate))
@@ -154,12 +158,12 @@ async fn create_agent(
     State(state): State<AppState>,
     Json(body): Json<CreateAgentBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let name = body.name.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'name' is required".to_string())
-    })?;
-    let model = body.model.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'model' is required".to_string())
-    })?;
+    let name = body
+        .name
+        .ok_or_else(|| GatewayError::Unprocessable("field 'name' is required".to_string()))?;
+    let model = body
+        .model
+        .ok_or_else(|| GatewayError::Unprocessable("field 'model' is required".to_string()))?;
 
     let now = Utc::now();
     let record = AgentRecord {
@@ -215,10 +219,18 @@ async fn update_agent(
         .find(|a| a.id == id)
         .ok_or_else(|| GatewayError::not_found("Agent", &id))?;
 
-    if let Some(name) = body.name { record.name = name; }
-    if let Some(model) = body.model { record.model = model; }
-    if let Some(desc) = body.description { record.description = Some(desc); }
-    if let Some(sp) = body.system_prompt { record.system_prompt = Some(sp); }
+    if let Some(name) = body.name {
+        record.name = name;
+    }
+    if let Some(model) = body.model {
+        record.model = model;
+    }
+    if let Some(desc) = body.description {
+        record.description = Some(desc);
+    }
+    if let Some(sp) = body.system_prompt {
+        record.system_prompt = Some(sp);
+    }
     if let Some(status) = body.status {
         // Map free-form string to the typed AgentStatus enum. Unknown → Idle
         // so a typo does not accidentally leave the agent in an invalid state.
@@ -270,10 +282,7 @@ async fn run_agent(
             .iter()
             .find(|a| a.id == id)
             .ok_or_else(|| GatewayError::not_found("Agent", &id))?;
-        (
-            agent.model.clone(),
-            agent.system_prompt.clone(),
-        )
+        (agent.model.clone(), agent.system_prompt.clone())
     };
 
     let user_message = body.message.unwrap_or_else(|| "Hello".to_string());
@@ -367,13 +376,8 @@ async fn run_agent(
     );
 
     if let Some(ref pool) = state.db {
-        crate::postgres_store::persist_messages(
-            pool,
-            &conv_id,
-            &user_message,
-            &response_content,
-        )
-        .await;
+        crate::postgres_store::persist_messages(pool, &conv_id, &user_message, &response_content)
+            .await;
     }
 
     Ok(Json(json!({
@@ -568,7 +572,9 @@ async fn agent_history(
         .flat_map(|c| c.messages.iter())
         .collect();
 
-    Ok(Json(json!({ "agent_id": id, "messages": messages, "total": messages.len() })))
+    Ok(Json(
+        json!({ "agent_id": id, "messages": messages, "total": messages.len() }),
+    ))
 }
 
 // ─── Legacy / compatibility handlers ─────────────────────────────────────────
@@ -630,7 +636,9 @@ async fn get_personality(
         return Ok(Json(prefs.clone()));
     }
 
-    Ok(Json(json!({ "agent_id": id, "traits": [], "tone": "neutral" })))
+    Ok(Json(
+        json!({ "agent_id": id, "traits": [], "tone": "neutral" }),
+    ))
 }
 
 /// `PUT /agents/{id}/personality` — accept personality updates.
@@ -654,7 +662,11 @@ async fn update_personality(
         "tone": body.tone.unwrap_or_else(|| "neutral".to_string()),
         "updated": true,
     });
-    state.personality.write().await.insert(id.clone(), prefs.clone());
+    state
+        .personality
+        .write()
+        .await
+        .insert(id.clone(), prefs.clone());
 
     Ok(Json(prefs))
 }
@@ -774,7 +786,10 @@ async fn orchestrate(
         .as_str()
         .or_else(|| body["agent_id"].as_str())
         .unwrap_or("default");
-    let task = body["task"].as_str().unwrap_or("coordinate subtasks").to_string();
+    let task = body["task"]
+        .as_str()
+        .unwrap_or("coordinate subtasks")
+        .to_string();
     let members: Vec<String> = body["member_agent_ids"]
         .as_array()
         .map(|arr| {
@@ -1017,8 +1032,7 @@ async fn bind_agent_phone(
 
     state.channels.write().await.push(record);
 
-    let base =
-        std::env::var("CLAWZ_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:3000".into());
+    let base = std::env::var("CLAWZ_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:3000".into());
     let base = base.trim_end_matches('/');
 
     let webhooks = if channel_type == "twilio" {

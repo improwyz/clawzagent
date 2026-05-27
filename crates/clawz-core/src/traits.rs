@@ -21,17 +21,17 @@
 //! // Dependency: implemented in clawz-worker, consumed by gateway::handlers
 
 use std::collections::HashMap;
-use std::pin::Pin;
 use std::net::IpAddr;
+use std::pin::Pin;
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use futures_core::Stream;
 use http::HeaderMap;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::io::{AsyncRead, AsyncWrite};
-use serde::{Deserialize, Serialize};
 
 use crate::error::Result;
 use crate::types::{
@@ -40,8 +40,8 @@ use crate::types::{
     cost::CostRecord,
     deploy::{DeployConfig, DeployStatus, DeploymentInfo},
     governance::{ApprovalRequest, GovernanceResult},
-    message::{ChatRequest, ChatResponse, Message, StreamChunk},
     mesh::PeerInfo,
+    message::{ChatRequest, ChatResponse, Message, StreamChunk},
     orchestration::{AgentHandle, AgentSpec, HealthStatus, SpawnConfig, ToolHandle, ToolType},
     tenant::{TenantContext, TenantId},
     tool::{ToolResult, ToolSchema},
@@ -219,11 +219,7 @@ pub trait ChannelPlugin: Send + Sync {
     async fn send(&self, ctx: &ChannelContext, msg: OutgoingMessage) -> Result<()>;
 
     /// Handle a webhook push from the platform.
-    async fn webhook(
-        &self,
-        payload: &[u8],
-        headers: &HeaderMap,
-    ) -> Result<Vec<IncomingMessage>>;
+    async fn webhook(&self, payload: &[u8], headers: &HeaderMap) -> Result<Vec<IncomingMessage>>;
 
     /// Advertise supported features (threads, reactions, voice, …).
     fn capabilities(&self) -> ChannelCapabilities;
@@ -391,10 +387,7 @@ pub trait Transport: Send + Sync {
     async fn send(&self, peer: &PeerInfo, payload: &[u8]) -> Result<Vec<u8>>;
 
     /// Bind to `addr` and return a listener.
-    async fn listen(
-        &self,
-        addr: &str,
-    ) -> Result<Box<dyn TransportListener>>;
+    async fn listen(&self, addr: &str) -> Result<Box<dyn TransportListener>>;
 
     fn supports_streaming(&self) -> bool;
 }
@@ -468,22 +461,13 @@ pub trait SaaSConnector: Send + Sync {
 
     async fn authenticate(&self, credentials: &Value) -> Result<()>;
 
-    async fn list_objects(
-        &self,
-        object_type: &str,
-        filter: Option<&Value>,
-    ) -> Result<Vec<Value>>;
+    async fn list_objects(&self, object_type: &str, filter: Option<&Value>) -> Result<Vec<Value>>;
 
     async fn get_object(&self, object_type: &str, id: &str) -> Result<Value>;
 
     async fn create_object(&self, object_type: &str, data: &Value) -> Result<Value>;
 
-    async fn update_object(
-        &self,
-        object_type: &str,
-        id: &str,
-        data: &Value,
-    ) -> Result<Value>;
+    async fn update_object(&self, object_type: &str, id: &str, data: &Value) -> Result<Value>;
 
     async fn delete_object(&self, object_type: &str, id: &str) -> Result<()>;
 
@@ -563,7 +547,12 @@ pub trait TenantMesh: Send + Sync {
     async fn create_network(&self, tenant_id: &TenantId) -> Result<MeshNetwork>;
 
     /// Join a container to the network and return its assigned IP.
-    async fn join(&self, network: &MeshNetwork, container_id: &str, role: MeshRole) -> Result<IpAddr>;
+    async fn join(
+        &self,
+        network: &MeshNetwork,
+        container_id: &str,
+        role: MeshRole,
+    ) -> Result<IpAddr>;
 
     /// Remove a container from the network.
     async fn leave(&self, network: &MeshNetwork, container_id: &str) -> Result<()>;
@@ -579,7 +568,8 @@ pub trait TenantMesh: Send + Sync {
 
 #[async_trait]
 pub trait IdempotencyStore: Send + Sync {
-    async fn check_and_record(&self, key: &IdempotencyKey, result: ToolResult) -> IdempotencyResult;
+    async fn check_and_record(&self, key: &IdempotencyKey, result: ToolResult)
+        -> IdempotencyResult;
     async fn get(&self, key: &IdempotencyKey) -> Option<ToolResult>;
 }
 

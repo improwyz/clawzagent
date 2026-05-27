@@ -64,10 +64,7 @@ impl SubAgentHandle {
     /// - Returns [`ClawzError::Internal`] if called twice (receiver already taken).
     /// - Returns [`ClawzError::Internal`] if the timeout fires.
     /// - Returns [`ClawzError::Internal`] if the sender side dropped without sending.
-    pub async fn await_result(
-        mut self,
-        timeout: Option<Duration>,
-    ) -> Result<Message> {
+    pub async fn await_result(mut self, timeout: Option<Duration>) -> Result<Message> {
         let rx = self.result_rx.take().ok_or_else(|| {
             ClawzError::Internal("subagent result channel already consumed".into())
         })?;
@@ -82,16 +79,10 @@ impl SubAgentHandle {
                     ))
                 })?
                 .map_err(|_| {
-                    ClawzError::Internal(format!(
-                        "subagent '{}' result channel dropped",
-                        self.id
-                    ))
+                    ClawzError::Internal(format!("subagent '{}' result channel dropped", self.id))
                 })?,
             None => rx.await.map_err(|_| {
-                ClawzError::Internal(format!(
-                    "subagent '{}' result channel dropped",
-                    self.id
-                ))
+                ClawzError::Internal(format!("subagent '{}' result channel dropped", self.id))
             })?,
         }
     }
@@ -129,11 +120,7 @@ impl SubAgent {
     /// - `F` — the handler closure.  Must be `Send + 'static` because it runs
     ///   in a spawned task.
     /// - `Fut` — the async output of the closure.
-    pub fn spawn<F, Fut>(
-        &self,
-        task: impl Into<String>,
-        handler: F,
-    ) -> SubAgentHandle
+    pub fn spawn<F, Fut>(&self, task: impl Into<String>, handler: F) -> SubAgentHandle
     where
         F: FnOnce(AgentConfig, String) -> Fut + Send + 'static,
         Fut: std::future::Future<Output = Result<Message>> + Send,
@@ -218,10 +205,7 @@ impl SubAgentPool {
     /// Await all subagents, returning their results (errors preserved).
     ///
     /// Order of the returned vector matches the insertion order.
-    pub async fn collect_all(
-        self,
-        timeout: Option<Duration>,
-    ) -> Vec<Result<Message>> {
+    pub async fn collect_all(self, timeout: Option<Duration>) -> Vec<Result<Message>> {
         let mut results = Vec::with_capacity(self.handles.len());
         for handle in self.handles {
             results.push(handle.await_result(timeout).await);
@@ -233,10 +217,7 @@ impl SubAgentPool {
     ///
     /// Errors are silently dropped; use [`SubAgentPool::collect_all`] if
     /// you need to inspect failures.
-    pub async fn collect_successful(
-        self,
-        timeout: Option<Duration>,
-    ) -> Vec<Message> {
+    pub async fn collect_successful(self, timeout: Option<Duration>) -> Vec<Message> {
         self.collect_all(timeout)
             .await
             .into_iter()
@@ -248,11 +229,7 @@ impl SubAgentPool {
     ///
     /// The separator is inserted between each response.  Empty / non-text
     /// responses are skipped.
-    pub async fn aggregate_text(
-        self,
-        separator: &str,
-        timeout: Option<Duration>,
-    ) -> String {
+    pub async fn aggregate_text(self, separator: &str, timeout: Option<Duration>) -> String {
         self.collect_successful(timeout)
             .await
             .iter()

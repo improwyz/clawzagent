@@ -59,7 +59,11 @@ impl GoogleAnalyticsConnector {
                 "https://www.googleapis.com/auth/analytics".into(),
             ],
         );
-        Self { oauth, credentials: None, property_id }
+        Self {
+            oauth,
+            credentials: None,
+            property_id,
+        }
     }
 
     /// Extract the current OAuth access token from stored credentials.
@@ -122,8 +126,10 @@ impl SaaSConnector for GoogleAnalyticsConnector {
                 let property = self.property()?;
                 let date_range = filters.search.as_deref().unwrap_or("30daysAgo:today");
                 let parts: Vec<&str> = date_range.split(':').collect();
-                let (start, end) = (parts.first().copied().unwrap_or("30daysAgo"),
-                                    parts.last().copied().unwrap_or("today"));
+                let (start, end) = (
+                    parts.first().copied().unwrap_or("30daysAgo"),
+                    parts.last().copied().unwrap_or("today"),
+                );
                 let body = serde_json::json!({
                     "dateRanges": [{ "startDate": start, "endDate": end }],
                     "dimensions": [{ "name": "date" }],
@@ -134,7 +140,10 @@ impl SaaSConnector for GoogleAnalyticsConnector {
                     ]
                 });
                 let resp = reqwest::Client::new()
-                    .post(format!("https://analyticsdata.googleapis.com/v1beta/{}:runReport", property))
+                    .post(format!(
+                        "https://analyticsdata.googleapis.com/v1beta/{}:runReport",
+                        property
+                    ))
                     .bearer_auth(&token)
                     .json(&body)
                     .send()
@@ -149,23 +158,30 @@ impl SaaSConnector for GoogleAnalyticsConnector {
 
     /// GA4 is a read-only analytics system; creation is not supported.
     async fn create_object(&self, obj: &str, _data: Value) -> Result<Value> {
-        Err(ClawzError::Provider(format!("Google Analytics does not support creating {obj}")))
+        Err(ClawzError::Provider(format!(
+            "Google Analytics does not support creating {obj}"
+        )))
     }
 
     /// GA4 is a read-only analytics system; updates are not supported.
     async fn update_object(&self, obj: &str, _id: &str, _data: Value) -> Result<Value> {
-        Err(ClawzError::Provider(format!("Google Analytics does not support updating {obj}")))
+        Err(ClawzError::Provider(format!(
+            "Google Analytics does not support updating {obj}"
+        )))
     }
 
     /// GA4 is a read-only analytics system; deletion is not supported.
     async fn delete_object(&self, obj: &str, _id: &str) -> Result<()> {
-        Err(ClawzError::Provider(format!("Google Analytics does not support deleting {obj}")))
+        Err(ClawzError::Provider(format!(
+            "Google Analytics does not support deleting {obj}"
+        )))
     }
 
     async fn execute_action(&self, action: &str, params: Value) -> Result<Value> {
         let token = self.token()?;
         // Allow the caller to override the property ID per-action.
-        let property = params["property_id"].as_str()
+        let property = params["property_id"]
+            .as_str()
             .map(|s| s.to_string())
             .or_else(|| self.property_id.clone())
             .ok_or_else(|| ClawzError::Provider("property_id required".into()))?;
@@ -173,7 +189,10 @@ impl SaaSConnector for GoogleAnalyticsConnector {
         match action {
             "run_report" => {
                 let resp = reqwest::Client::new()
-                    .post(format!("https://analyticsdata.googleapis.com/v1beta/{}:runReport", property))
+                    .post(format!(
+                        "https://analyticsdata.googleapis.com/v1beta/{}:runReport",
+                        property
+                    ))
                     .bearer_auth(&token)
                     .json(&params)
                     .send()
@@ -183,7 +202,10 @@ impl SaaSConnector for GoogleAnalyticsConnector {
             }
             "run_realtime_report" => {
                 let resp = reqwest::Client::new()
-                    .post(format!("https://analyticsdata.googleapis.com/v1beta/{}:runRealtimeReport", property))
+                    .post(format!(
+                        "https://analyticsdata.googleapis.com/v1beta/{}:runRealtimeReport",
+                        property
+                    ))
                     .bearer_auth(&token)
                     .json(&params)
                     .send()

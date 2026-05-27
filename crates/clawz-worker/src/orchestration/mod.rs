@@ -22,8 +22,8 @@
 pub mod bollard_scheduler;
 pub mod factory;
 pub mod lifecycle;
-pub mod tool_orchestrator;
 pub mod standalone;
+pub mod tool_orchestrator;
 
 // Re-export the primary public types so consumers can write:
 // `use clawz_worker::orchestration::BollardScheduler;`

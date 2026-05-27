@@ -75,15 +75,17 @@ pub async fn run_with_supervisor<S: CircuitBreakerScheduler>(
 
                     if restart_attempts < config.max_restart_attempts {
                         restart_attempts += 1;
-                        tokio::time::sleep(
-                            std::time::Duration::from_secs(config.restart_cooldown_secs)
-                        ).await;
+                        tokio::time::sleep(std::time::Duration::from_secs(
+                            config.restart_cooldown_secs,
+                        ))
+                        .await;
 
                         scheduler.recover().await?;
                     } else {
-                        return Err(clawz_core::error::ClawzError::Orchestration(
-                            format!("max restart attempts ({}) exceeded", config.max_restart_attempts)
-                        ));
+                        return Err(clawz_core::error::ClawzError::Orchestration(format!(
+                            "max restart attempts ({}) exceeded",
+                            config.max_restart_attempts
+                        )));
                     }
                 }
             }

@@ -3,8 +3,8 @@
 //! The validator enforces invariants such as non-empty descriptions,
 //! normalized reward weights, and present success criteria.
 
-use clawz_core::types::GoalObject;
 use clawz_core::error::{ClawzError, Result};
+use clawz_core::types::GoalObject;
 
 /// Structural validator for parsed goals.
 #[derive(Debug, Clone)]
@@ -54,15 +54,13 @@ impl Validator {
         }
 
         if !goal.reward_weights.is_normalized(0.01) {
-            return Err(ClawzError::Validation(
-                format!(
-                    "reward weights must be non-negative and sum to 1.0, got ({:.2}, {:.2}, {:.2}, {:.2})",
-                    goal.reward_weights.accuracy,
-                    goal.reward_weights.speed,
-                    goal.reward_weights.cost,
-                    goal.reward_weights.safety,
-                ),
-            ));
+            return Err(ClawzError::Validation(format!(
+                "reward weights must be non-negative and sum to 1.0, got ({:.2}, {:.2}, {:.2}, {:.2})",
+                goal.reward_weights.accuracy,
+                goal.reward_weights.speed,
+                goal.reward_weights.cost,
+                goal.reward_weights.safety,
+            )));
         }
 
         for ms in &goal.milestones {

@@ -140,7 +140,10 @@ impl ContainersClient {
 
     /// Parse the standard Cloudflare API envelope.
     fn unwrap_cf_response(json: Value) -> Result<Value, ClawzError> {
-        let success = json.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+        let success = json
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if !success {
             let errors = json
                 .get("errors")
@@ -180,7 +183,9 @@ impl ContainersClient {
                 .unwrap_or("")
                 .to_owned(),
             status: ContainerStatus::from_str(
-                v.get("status").and_then(|x| x.as_str()).unwrap_or("unknown"),
+                v.get("status")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("unknown"),
             ),
             created_at: v
                 .get("created_at")
@@ -223,8 +228,10 @@ impl ContainersClient {
             body["command"] = Value::Array(cmd.into_iter().map(Value::String).collect());
         }
         if let Some(env) = config.env {
-            let env_obj: serde_json::Map<String, Value> =
-                env.into_iter().map(|(k, v)| (k, Value::String(v))).collect();
+            let env_obj: serde_json::Map<String, Value> = env
+                .into_iter()
+                .map(|(k, v)| (k, Value::String(v)))
+                .collect();
             body["env"] = Value::Object(env_obj);
         }
 
@@ -380,8 +387,14 @@ mod tests {
 
     #[test]
     fn test_container_status_from_str() {
-        assert_eq!(ContainerStatus::from_str("running"), ContainerStatus::Running);
-        assert_eq!(ContainerStatus::from_str("exited"), ContainerStatus::Stopped);
+        assert_eq!(
+            ContainerStatus::from_str("running"),
+            ContainerStatus::Running
+        );
+        assert_eq!(
+            ContainerStatus::from_str("exited"),
+            ContainerStatus::Stopped
+        );
         assert_eq!(ContainerStatus::from_str("error"), ContainerStatus::Failed);
         assert_eq!(ContainerStatus::from_str("blah"), ContainerStatus::Unknown);
     }

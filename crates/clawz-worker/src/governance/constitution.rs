@@ -5,11 +5,11 @@
 //! [`GovernancePolicy`], the convention holds a deliberative vote, and adopted
 //! amendments are parsed as `key=value` pairs and applied to the policy.
 
-use std::sync::Arc;
 use chrono::{DateTime, Utc};
-use uuid::Uuid;
-use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
 use crate::governance::council::{Council, Vote};
 use clawz_core::error::ClawzError;
@@ -142,7 +142,10 @@ impl ConstitutionalConvention {
     /// Override the supermajority adoption threshold.  Values outside (0.5, 1.0]
     /// are rejected.  Note: consumes self due to non-Copy fields.
     pub fn with_threshold(self, threshold: f64) -> Self {
-        assert!((0.5..=1.0).contains(&threshold), "threshold must be in (0.5, 1.0]");
+        assert!(
+            (0.5..=1.0).contains(&threshold),
+            "threshold must be in (0.5, 1.0]"
+        );
         Self {
             adoption_threshold: threshold,
             ..self
@@ -183,13 +186,13 @@ impl ConstitutionalConvention {
         // Find and update the amendment in-place
         {
             let list = self.amendments.read().await;
-            let amendment = list
-                .iter()
-                .find(|a| a.id == amendment_id)
-                .ok_or_else(|| ClawzError::NotFound {
-                    entity: "amendment".into(),
-                    id: amendment_id.to_string(),
-                })?;
+            let amendment =
+                list.iter()
+                    .find(|a| a.id == amendment_id)
+                    .ok_or_else(|| ClawzError::NotFound {
+                        entity: "amendment".into(),
+                        id: amendment_id.to_string(),
+                    })?;
 
             if amendment.status != AmendmentStatus::Open {
                 return Err(ClawzError::Governance(format!(
@@ -243,13 +246,13 @@ impl ConstitutionalConvention {
         // Look up amendment status and vote count from the live list
         let (status, proposed_at, vc) = {
             let list = self.amendments.read().await;
-            let amendment = list
-                .iter()
-                .find(|a| a.id == amendment_id)
-                .ok_or_else(|| ClawzError::NotFound {
-                    entity: "amendment".into(),
-                    id: amendment_id.to_string(),
-                })?;
+            let amendment =
+                list.iter()
+                    .find(|a| a.id == amendment_id)
+                    .ok_or_else(|| ClawzError::NotFound {
+                        entity: "amendment".into(),
+                        id: amendment_id.to_string(),
+                    })?;
 
             let vc = amendment.vote_count.read().await;
             (
@@ -261,11 +264,10 @@ impl ConstitutionalConvention {
 
         // Auto-expire if still open and window has passed
         if status == AmendmentStatus::Open {
-            let elapsed = Utc::now()
-                .signed_duration_since(proposed_at)
-                .num_seconds() as u64;
+            let elapsed = Utc::now().signed_duration_since(proposed_at).num_seconds() as u64;
             if elapsed > self.voting_window_secs {
-                self.update_status(amendment_id, AmendmentStatus::Expired).await?;
+                self.update_status(amendment_id, AmendmentStatus::Expired)
+                    .await?;
                 return Ok(ConstitutionalDecision::Rejected);
             }
         }
@@ -317,7 +319,10 @@ impl ConstitutionalConvention {
     /// Parses each amendment's `rule_text` as newline-separated `key=value` pairs
     /// and merges them into the policy's rules map.  Returns the IDs of all
     /// applied amendments.
-    pub async fn apply_adopted(&self, policy: &mut GovernancePolicy) -> Result<Vec<Uuid>, ClawzError> {
+    pub async fn apply_adopted(
+        &self,
+        policy: &mut GovernancePolicy,
+    ) -> Result<Vec<Uuid>, ClawzError> {
         let list = self.amendments.read().await;
         let mut applied = Vec::new();
 
@@ -407,9 +412,15 @@ mod tests {
     async fn make_convention() -> ConstitutionalConvention {
         let base = Council::new().with_vote_timeout(std::time::Duration::from_secs(60));
         let council = Arc::new(base);
-        council.add_member(String::from("alice"), CouncilRole::Reviewer).await;
-        council.add_member(String::from("bob"), CouncilRole::Reviewer).await;
-        council.add_member(String::from("carol"), CouncilRole::Proponent).await;
+        council
+            .add_member(String::from("alice"), CouncilRole::Reviewer)
+            .await;
+        council
+            .add_member(String::from("bob"), CouncilRole::Reviewer)
+            .await;
+        council
+            .add_member(String::from("carol"), CouncilRole::Proponent)
+            .await;
         ConstitutionalConvention::new(council)
     }
 
@@ -432,19 +443,21 @@ mod tests {
     #[tokio::test]
     async fn vote_updates_tally() {
         let conv = make_convention().await;
-        let amendment = ProposedAmendment::new(
-            "Test vote",
-            "Test description",
-            "alice",
-            "key=value",
-        );
+        let amendment =
+            ProposedAmendment::new("Test vote", "Test description", "alice", "key=value");
         let id = conv.propose(amendment).await.unwrap();
 
         conv.vote("alice", id, Vote::Approve, None).await.unwrap();
         conv.vote("bob", id, Vote::Reject, None).await.unwrap();
 
         let list = conv.amendments.read().await;
-        let vc = list.iter().find(|a| a.id == id).unwrap().vote_count.read().await;
+        let vc = list
+            .iter()
+            .find(|a| a.id == id)
+            .unwrap()
+            .vote_count
+            .read()
+            .await;
         assert_eq!(vc.approve, 1);
         assert_eq!(vc.reject, 1);
         assert_eq!(vc.abstain, 0);
@@ -472,12 +485,7 @@ mod tests {
     #[tokio::test]
     async fn decide_rejected_with_supermajority_reject() {
         let conv = make_convention().await;
-        let amendment = ProposedAmendment::new(
-            "Reject this",
-            "Should fail",
-            "carol",
-            "foo=bar",
-        );
+        let amendment = ProposedAmendment::new("Reject this", "Should fail", "carol", "foo=bar");
         let id = conv.propose(amendment).await.unwrap();
 
         conv.vote("alice", id, Vote::Reject, None).await.unwrap();
@@ -491,12 +499,8 @@ mod tests {
     #[tokio::test]
     async fn decide_quorum_not_met_with_single_vote() {
         let conv = make_convention().await;
-        let amendment = ProposedAmendment::new(
-            "Too few votes",
-            "Only one vote cast",
-            "carol",
-            "x=y",
-        );
+        let amendment =
+            ProposedAmendment::new("Too few votes", "Only one vote cast", "carol", "x=y");
         let id = conv.propose(amendment).await.unwrap();
 
         conv.vote("alice", id, Vote::Approve, None).await.unwrap();
@@ -533,9 +537,24 @@ mod tests {
         assert_eq!(applied.len(), 1);
         assert_eq!(policy.rules.len(), 3);
         // PolicyRule uses description field (not name)
-        assert!(policy.rules.iter().any(|r| r.description.contains("max_retries")));
-        assert!(policy.rules.iter().any(|r| r.description.contains("timeout_secs")));
-        assert!(policy.rules.iter().any(|r| r.description.contains("enabled")));
+        assert!(
+            policy
+                .rules
+                .iter()
+                .any(|r| r.description.contains("max_retries"))
+        );
+        assert!(
+            policy
+                .rules
+                .iter()
+                .any(|r| r.description.contains("timeout_secs"))
+        );
+        assert!(
+            policy
+                .rules
+                .iter()
+                .any(|r| r.description.contains("enabled"))
+        );
     }
 
     #[tokio::test]

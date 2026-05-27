@@ -152,8 +152,7 @@ impl AddressPool {
 
     /// Evict connections that have been idle longer than `idle_timeout`.
     fn evict_stale(&mut self, idle_timeout: Duration) {
-        self.idle
-            .retain(|c| c.last_used.elapsed() < idle_timeout);
+        self.idle.retain(|c| c.last_used.elapsed() < idle_timeout);
     }
 }
 
@@ -177,7 +176,9 @@ impl ConnectionPool {
     async fn acquire(&self, addr: &str, connect_timeout: Duration) -> Result<TcpStream> {
         {
             let mut pools = self.pools.lock().await;
-            let ap = pools.entry(addr.to_string()).or_insert_with(AddressPool::new);
+            let ap = pools
+                .entry(addr.to_string())
+                .or_insert_with(AddressPool::new);
             if let Some(stream) = ap.pop(self.idle_timeout) {
                 return Ok(stream);
             }
@@ -185,9 +186,7 @@ impl ConnectionPool {
 
         let stream = timeout(connect_timeout, TcpStream::connect(addr))
             .await
-            .map_err(|_| {
-                ClawzError::Transport(format!("connect timeout to {addr}"))
-            })?
+            .map_err(|_| ClawzError::Transport(format!("connect timeout to {addr}")))?
             .map_err(|e| ClawzError::Transport(format!("connect to {addr}: {e}")))?;
 
         stream
@@ -199,7 +198,9 @@ impl ConnectionPool {
     /// Return a stream to the idle pool.
     async fn release(&self, addr: &str, stream: TcpStream) {
         let mut pools = self.pools.lock().await;
-        let ap = pools.entry(addr.to_string()).or_insert_with(AddressPool::new);
+        let ap = pools
+            .entry(addr.to_string())
+            .or_insert_with(AddressPool::new);
         ap.push(stream, self.max_per_addr);
     }
 
@@ -399,11 +400,7 @@ mod tests {
             ..Default::default()
         };
         let transport = GrpcTransport::new(config);
-        let peer = PeerInfo::new(
-            uuid::Uuid::new_v4(),
-            server_addr.to_string(),
-            "test-host",
-        );
+        let peer = PeerInfo::new(uuid::Uuid::new_v4(), server_addr.to_string(), "test-host");
         let payload = b"hello grpc";
         let resp = transport.send(&peer, payload).await.unwrap();
         assert_eq!(resp, payload);
@@ -426,11 +423,7 @@ mod tests {
             ..Default::default()
         };
         let transport = GrpcTransport::new(config);
-        let peer = PeerInfo::new(
-            uuid::Uuid::new_v4(),
-            server_addr.to_string(),
-            "test-host",
-        );
+        let peer = PeerInfo::new(uuid::Uuid::new_v4(), server_addr.to_string(), "test-host");
         // First request — creates connection
         let r1 = transport.send(&peer, b"ping1").await.unwrap();
         assert_eq!(r1, b"ping1");

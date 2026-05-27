@@ -58,10 +58,7 @@ pub struct RetrieveContextStep {
 
 impl RetrieveContextStep {
     /// Create a new step with the given memory backend and base prompt.
-    pub fn new(
-        memory: Arc<dyn MemoryBackend>,
-        base_system_prompt: impl Into<String>,
-    ) -> Self {
+    pub fn new(memory: Arc<dyn MemoryBackend>, base_system_prompt: impl Into<String>) -> Self {
         Self {
             memory,
             base_system_prompt: base_system_prompt.into(),
@@ -199,11 +196,7 @@ mod tests {
         ) -> Result<Vec<clawz_core::traits::MemoryEntry>> {
             Ok(vec![])
         }
-        async fn get_conversation_history(
-            &self,
-            _: &str,
-            _: usize,
-        ) -> Result<Vec<Message>> {
+        async fn get_conversation_history(&self, _: &str, _: usize) -> Result<Vec<Message>> {
             Ok(vec![])
         }
         async fn save_message(&self, _: &str, _: &Message) -> Result<()> {
@@ -225,7 +218,12 @@ mod tests {
         assert!(matches!(outcome, StepOutcome::Continue));
 
         let prompt = ctx.get_meta(META_SYSTEM_PROMPT).unwrap();
-        assert!(prompt.as_str().unwrap().contains("You are a helpful assistant"));
+        assert!(
+            prompt
+                .as_str()
+                .unwrap()
+                .contains("You are a helpful assistant")
+        );
     }
 
     #[tokio::test]

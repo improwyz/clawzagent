@@ -119,7 +119,9 @@ impl AdmissionController {
         // Reject immediately rather than queueing. This prevents the gateway from
         // becoming a bottleneck and pushes back-pressure to the caller (HTTP 429).
         if slots.len() >= self.max_concurrent_per_tenant {
-            return Err(ClawzError::RateLimited { retry_after_secs: 5 });
+            return Err(ClawzError::RateLimited {
+                retry_after_secs: 5,
+            });
         }
 
         // Generate a fresh UUID so release() can pinpoint this exact slot even if

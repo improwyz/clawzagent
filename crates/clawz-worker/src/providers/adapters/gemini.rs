@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::{http_error, AdapterConfig, ProviderAdapter};
+use super::{AdapterConfig, ProviderAdapter, http_error};
 
 // ── Wire types ────────────────────────────────────────────────────────────────
 
@@ -40,10 +40,18 @@ struct GeminiContent {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 enum GeminiPart {
-    Text { text: String },
-    InlineData { inline_data: GeminiInlineData },
-    FunctionCall { function_call: GeminiFunctionCall },
-    FunctionResponse { function_response: GeminiFunctionResponse },
+    Text {
+        text: String,
+    },
+    InlineData {
+        inline_data: GeminiInlineData,
+    },
+    FunctionCall {
+        function_call: GeminiFunctionCall,
+    },
+    FunctionResponse {
+        function_response: GeminiFunctionResponse,
+    },
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -206,8 +214,7 @@ impl ProviderAdapter for GeminiAdapter {
             m if m.contains("2.0-flash") => (0.000075, 0.0003),
             _ => (0.00125, 0.005),
         };
-        (input_tokens as f64 / 1_000.0) * in_per_1k
-            + (output_tokens as f64 / 1_000.0) * out_per_1k
+        (input_tokens as f64 / 1_000.0) * in_per_1k + (output_tokens as f64 / 1_000.0) * out_per_1k
     }
 }
 
@@ -298,28 +305,24 @@ fn convert_content_to_parts(content: &MessageContent) -> Result<Vec<GeminiPart>,
                 .iter()
                 .map(|p| match p {
                     ContentPart::Text { text } => GeminiPart::Text { text: text.clone() },
-                    ContentPart::ImageBase64 { media_type, data } => {
-                        GeminiPart::InlineData {
-                            inline_data: GeminiInlineData {
-                                mime_type: media_type.clone(),
-                                data: data.clone(),
-                            },
-                        }
-                    }
+                    ContentPart::ImageBase64 { media_type, data } => GeminiPart::InlineData {
+                        inline_data: GeminiInlineData {
+                            mime_type: media_type.clone(),
+                            data: data.clone(),
+                        },
+                    },
                     ContentPart::ImageUrl { url, .. } => {
                         // Gemini doesn't support raw URLs; treat as text annotation
                         GeminiPart::Text {
                             text: format!("[image: {}]", url),
                         }
                     }
-                    ContentPart::AudioBase64 { media_type, data } => {
-                        GeminiPart::InlineData {
-                            inline_data: GeminiInlineData {
-                                mime_type: media_type.clone(),
-                                data: data.clone(),
-                            },
-                        }
-                    }
+                    ContentPart::AudioBase64 { media_type, data } => GeminiPart::InlineData {
+                        inline_data: GeminiInlineData {
+                            mime_type: media_type.clone(),
+                            data: data.clone(),
+                        },
+                    },
                 })
                 .collect();
             Ok(gemini_parts)
@@ -374,11 +377,14 @@ fn parse_response(raw: GeminiResponse, model: &str) -> ChatResponse {
         })
         .collect();
 
-    let usage = raw.usage_metadata.map(|u| Usage {
-        prompt_tokens: u.prompt_token_count.unwrap_or(0),
-        completion_tokens: u.candidates_token_count.unwrap_or(0),
-        total_tokens: u.total_token_count.unwrap_or(0),
-    }).unwrap_or_default();
+    let usage = raw
+        .usage_metadata
+        .map(|u| Usage {
+            prompt_tokens: u.prompt_token_count.unwrap_or(0),
+            completion_tokens: u.candidates_token_count.unwrap_or(0),
+            total_tokens: u.total_token_count.unwrap_or(0),
+        })
+        .unwrap_or_default();
 
     ChatResponse {
         id: Uuid::new_v4().to_string(),
@@ -596,6 +602,8 @@ mod tests {
 
         let response = parse_response(raw, "gemini-1.5-pro");
         let choice = &response.choices[0];
-        assert!(matches!(&choice.message.content, MessageContent::ToolCalls(calls) if calls.len() == 1));
+        assert!(
+            matches!(&choice.message.content, MessageContent::ToolCalls(calls) if calls.len() == 1)
+        );
     }
 }

@@ -26,4 +26,6 @@ pub use adapters::ProviderAdapter;
 pub use config::{config_from_env, load_provider_config, save_provider_config};
 pub use cost::CostTracker;
 pub use registry::ProviderRegistry;
-pub use router::{AuthType, ProviderConfig, ProviderRouter, ProviderRouterConfig, ReliabilityConfig};
+pub use router::{
+    AuthType, ProviderConfig, ProviderRouter, ProviderRouterConfig, ReliabilityConfig,
+};

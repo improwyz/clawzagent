@@ -1,5 +1,5 @@
-use clawz_core::deployment::DeploymentMode;
 use chrono::{DateTime, Duration, Utc};
+use clawz_core::deployment::DeploymentMode;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
@@ -20,8 +20,18 @@ pub struct ScalingPolicy {
 }
 
 impl ScalingPolicy {
-    pub fn new(load_threshold_up: f32, load_threshold_down: f32, cooldown_seconds: i64, org_size_trigger: usize) -> Self {
-        Self { load_threshold_up, load_threshold_down, cooldown_seconds, org_size_trigger }
+    pub fn new(
+        load_threshold_up: f32,
+        load_threshold_down: f32,
+        cooldown_seconds: i64,
+        org_size_trigger: usize,
+    ) -> Self {
+        Self {
+            load_threshold_up,
+            load_threshold_down,
+            cooldown_seconds,
+            org_size_trigger,
+        }
     }
 }
 
@@ -60,7 +70,8 @@ impl DeploymentElasticity {
             if let Some(ref last_direction) = last_dir {
                 let last = *self.last_transition.read().await;
                 let cooldown = Duration::seconds(self.policy.cooldown_seconds);
-                if direction == *last_direction && Utc::now().signed_duration_since(last) < cooldown {
+                if direction == *last_direction && Utc::now().signed_duration_since(last) < cooldown
+                {
                     return None;
                 }
             }
@@ -78,11 +89,16 @@ impl DeploymentElasticity {
         }
     }
 
-    fn evaluate_transition(&self, current: &DeploymentMode, metrics: &SystemMetrics) -> Option<(DeploymentMode, String)> {
+    fn evaluate_transition(
+        &self,
+        current: &DeploymentMode,
+        metrics: &SystemMetrics,
+    ) -> Option<(DeploymentMode, String)> {
         match current {
             DeploymentMode::Standalone => {
                 if metrics.load_avg > self.policy.load_threshold_up
-                    || metrics.agent_count > self.policy.org_size_trigger {
+                    || metrics.agent_count > self.policy.org_size_trigger
+                {
                     Some((DeploymentMode::Micro, "scale_up".into()))
                 } else {
                     None
@@ -92,10 +108,12 @@ impl DeploymentElasticity {
                 // 1.5 multiplier: elastic mode requires significantly higher load before engaging
                 // subagent_count > 10: must have meaningful parallel workload before elastic scaling
                 if metrics.load_avg > self.policy.load_threshold_up * 1.5
-                    || metrics.subagent_count > 10 {
+                    || metrics.subagent_count > 10
+                {
                     Some((DeploymentMode::Elastic, "scale_up".into()))
                 } else if metrics.load_avg < self.policy.load_threshold_down
-                    && metrics.agent_count <= 2 {
+                    && metrics.agent_count <= 2
+                {
                     Some((DeploymentMode::Standalone, "scale_down".into()))
                 } else {
                     None
@@ -104,7 +122,8 @@ impl DeploymentElasticity {
             DeploymentMode::Elastic => {
                 if metrics.load_avg < self.policy.load_threshold_down
                     && metrics.subagent_count <= 3
-                    && metrics.idle_containers > 5 {
+                    && metrics.idle_containers > 5
+                {
                     Some((DeploymentMode::Micro, "scale_down".into()))
                 } else {
                     None
@@ -128,7 +147,12 @@ mod tests {
             org_size_trigger: 5,
         };
         let scaler = DeploymentElasticity::new(policy);
-        let metrics = SystemMetrics { load_avg: 0.8, agent_count: 6, subagent_count: 0, idle_containers: 0 };
+        let metrics = SystemMetrics {
+            load_avg: 0.8,
+            agent_count: 6,
+            subagent_count: 0,
+            idle_containers: 0,
+        };
 
         let transition = scaler.evaluate(&metrics).await;
         assert!(transition.is_some());
@@ -144,7 +168,12 @@ mod tests {
             org_size_trigger: 5,
         };
         let scaler = DeploymentElasticity::new(policy);
-        let metrics = SystemMetrics { load_avg: 0.9, agent_count: 8, subagent_count: 0, idle_containers: 0 };
+        let metrics = SystemMetrics {
+            load_avg: 0.9,
+            agent_count: 8,
+            subagent_count: 0,
+            idle_containers: 0,
+        };
 
         // First evaluation triggers
         let first = scaler.evaluate(&metrics).await;
@@ -166,13 +195,23 @@ mod tests {
         let scaler = DeploymentElasticity::new(policy);
 
         // First, transition from Standalone to Micro
-        let hot = SystemMetrics { load_avg: 0.8, agent_count: 6, subagent_count: 0, idle_containers: 0 };
+        let hot = SystemMetrics {
+            load_avg: 0.8,
+            agent_count: 6,
+            subagent_count: 0,
+            idle_containers: 0,
+        };
         let up_transition = scaler.evaluate(&hot).await;
         assert!(up_transition.is_some());
         assert_eq!(up_transition.unwrap().to, DeploymentMode::Micro);
 
         // Now test scale-down: Micro -> Standalone only when load drops below down threshold
-        let cold = SystemMetrics { load_avg: 0.2, agent_count: 1, subagent_count: 0, idle_containers: 0 };
+        let cold = SystemMetrics {
+            load_avg: 0.2,
+            agent_count: 1,
+            subagent_count: 0,
+            idle_containers: 0,
+        };
 
         assert!(scaler.evaluate(&cold).await.is_some()); // Should trigger a scale down
     }
@@ -188,19 +227,35 @@ mod tests {
         let scaler = DeploymentElasticity::new(policy);
 
         // First transition from Standalone -> Micro (load > up threshold)
-        let hot = SystemMetrics { load_avg: 0.8, agent_count: 6, subagent_count: 0, idle_containers: 0 };
+        let hot = SystemMetrics {
+            load_avg: 0.8,
+            agent_count: 6,
+            subagent_count: 0,
+            idle_containers: 0,
+        };
         let first = scaler.evaluate(&hot).await;
         assert!(first.is_some());
 
         // Now load sits mid-range: 0.3 (between 0.25 and 0.75)
         // Should stay in Micro — no transition
-        let mid = SystemMetrics { load_avg: 0.3, agent_count: 6, subagent_count: 0, idle_containers: 0 };
+        let mid = SystemMetrics {
+            load_avg: 0.3,
+            agent_count: 6,
+            subagent_count: 0,
+            idle_containers: 0,
+        };
         let second = scaler.evaluate(&mid).await;
-        assert!(second.is_none(), "mid-range load should not trigger transition");
+        assert!(
+            second.is_none(),
+            "mid-range load should not trigger transition"
+        );
 
         // And again — still mid-range, still stable
         let third = scaler.evaluate(&mid).await;
-        assert!(third.is_none(), "repeated mid-range evaluation stays stable");
+        assert!(
+            third.is_none(),
+            "repeated mid-range evaluation stays stable"
+        );
     }
 
     #[tokio::test]
@@ -214,12 +269,20 @@ mod tests {
         let scaler = DeploymentElasticity::new(policy);
 
         // Trigger Standalone -> Micro
-        let metrics = SystemMetrics { load_avg: 0.8, agent_count: 6, subagent_count: 0, idle_containers: 0 };
+        let metrics = SystemMetrics {
+            load_avg: 0.8,
+            agent_count: 6,
+            subagent_count: 0,
+            idle_containers: 0,
+        };
         let first = scaler.evaluate(&metrics).await;
         assert!(first.is_some());
 
         // Immediate re-evaluation while still hot should be blocked by cooldown
         let second = scaler.evaluate(&metrics).await;
-        assert!(second.is_none(), "cooldown should block same-direction re-transition");
+        assert!(
+            second.is_none(),
+            "cooldown should block same-direction re-transition"
+        );
     }
 }

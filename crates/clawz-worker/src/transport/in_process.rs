@@ -34,7 +34,7 @@ use clawz_core::{
     traits::{Transport, TransportConnection, TransportListener},
     types::mesh::PeerInfo,
 };
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, mpsc, oneshot};
 
 // ── Message types ─────────────────────────────────────────────────────────────
 
@@ -56,8 +56,7 @@ type RegistryMap = HashMap<String, mpsc::Sender<Request>>;
 /// The registry is a `static` so that multiple `InProcessTransport` instances
 /// can all reach the same set of listeners without explicit hand-off.
 fn global_registry() -> &'static Arc<RwLock<RegistryMap>> {
-    static REGISTRY: std::sync::OnceLock<Arc<RwLock<RegistryMap>>> =
-        std::sync::OnceLock::new();
+    static REGISTRY: std::sync::OnceLock<Arc<RwLock<RegistryMap>>> = std::sync::OnceLock::new();
     REGISTRY.get_or_init(|| Arc::new(RwLock::new(HashMap::new())))
 }
 
@@ -187,9 +186,7 @@ impl Transport for InProcessTransport {
         let addr = format!("inproc://{}", peer.mesh_ip);
 
         let tx = lookup(&addr).await.ok_or_else(|| {
-            ClawzError::Transport(format!(
-                "no in-process listener registered for '{addr}'"
-            ))
+            ClawzError::Transport(format!("no in-process listener registered for '{addr}'"))
         })?;
 
         let (reply_tx, reply_rx) = oneshot::channel();
@@ -199,20 +196,20 @@ impl Transport for InProcessTransport {
         })
         .await
         .map_err(|_| {
-            ClawzError::Transport(format!("in-process send to '{addr}' failed (channel closed)"))
+            ClawzError::Transport(format!(
+                "in-process send to '{addr}' failed (channel closed)"
+            ))
         })?;
 
-        let response = tokio::time::timeout(
-            Duration::from_millis(self.request_timeout_ms),
-            reply_rx,
-        )
-        .await
-        .map_err(|_| {
-            ClawzError::Transport(format!("in-process response timeout from '{addr}'"))
-        })?
-        .map_err(|_| {
-            ClawzError::Transport(format!("in-process reply channel dropped for '{addr}'"))
-        })?;
+        let response =
+            tokio::time::timeout(Duration::from_millis(self.request_timeout_ms), reply_rx)
+                .await
+                .map_err(|_| {
+                    ClawzError::Transport(format!("in-process response timeout from '{addr}'"))
+                })?
+                .map_err(|_| {
+                    ClawzError::Transport(format!("in-process reply channel dropped for '{addr}'"))
+                })?;
 
         Ok(response)
     }
@@ -257,10 +254,14 @@ mod tests {
                     tokio::spawn(async move {
                         // Read the length-prefixed request.
                         let mut len_buf = [0u8; 4];
-                        if conn.reader.read_exact(&mut len_buf).await.is_err() { return; }
+                        if conn.reader.read_exact(&mut len_buf).await.is_err() {
+                            return;
+                        }
                         let len = u32::from_be_bytes(len_buf) as usize;
                         let mut payload = vec![0u8; len];
-                        if conn.reader.read_exact(&mut payload).await.is_err() { return; }
+                        if conn.reader.read_exact(&mut payload).await.is_err() {
+                            return;
+                        }
                         // Echo back length-prefixed.
                         let resp_len = (payload.len() as u32).to_be_bytes();
                         let _ = conn.writer.write_all(&resp_len).await;

@@ -20,7 +20,9 @@ pub struct FilesystemArchive {
 }
 
 impl FilesystemArchive {
-    pub fn new(base_dir: PathBuf) -> Self { Self { base_dir } }
+    pub fn new(base_dir: PathBuf) -> Self {
+        Self { base_dir }
+    }
 }
 
 #[async_trait::async_trait]
@@ -30,7 +32,9 @@ impl ArchiveBackend for FilesystemArchive {
             .map_err(|e| clawz_core::error::ClawzError::Internal(format!("mkdir: {e}")))?;
         let path = self.base_dir.join("archive.jsonl");
         let mut file = std::fs::OpenOptions::new()
-            .create(true).append(true).open(&path)
+            .create(true)
+            .append(true)
+            .open(&path)
             .map_err(|e| clawz_core::error::ClawzError::Internal(format!("open: {e}")))?;
         for entry in &entries {
             let line = serde_json::to_string(entry)
@@ -44,7 +48,9 @@ impl ArchiveBackend for FilesystemArchive {
 
     async fn retrieve(&self, query: &str) -> clawz_core::Result<Vec<MemoryEntry>> {
         let path = self.base_dir.join("archive.jsonl");
-        if !path.exists() { return Ok(vec![]); }
+        if !path.exists() {
+            return Ok(vec![]);
+        }
         let content = std::fs::read_to_string(&path)
             .map_err(|e| clawz_core::error::ClawzError::Internal(format!("read: {e}")))?;
         let mut results = Vec::new();
@@ -67,9 +73,11 @@ mod tests {
     async fn filesystem_archive_roundtrip() {
         let dir = std::env::temp_dir().join(format!("clawz_archive_{}", uuid::Uuid::new_v4()));
         let archive = FilesystemArchive::new(dir.clone());
-        let entries = vec![
-            MemoryEntry { key: "test_key".into(), value: "test_value".into(), timestamp: Utc::now() },
-        ];
+        let entries = vec![MemoryEntry {
+            key: "test_key".into(),
+            value: "test_value".into(),
+            timestamp: Utc::now(),
+        }];
         archive.archive(entries).await.unwrap();
         let results = archive.retrieve("test_key").await.unwrap();
         assert_eq!(results.len(), 1);

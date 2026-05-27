@@ -14,20 +14,20 @@
 //!   and `AppState.deployments` to produce a unified health snapshot.
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::Utc;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 // Dependency: crate root types shared across fleet, agents, and governance modules.
+use crate::{AppState, DeploymentRecord, FleetNodeRecord, GatewayError};
 use clawz_core::types::orchestration::AgentSpec;
 use clawz_core::types::tenant::{TenantContext, TenantId};
-use crate::{AppState, DeploymentRecord, FleetNodeRecord, GatewayError};
 
 /// Assemble the fleet sub-router.
 ///
@@ -36,7 +36,12 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         // Fleet nodes CRUD
         .route("/", get(list_fleet).post(create_fleet_node))
-        .route("/{id}", get(get_fleet_node).put(update_fleet_node).delete(delete_fleet_node))
+        .route(
+            "/{id}",
+            get(get_fleet_node)
+                .put(update_fleet_node)
+                .delete(delete_fleet_node),
+        )
         // Fleet-level topology and deployment endpoints
         .route("/mesh", get(fleet_mesh))
         .route("/deploy", post(fleet_deploy))
@@ -104,9 +109,9 @@ async fn create_fleet_node(
     State(state): State<AppState>,
     Json(body): Json<CreateFleetNodeBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let name = body.name.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'name' is required".to_string())
-    })?;
+    let name = body
+        .name
+        .ok_or_else(|| GatewayError::Unprocessable("field 'name' is required".to_string()))?;
     let host = body.host.unwrap_or_else(|| "localhost".to_string());
     let port = body.port.unwrap_or(8080);
 
@@ -156,11 +161,21 @@ async fn update_fleet_node(
         .find(|n| n.id == id)
         .ok_or_else(|| GatewayError::not_found("FleetNode", &id))?;
 
-    if let Some(name) = body.name { record.name = name; }
-    if let Some(nt) = body.node_type { record.node_type = nt; }
-    if let Some(host) = body.host { record.host = host; }
-    if let Some(port) = body.port { record.port = port; }
-    if let Some(status) = body.status { record.status = status; }
+    if let Some(name) = body.name {
+        record.name = name;
+    }
+    if let Some(nt) = body.node_type {
+        record.node_type = nt;
+    }
+    if let Some(host) = body.host {
+        record.host = host;
+    }
+    if let Some(port) = body.port {
+        record.port = port;
+    }
+    if let Some(status) = body.status {
+        record.status = status;
+    }
     record.updated_at = Utc::now();
     let snapshot = record.clone();
     drop(nodes);
@@ -204,15 +219,17 @@ async fn fleet_mesh(State(state): State<AppState>) -> Json<Value> {
     let online: Vec<Value> = nodes
         .iter()
         .filter(|n| n.status == "online")
-        .map(|n| json!({
-            "id": n.id,
-            "name": n.name,
-            "node_type": n.node_type,
-            "host": n.host,
-            "port": n.port,
-            "status": n.status,
-            "agent_count": n.agent_ids.len(),
-        }))
+        .map(|n| {
+            json!({
+                "id": n.id,
+                "name": n.name,
+                "node_type": n.node_type,
+                "host": n.host,
+                "port": n.port,
+                "status": n.status,
+                "agent_count": n.agent_ids.len(),
+            })
+        })
         .collect();
 
     let mut connections: Vec<Value> = Vec::new();
@@ -245,12 +262,12 @@ async fn fleet_deploy(
     State(state): State<AppState>,
     Json(body): Json<FleetDeployBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let agent_id = body.agent_id.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'agent_id' is required".to_string())
-    })?;
-    let node_id = body.node_id.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'node_id' is required".to_string())
-    })?;
+    let agent_id = body
+        .agent_id
+        .ok_or_else(|| GatewayError::Unprocessable("field 'agent_id' is required".to_string()))?;
+    let node_id = body
+        .node_id
+        .ok_or_else(|| GatewayError::Unprocessable("field 'node_id' is required".to_string()))?;
 
     // Verify both agent and node exist before recording the deployment.
     // Dependency: reads AppState.agents from the agents domain.
@@ -287,7 +304,10 @@ async fn fleet_deploy(
                 .map(|a| a.model.clone())
                 .unwrap_or_else(|| "claude-sonnet-4-5".to_string())
         };
-        let ctx = TenantContext::new(TenantId::new("default"), clawz_core::types::tenant::Role::Operator);
+        let ctx = TenantContext::new(
+            TenantId::new("default"),
+            clawz_core::types::tenant::Role::Operator,
+        );
         let spec = AgentSpec {
             image: format!("clawz/agent:{}", agent_model.replace('/', "-")),
             capabilities: vec!["chat".into(), "tools".into()],
@@ -363,9 +383,10 @@ async fn fleet_metrics(State(state): State<AppState>) -> Json<Value> {
     let offline_count = nodes.iter().filter(|n| n.status == "offline").count();
     let degraded_count = nodes.iter().filter(|n| n.status == "degraded").count();
     let active_deployments = deployments.iter().filter(|d| d.status == "running").count();
-    let running_agents = agents.iter().filter(|a| {
-        matches!(a.status, crate::AgentStatus::Running)
-    }).count();
+    let running_agents = agents
+        .iter()
+        .filter(|a| matches!(a.status, crate::AgentStatus::Running))
+        .count();
 
     Json(json!({
         "nodes": {
@@ -479,5 +500,7 @@ async fn kanban_move(
     deployment.status = new_status.to_string();
     deployment.updated_at = Utc::now();
 
-    Ok(Json(json!({ "id": id, "status": new_status, "moved": true })))
+    Ok(Json(
+        json!({ "id": id, "status": new_status, "moved": true }),
+    ))
 }

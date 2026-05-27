@@ -106,21 +106,23 @@ impl PluginLoader {
     /// Returns the plugin's `ChannelMetadata` on success.
     pub async fn load_plugin(&self, path: &Path) -> Result<ChannelMetadata> {
         // Safety: we are loading a trusted plugin compiled against this binary.
-        let library = unsafe { Library::new(path) }
-            .map_err(|e| ClawzError::Channel(format!("failed to load plugin '{}': {e}", path.display())))?;
+        let library = unsafe { Library::new(path) }.map_err(|e| {
+            ClawzError::Channel(format!("failed to load plugin '{}': {e}", path.display()))
+        })?;
 
         // Resolve the factory symbol.  The byte slice includes a trailing NUL
         // because libloading's `get` expects a C-string on Unix platforms.
         let factory: Symbol<unsafe extern "C" fn() -> *mut dyn ChannelPlugin> = unsafe {
-            library
-                .get(PLUGIN_FACTORY)
-                .map_err(|e| ClawzError::Channel(format!("plugin '{}' missing factory: {e}", path.display())))?
+            library.get(PLUGIN_FACTORY).map_err(|e| {
+                ClawzError::Channel(format!("plugin '{}' missing factory: {e}", path.display()))
+            })?
         };
 
         // Catch panics inside the factory call so a bad plugin cannot crash
         // the whole worker process.
-        let raw_ptr = std::panic::catch_unwind(|| unsafe { factory() })
-            .map_err(|_| ClawzError::Channel(format!("plugin factory panicked: '{}'", path.display())))?;
+        let raw_ptr = std::panic::catch_unwind(|| unsafe { factory() }).map_err(|_| {
+            ClawzError::Channel(format!("plugin factory panicked: '{}'", path.display()))
+        })?;
 
         if raw_ptr.is_null() {
             return Err(ClawzError::Channel(format!(
@@ -159,7 +161,7 @@ impl PluginLoader {
                 return vec![Err(ClawzError::Channel(format!(
                     "cannot read plugin directory '{}': {e}",
                     directory.display()
-                )))]
+                )))];
             }
         };
 
@@ -233,19 +235,20 @@ impl PluginLoader {
         // many files).
         let (tx, mut rx) = tokio::sync::mpsc::channel::<PathBuf>(32);
 
-        let mut watcher = notify::recommended_watcher(move |res: std::result::Result<Event, notify::Error>| {
-            if let Ok(event) = res {
-                // We only care about new files or modifications; deletions are
-                // ignored because the worker may intentionally remove a broken
-                // plugin without wanting to unload it from memory.
-                if event.kind.is_modify() || event.kind.is_create() {
-                    for path in event.paths {
-                        let _ = tx.blocking_send(path);
+        let mut watcher =
+            notify::recommended_watcher(move |res: std::result::Result<Event, notify::Error>| {
+                if let Ok(event) = res {
+                    // We only care about new files or modifications; deletions are
+                    // ignored because the worker may intentionally remove a broken
+                    // plugin without wanting to unload it from memory.
+                    if event.kind.is_modify() || event.kind.is_create() {
+                        for path in event.paths {
+                            let _ = tx.blocking_send(path);
+                        }
                     }
                 }
-            }
-        })
-        .map_err(|e| ClawzError::Channel(format!("watcher error: {e}")))?;
+            })
+            .map_err(|e| ClawzError::Channel(format!("watcher error: {e}")))?;
 
         watcher
             .watch(directory, RecursiveMode::NonRecursive)

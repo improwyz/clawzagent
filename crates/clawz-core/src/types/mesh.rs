@@ -66,11 +66,7 @@ pub struct PeerInfo {
 }
 
 impl PeerInfo {
-    pub fn new(
-        id: Uuid,
-        mesh_ip: impl Into<String>,
-        hostname: impl Into<String>,
-    ) -> Self {
+    pub fn new(id: Uuid, mesh_ip: impl Into<String>, hostname: impl Into<String>) -> Self {
         Self {
             id,
             mesh_ip: mesh_ip.into(),
@@ -212,12 +208,9 @@ impl MeshPath {
 /// Select the best path from a list according to `policy`.
 /// // Called by: worker::mesh router before every cross-peer RPC.
 pub fn select_best_path(paths: &[MeshPath], policy: RoutingPolicy) -> Option<&MeshPath> {
-    paths
-        .iter()
-        .filter(|p| p.reliability > 0.0)
-        .max_by(|a, b| {
-            a.score(policy)
-                .partial_cmp(&b.score(policy))
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+    paths.iter().filter(|p| p.reliability > 0.0).max_by(|a, b| {
+        a.score(policy)
+            .partial_cmp(&b.score(policy))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    })
 }

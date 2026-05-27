@@ -258,7 +258,6 @@ pub struct GovernanceGuardrails {
     min_audit_rate_per_hour: u64,
 
     // ── PRISM-G G-dimension extension ────────────────────────────────────────
-
     /// Configured oversight level for this guardrail instance.
     /// Used by the oversight check to determine if pre-approval is required.
     configured_oversight: clawz_core::types::OversightLevel,
@@ -549,9 +548,18 @@ impl GovernanceGuardrails {
     /// exact phrases in the keyword list.
     pub fn check_integrity(&self, text: &str) -> ComplianceResult {
         let citation_patterns = [
-            "[1]", "[2]", "[source]", "[citation]", "according to",
-            "based on", "reference:", "source:", "cited from",
-            "as stated in", "per ", "from the",
+            "[1]",
+            "[2]",
+            "[source]",
+            "[citation]",
+            "according to",
+            "based on",
+            "reference:",
+            "source:",
+            "cited from",
+            "as stated in",
+            "per ",
+            "from the",
         ];
 
         let has_citations = citation_patterns
@@ -744,34 +752,34 @@ impl GovernanceGuardrails {
                     || action_lower.contains("wipe")
                     || action_lower.contains("erase")
                     || action_lower.contains("purge"))
-                {
-                    return (
-                        false,
-                        Some(format!(
-                            "action may destroy audit/log data required by constraint: {}",
-                            constraint.description
-                        )),
-                    );
-                }
+            {
+                return (
+                    false,
+                    Some(format!(
+                        "action may destroy audit/log data required by constraint: {}",
+                        constraint.description
+                    )),
+                );
+            }
 
             // If constraint mentions uptime or availability
             if (constraint_text.contains("uptime")
                 || constraint_text.contains("availability")
                 || constraint_text.contains("running")
-                    || constraint_text.contains("available"))
+                || constraint_text.contains("available"))
                 && (action_lower.contains("stop")
                     || action_lower.contains("terminate")
                     || action_lower.contains("kill")
                     || action_lower.contains("shutdown"))
-                {
-                    return (
-                        false,
-                        Some(format!(
-                            "action may violate availability constraint: {}",
-                            constraint.description
-                        )),
-                    );
-                }
+            {
+                return (
+                    false,
+                    Some(format!(
+                        "action may violate availability constraint: {}",
+                        constraint.description
+                    )),
+                );
+            }
         }
 
         // Passed all alignment checks
@@ -799,7 +807,11 @@ impl GovernanceGuardrails {
 
         use crate::governance::oversight::{effective_oversight, requires_pre_approval};
 
-        let effective = effective_oversight(risk.clone(), self.configured_oversight, self.active_goal.is_some());
+        let effective = effective_oversight(
+            risk.clone(),
+            self.configured_oversight,
+            self.active_goal.is_some(),
+        );
 
         if requires_pre_approval(effective) {
             (
@@ -831,11 +843,7 @@ impl GovernanceGuardrails {
     /// let result = guardrails.run_all("According to [1], the sky is blue.", 10);
     /// assert!(result.all_passed());
     /// ```
-    pub fn run_all(
-        &self,
-        text: &str,
-        audit_entries_last_hour: u64,
-    ) -> GuardrailReport {
+    pub fn run_all(&self, text: &str, audit_entries_last_hour: u64) -> GuardrailReport {
         let privacy = self.check_privacy(text);
         let reliability = self.check_reliability();
         let integrity = self.check_integrity(text);
@@ -869,7 +877,7 @@ impl Default for GovernanceGuardrails {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clawz_core::types::purpose::{GoalObject, GoalType, Constraint, ConstraintKind};
+    use clawz_core::types::purpose::{Constraint, ConstraintKind, GoalObject, GoalType};
 
     #[test]
     fn test_privacy_detects_email() {
@@ -1022,7 +1030,10 @@ mod tests {
         let guardrails = GovernanceGuardrails::new().with_active_goal(goal);
         let (passed, blocker) = guardrails.check_alignment("shutdown production server");
 
-        assert!(!passed, "shutdown should contradict uptime maintenance goal");
+        assert!(
+            !passed,
+            "shutdown should contradict uptime maintenance goal"
+        );
         assert!(blocker.is_some());
     }
 
@@ -1048,7 +1059,10 @@ mod tests {
 
         let (passed, blocker) = guardrails.check_oversight();
 
-        assert!(!passed, "High risk with only Autonomous oversight should fail");
+        assert!(
+            !passed,
+            "High risk with only Autonomous oversight should fail"
+        );
         assert!(blocker.is_some());
     }
 

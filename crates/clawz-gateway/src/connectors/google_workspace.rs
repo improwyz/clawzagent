@@ -162,7 +162,10 @@ impl SaaSConnector for GoogleWorkspaceConnector {
     async fn create_object(&self, obj: &str, data: Value) -> Result<Value> {
         let (api, path) = match obj {
             "messages" => ("gmail", "/gmail/v1/users/me/messages".to_string()),
-            "files" => ("www", "/upload/drive/v3/files?uploadType=multipart".to_string()),
+            "files" => (
+                "www",
+                "/upload/drive/v3/files?uploadType=multipart".to_string(),
+            ),
             "events" => ("www", "/calendar/v3/calendars/primary/events".to_string()),
             "spreadsheets" => ("sheets", "/sheets/v4/spreadsheets".to_string()),
             _ => ("www", format!("/{}?alt=json", obj)),
@@ -181,7 +184,10 @@ impl SaaSConnector for GoogleWorkspaceConnector {
         let (api, path) = match obj {
             "messages" => ("gmail", format!("/gmail/v1/users/me/messages/{}", id)),
             "files" => ("www", format!("/drive/v3/files/{}", id)),
-            "events" => ("www", format!("/calendar/v3/calendars/primary/events/{}", id)),
+            "events" => (
+                "www",
+                format!("/calendar/v3/calendars/primary/events/{}", id),
+            ),
             "spreadsheets" => ("sheets", format!("/sheets/v4/spreadsheets/{}", id)),
             _ => ("www", format!("/me/{}/{}", obj, id)),
         };
@@ -199,7 +205,10 @@ impl SaaSConnector for GoogleWorkspaceConnector {
         let (api, path) = match obj {
             "messages" => ("gmail", format!("/gmail/v1/users/me/messages/{}", id)),
             "files" => ("www", format!("/drive/v3/files/{}", id)),
-            "events" => ("www", format!("/calendar/v3/calendars/primary/events/{}", id)),
+            "events" => (
+                "www",
+                format!("/calendar/v3/calendars/primary/events/{}", id),
+            ),
             "spreadsheets" => ("sheets", format!("/sheets/v4/spreadsheets/{}", id)),
             _ => ("www", format!("/me/{}/{}", obj, id)),
         };
@@ -222,8 +231,21 @@ impl SaaSConnector for GoogleWorkspaceConnector {
     async fn execute_action(&self, action: &str, params: Value) -> Result<Value> {
         let (api, path) = match action {
             "send" => ("gmail", "/gmail/v1/users/me/messages/send".to_string()),
-            "sendMessage" => ("www", format!("/teams/{}/channels/{}/messages", params.get("teamId").and_then(|v| v.as_str()).unwrap_or(""), params.get("channelId").and_then(|v| v.as_str()).unwrap_or(""))),
-            "watch" => ("www", "/calendar/v3/calendars/primary/events/watch".to_string()),
+            "sendMessage" => (
+                "www",
+                format!(
+                    "/teams/{}/channels/{}/messages",
+                    params.get("teamId").and_then(|v| v.as_str()).unwrap_or(""),
+                    params
+                        .get("channelId")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                ),
+            ),
+            "watch" => (
+                "www",
+                "/calendar/v3/calendars/primary/events/watch".to_string(),
+            ),
             _ => ("www", format!("/me/{}?alt=json", action)),
         };
         let client = self.client(api)?;

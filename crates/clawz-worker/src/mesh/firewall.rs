@@ -15,8 +15,8 @@
 //!
 //! - `clawz_core::traits::TenantMesh` — core trait this module implements.
 
-use std::collections::{HashMap, HashSet};
 use parking_lot::RwLock;
+use std::collections::{HashMap, HashSet};
 
 // Dependency: clawz-core::traits::TenantMesh — enforced per-tenant via trait.
 
@@ -58,9 +58,10 @@ impl TenantFirewall {
     ///
     /// This creates a unidirectional allow rule: `tool_ip → agent_ip`.
     pub fn add_tool(&self, tool_id: &str, tool_ip: &str, _agent_id: &str, agent_ip: &str) {
-        self.tool_to_agent
-            .write()
-            .insert(tool_id.to_string(), (tool_ip.to_string(), agent_ip.to_string()));
+        self.tool_to_agent.write().insert(
+            tool_id.to_string(),
+            (tool_ip.to_string(), agent_ip.to_string()),
+        );
     }
 
     /// Revoke a tool's access to its bound agent.

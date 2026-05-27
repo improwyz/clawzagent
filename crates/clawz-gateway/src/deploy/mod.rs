@@ -62,8 +62,7 @@ pub use massivegrid::MassiveGridAdapter;
 pub use northflank::NorthflankAdapter;
 pub use oracle_cloud::OracleCloudAdapter;
 pub use provider::{
-    DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus,
-    ProviderCredentials,
+    DeployConfig, DeployMode, DeployProvider, DeploymentInfo, DeploymentStatus, ProviderCredentials,
 };
 pub use railway::RailwayAdapter;
 pub use sliplane::SliplaneAdapter;
@@ -120,11 +119,19 @@ impl DeployManager {
         m.register(Arc::new(SliplaneAdapter::new()));
 
         // Tier 2 — cloud managed container / serverless
-        m.register(Arc::new(GoogleCloudRunAdapter::new("default-project", "us-central1")));
-        m.register(Arc::new(OracleCloudAdapter::new("default-tenancy", "us-ashburn-1")));
+        m.register(Arc::new(GoogleCloudRunAdapter::new(
+            "default-project",
+            "us-central1",
+        )));
+        m.register(Arc::new(OracleCloudAdapter::new(
+            "default-tenancy",
+            "us-ashburn-1",
+        )));
         m.register(Arc::new(AwsLambdaAdapter::new("us-east-1", "000000000000")));
         m.register(Arc::new(AzureFunctionsAdapter::new("", "default")));
-        m.register(Arc::new(MassiveGridAdapter::new("https://app.massivegrid.com")));
+        m.register(Arc::new(MassiveGridAdapter::new(
+            "https://app.massivegrid.com",
+        )));
 
         // Tier 3 — edge / serverless
         m.register(Arc::new(CloudflareAdapter::new("default")));
@@ -163,7 +170,8 @@ impl DeployManager {
 
     /// Insert a provider into the internal HashMap keyed by its `provider_id`.
     fn register(&mut self, provider: Arc<dyn DeployProvider>) {
-        self.providers.insert(provider.provider_id().to_string(), provider);
+        self.providers
+            .insert(provider.provider_id().to_string(), provider);
     }
 
     // ── Provider discovery ─────────────────────────────────────────────────
@@ -206,10 +214,12 @@ impl DeployManager {
 
     /// Retrieve a provider by its ID string.
     pub fn get_provider(&self, provider_id: &str) -> Result<&Arc<dyn DeployProvider>> {
-        self.providers.get(provider_id).ok_or_else(|| ClawzError::NotFound {
-            entity: "deploy_provider".into(),
-            id: provider_id.into(),
-        })
+        self.providers
+            .get(provider_id)
+            .ok_or_else(|| ClawzError::NotFound {
+                entity: "deploy_provider".into(),
+                id: provider_id.into(),
+            })
     }
 
     /// Validate credentials for the named provider.
@@ -223,11 +233,7 @@ impl DeployManager {
     }
 
     /// Deploy to the named provider; persist the resulting `DeploymentInfo`.
-    pub async fn deploy(
-        &self,
-        provider_id: &str,
-        config: &DeployConfig,
-    ) -> Result<DeploymentInfo> {
+    pub async fn deploy(&self, provider_id: &str, config: &DeployConfig) -> Result<DeploymentInfo> {
         let provider = self.get_provider(provider_id)?;
         let mut info = provider.deploy(config).await?;
         info.provider_id = provider_id.to_string();
@@ -236,7 +242,11 @@ impl DeployManager {
     }
 
     /// Query deployment status from live provider and update the local store.
-    pub async fn deployment_status(&self, provider_id: &str, deployment_id: &str) -> Result<DeploymentStatus> {
+    pub async fn deployment_status(
+        &self,
+        provider_id: &str,
+        deployment_id: &str,
+    ) -> Result<DeploymentStatus> {
         let provider = self.get_provider(provider_id)?;
         let status = provider.status(deployment_id).await?;
         self.store.update_status(deployment_id, status)?;
@@ -260,9 +270,7 @@ impl DeployManager {
             .store
             .get(deployment_id)?
             .and_then(|info| info.external_resource);
-        provider
-            .destroy(deployment_id, external.as_deref())
-            .await?;
+        provider.destroy(deployment_id, external.as_deref()).await?;
         self.store.remove(deployment_id)?;
         if let Some(ref pool) = self.db {
             crate::postgres_store::delete_cloud_deployment(pool, deployment_id).await?;
@@ -366,7 +374,9 @@ mod tests {
     fn test_auto_select_docker() {
         let m = make_manager();
         let config = DeployConfig {
-            mode: DeployMode::Docker { image: "nginx".into() },
+            mode: DeployMode::Docker {
+                image: "nginx".into(),
+            },
             env_vars: Default::default(),
             region: None,
             replicas: 1,

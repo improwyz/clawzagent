@@ -22,7 +22,10 @@ pub struct Temperament {
 
 impl Default for Temperament {
     fn default() -> Self {
-        Self { reactivity: 0.5, self_regulation: 0.5 }
+        Self {
+            reactivity: 0.5,
+            self_regulation: 0.5,
+        }
     }
 }
 
@@ -34,13 +37,14 @@ pub struct RiskPosture {
 
 impl Default for RiskPosture {
     fn default() -> Self {
-        Self { risk_tolerance: 0.5 }
+        Self {
+            risk_tolerance: 0.5,
+        }
     }
 }
 
 /// Processing style — fundamental cognitive mode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ProcessingStyle {
     Parallel,
     Sequential,
@@ -49,17 +53,14 @@ pub enum ProcessingStyle {
     Deliberative,
 }
 
-
 /// Authority orientation — core stance toward human oversight.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum AuthorityOrientation {
     Deferential,
     Skeptical,
     #[default]
     Egalitarian,
 }
-
 
 /// The agent's four immutable constitution principles.
 pub const CARDINAL_RULES: &[&str] = &[
@@ -112,20 +113,22 @@ pub struct ResponseCalibration {
 
 impl Default for ResponseCalibration {
     fn default() -> Self {
-        Self { directness: 0.5, assertiveness: 0.5, emotional_colour: 0.3 }
+        Self {
+            directness: 0.5,
+            assertiveness: 0.5,
+            emotional_colour: 0.3,
+        }
     }
 }
 
 /// Horizon baseline.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum Horizon {
     Short,
     #[default]
     Medium,
     Long,
 }
-
 
 /// Temporal preference.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,7 +139,10 @@ pub struct TemporalPreference {
 
 impl Default for TemporalPreference {
     fn default() -> Self {
-        Self { horizon_baseline: Horizon::default(), horizon_refinement: 0.5 }
+        Self {
+            horizon_baseline: Horizon::default(),
+            horizon_refinement: 0.5,
+        }
     }
 }
 

@@ -134,11 +134,7 @@ impl ConversationStore {
     // ── Retrieving history ────────────────────────────────────────────────────
 
     /// Return the most recent `limit` messages in chronological order.
-    pub async fn get_history(
-        &self,
-        conversation_id: &str,
-        limit: usize,
-    ) -> Result<Vec<Message>> {
+    pub async fn get_history(&self, conversation_id: &str, limit: usize) -> Result<Vec<Message>> {
         let guard = self.conversations.read().await;
         let msgs = guard
             .get(conversation_id)
@@ -306,7 +302,10 @@ mod tests {
     #[tokio::test]
     async fn test_append_and_get_history() {
         let store = ConversationStore::new();
-        store.append("conv-1", Message::user("hello")).await.unwrap();
+        store
+            .append("conv-1", Message::user("hello"))
+            .await
+            .unwrap();
         store
             .append("conv-1", Message::assistant("world"))
             .await

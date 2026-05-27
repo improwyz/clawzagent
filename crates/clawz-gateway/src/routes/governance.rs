@@ -18,17 +18,17 @@
 //! - `evaluate` writes to `AppState.audit_log` so every decision is traceable.
 //! - `create_policy` also audits itself so policy changes appear in the same log.
 
-use clawz_core::types::governance::ApprovalStatus;
-use clawz_services::dto::EvaluateGovernanceRequest;
 use axum::{
+    Json, Router,
     extract::{Path, Query, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::Utc;
+use clawz_core::types::governance::ApprovalStatus;
+use clawz_services::dto::EvaluateGovernanceRequest;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 // Dependency: AuditEntry, PolicyRecord, and GatewayError defined in the crate root.
@@ -41,7 +41,10 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         // Policy CRUD
         .route("/policies", get(list_policies).post(create_policy))
-        .route("/policies/{id}", get(get_policy).put(update_policy).delete(delete_policy))
+        .route(
+            "/policies/{id}",
+            get(get_policy).put(update_policy).delete(delete_policy),
+        )
         // Audit log query
         .route("/audit", get(audit_log))
         // Per-agent trust score
@@ -50,7 +53,12 @@ pub fn routes() -> Router<AppState> {
         .route("/evaluate", post(evaluate))
         // Legacy proposal endpoints retained for UI compatibility
         .route("/proposals", get(list_proposals).post(create_proposal))
-        .route("/proposals/{id}", get(get_proposal).put(update_proposal).delete(delete_proposal))
+        .route(
+            "/proposals/{id}",
+            get(get_proposal)
+                .put(update_proposal)
+                .delete(delete_proposal),
+        )
         .route("/proposals/{id}/vote", post(vote_proposal))
 }
 
@@ -128,9 +136,9 @@ async fn create_policy(
     State(state): State<AppState>,
     Json(body): Json<CreatePolicyBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let name = body.name.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'name' is required".to_string())
-    })?;
+    let name = body
+        .name
+        .ok_or_else(|| GatewayError::Unprocessable("field 'name' is required".to_string()))?;
 
     let now = Utc::now();
     let record = PolicyRecord {
@@ -181,11 +189,21 @@ async fn update_policy(
         .find(|p| p.id == id)
         .ok_or_else(|| GatewayError::not_found("Policy", &id))?;
 
-    if let Some(name) = body.name { record.name = name; }
-    if let Some(desc) = body.description { record.description = desc; }
-    if let Some(rules) = body.rules { record.rules = rules; }
-    if let Some(enf) = body.enforcement { record.enforcement = enf; }
-    if let Some(enabled) = body.enabled { record.enabled = enabled; }
+    if let Some(name) = body.name {
+        record.name = name;
+    }
+    if let Some(desc) = body.description {
+        record.description = desc;
+    }
+    if let Some(rules) = body.rules {
+        record.rules = rules;
+    }
+    if let Some(enf) = body.enforcement {
+        record.enforcement = enf;
+    }
+    if let Some(enabled) = body.enabled {
+        record.enabled = enabled;
+    }
     record.updated_at = Utc::now();
     let snapshot = record.clone();
     drop(policies);
@@ -218,10 +236,7 @@ async fn delete_policy(
 ///
 /// Supports filtering by `resource_type` and `actor` so compliance dashboards
 /// can narrow the view without client-side filtering.
-async fn audit_log(
-    State(state): State<AppState>,
-    Query(q): Query<AuditQuery>,
-) -> Json<Value> {
+async fn audit_log(State(state): State<AppState>, Query(q): Query<AuditQuery>) -> Json<Value> {
     // Clamp pagination: high limits are allowed because audit is typically
     // smaller than conversation data, but we still cap at 200 for safety.
     let page = q.page.unwrap_or(1).max(1);
@@ -301,10 +316,8 @@ async fn trust_score(
 
     // Compute a deterministic trust score based on audit entries.
     let audit = state.audit_log.read().await;
-    let agent_entries: Vec<&AuditEntry> = audit
-        .iter()
-        .filter(|e| e.resource_id == agent_id)
-        .collect();
+    let agent_entries: Vec<&AuditEntry> =
+        audit.iter().filter(|e| e.resource_id == agent_id).collect();
 
     let total_actions = agent_entries.len();
     let violations = agent_entries
@@ -344,12 +357,12 @@ async fn evaluate(
     State(state): State<AppState>,
     Json(body): Json<EvaluateBody>,
 ) -> Result<Json<Value>, GatewayError> {
-    let agent_id = body.agent_id.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'agent_id' is required".to_string())
-    })?;
-    let action = body.action.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'action' is required".to_string())
-    })?;
+    let agent_id = body
+        .agent_id
+        .ok_or_else(|| GatewayError::Unprocessable("field 'agent_id' is required".to_string()))?;
+    let action = body
+        .action
+        .ok_or_else(|| GatewayError::Unprocessable("field 'action' is required".to_string()))?;
 
     {
         let agents = state.agents.read().await;
@@ -448,12 +461,12 @@ async fn create_proposal(
     State(state): State<AppState>,
     Json(body): Json<CreateProposalBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let agent_id = body.agent_id.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'agent_id' is required".to_string())
-    })?;
-    let action = body.action.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'action' is required".to_string())
-    })?;
+    let agent_id = body
+        .agent_id
+        .ok_or_else(|| GatewayError::Unprocessable("field 'agent_id' is required".to_string()))?;
+    let action = body
+        .action
+        .ok_or_else(|| GatewayError::Unprocessable("field 'action' is required".to_string()))?;
     let required = body.required_approvals.unwrap_or(1);
     let context = body.context.unwrap_or(json!({}));
 
@@ -468,7 +481,10 @@ async fn create_proposal(
         .await
         .ok_or_else(|| GatewayError::Internal("proposal missing after create".into()))?;
 
-    state.publish_event("governance.proposal", json!({ "id": id, "status": "pending" }));
+    state.publish_event(
+        "governance.proposal",
+        json!({ "id": id, "status": "pending" }),
+    );
 
     Ok((StatusCode::CREATED, Json(proposal_json(&req))))
 }
@@ -505,9 +521,15 @@ async fn update_proposal(
     let agent_id = body.agent_id.unwrap_or(existing.agent_id);
     let action = body.action.unwrap_or(existing.action);
     let context = body.context.unwrap_or(existing.context);
-    let required = body.required_approvals.unwrap_or(existing.required_approvals);
+    let required = body
+        .required_approvals
+        .unwrap_or(existing.required_approvals);
 
-    state.approval_workflow.reject(&id, "system", "superseded by update").await.ok();
+    state
+        .approval_workflow
+        .reject(&id, "system", "superseded by update")
+        .await
+        .ok();
     let new_id = state
         .approval_workflow
         .request(agent_id, action, context, required)

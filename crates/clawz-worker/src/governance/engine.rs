@@ -52,9 +52,7 @@ use async_trait::async_trait;
 use clawz_core::{
     error::{ClawzError, Result},
     traits::GovernanceEngine,
-    types::governance::{
-        ApprovalRequest, GovernancePolicy, GovernanceResult,
-    },
+    types::governance::{ApprovalRequest, GovernancePolicy, GovernanceResult},
 };
 // Dependency: `serde` — serialisation for configuration and cache entries.
 use serde::{Deserialize, Serialize};
@@ -65,8 +63,8 @@ use tokio::sync::RwLock;
 use super::{
     approval::ApprovalWorkflow,
     audit::{AuditLogger, AuditResult},
-    policy::PolicyEngine,
     guardrails::GovernanceGuardrails,
+    policy::PolicyEngine,
     trust::TrustScorer,
 };
 
@@ -239,15 +237,12 @@ impl ClawzGovernanceEngine {
 
     /// Stores a result in the cache with the engine's configured TTL.
     async fn set_cached(&self, key: String, result: GovernanceResult) {
-        let expires_at = std::time::Instant::now()
-            + std::time::Duration::from_secs(self.cache_ttl_secs);
-        self.cache.write().await.insert(
-            key,
-            CacheEntry {
-                result,
-                expires_at,
-            },
-        );
+        let expires_at =
+            std::time::Instant::now() + std::time::Duration::from_secs(self.cache_ttl_secs);
+        self.cache
+            .write()
+            .await
+            .insert(key, CacheEntry { result, expires_at });
     }
 }
 
@@ -299,9 +294,7 @@ impl GovernanceEngine for ClawzGovernanceEngine {
         let trust_f64 = trust_score.as_f64();
 
         // 2. Hard deny below minimum trust.
-        if self.config.enable_trust_check
-            && trust_score.score < self.config.deny_below_trust
-        {
+        if self.config.enable_trust_check && trust_score.score < self.config.deny_below_trust {
             let result = GovernanceResult::deny(
                 vec![format!(
                     "trust score {} is below hard deny threshold {}",
@@ -360,9 +353,7 @@ impl GovernanceEngine for ClawzGovernanceEngine {
         }
 
         // 5. Trust threshold for review.
-        if self.config.enable_trust_check
-            && trust_score.score < self.config.min_trust_score
-        {
+        if self.config.enable_trust_check && trust_score.score < self.config.min_trust_score {
             requires_review = true;
         }
 
@@ -415,7 +406,9 @@ impl GovernanceEngine for ClawzGovernanceEngine {
     async fn update_trust(&self, agent_id: &str, delta: f64, reason: &str) -> Result<()> {
         // Convert 0-1 delta to 0-1000 scale.
         let scaled = (delta * 100.0) as i32;
-        self.trust_scorer.update_score(agent_id, scaled, reason).await;
+        self.trust_scorer
+            .update_score(agent_id, scaled, reason)
+            .await;
         Ok(())
     }
 
@@ -433,11 +426,11 @@ impl GovernanceEngine for ClawzGovernanceEngine {
                     return Ok(true); // disabled = allow
                 }
                 // Check if any Deny rule in the policy matches.
-                let violations =
-                    engine.evaluate(action, &serde_json::Value::Null);
-                let denied = violations
-                    .iter()
-                    .any(|v| v.policy_id == policy_id && matches!(v.effect, clawz_core::types::governance::PolicyEffect::Deny));
+                let violations = engine.evaluate(action, &serde_json::Value::Null);
+                let denied = violations.iter().any(|v| {
+                    v.policy_id == policy_id
+                        && matches!(v.effect, clawz_core::types::governance::PolicyEffect::Deny)
+                });
                 Ok(!denied)
             }
             None => Err(ClawzError::NotFound {
@@ -512,7 +505,10 @@ mod tests {
     #[tokio::test]
     async fn test_update_trust() {
         let engine = make_engine();
-        engine.update_trust("agent-1", 0.1, "good work").await.unwrap();
+        engine
+            .update_trust("agent-1", 0.1, "good work")
+            .await
+            .unwrap();
         let score = engine.get_trust_score("agent-1").await.unwrap();
         assert!(score > 0.5);
     }

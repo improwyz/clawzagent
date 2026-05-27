@@ -29,32 +29,32 @@
 //!
 // ── Native channel implementations ───────────────────────────────────────────
 
+pub mod dialpad;
+pub mod discord;
+pub mod google_voice;
+pub mod ringcentral;
 pub mod slack;
 pub mod teams;
-pub mod discord;
-pub mod zoom;
-pub mod webex;
-pub mod whatsapp;
 pub mod threecx;
-pub mod ringcentral;
-pub mod dialpad;
 pub mod twilio;
-pub mod google_voice;
+pub mod webex;
 pub mod webhook;
+pub mod whatsapp;
+pub mod zoom;
 
 // Dependency: Re-export each channel struct so consumers only need `native::*`
+pub use dialpad::DialpadChannel;
+pub use discord::DiscordChannel;
+pub use google_voice::GoogleVoiceChannel;
+pub use ringcentral::RingCentralChannel;
 pub use slack::SlackChannel;
 pub use teams::TeamsChannel;
-pub use discord::DiscordChannel;
-pub use zoom::ZoomChannel;
-pub use webex::WebexChannel;
-pub use whatsapp::WhatsAppChannel;
 pub use threecx::ThreeCXChannel;
-pub use ringcentral::RingCentralChannel;
-pub use dialpad::DialpadChannel;
 pub use twilio::TwilioChannel;
-pub use google_voice::GoogleVoiceChannel;
+pub use webex::WebexChannel;
 pub use webhook::WebhookChannel;
+pub use whatsapp::WhatsAppChannel;
+pub use zoom::ZoomChannel;
 
 // Dependency: ChannelRegistry lives in the sibling `registry` module
 use crate::channels::registry::ChannelRegistry;
@@ -71,7 +71,6 @@ use clawz_core::types::channel::ChannelConfig;
 ///
 /// Never panics — each channel constructor is infallible.
 pub fn register_all(registry: &mut ChannelRegistry) {
-
     /// Helper macro to reduce boilerplate when registering a native channel.
     ///
     /// Expands to:

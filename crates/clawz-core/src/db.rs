@@ -873,14 +873,13 @@ impl AgentRepo {
     }
 
     pub async fn list(pool: &PgPool, limit: i64, offset: i64) -> Result<Vec<DbAgent>> {
-        let rows =
-            sqlx::query_as::<_, DbAgent>(
-                "SELECT * FROM agents ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-            )
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(pool)
-            .await?;
+        let rows = sqlx::query_as::<_, DbAgent>(
+            "SELECT * FROM agents ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await?;
         Ok(rows)
     }
 
@@ -934,11 +933,10 @@ impl ConversationRepo {
     }
 
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<DbConversation>> {
-        let row =
-            sqlx::query_as::<_, DbConversation>("SELECT * FROM conversations WHERE id = $1")
-                .bind(id)
-                .fetch_optional(pool)
-                .await?;
+        let row = sqlx::query_as::<_, DbConversation>("SELECT * FROM conversations WHERE id = $1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await?;
         Ok(row)
     }
 
@@ -1098,9 +1096,9 @@ impl RoomRepo {
     /// When `client_message_id` is set and already exists for the room, returns the
     /// existing message sequence without inserting a duplicate.
     pub async fn append_message(pool: &PgPool, msg: &mut DbMessage) -> Result<i64> {
-        let room_id = msg.room_id.ok_or_else(|| {
-            ClawzError::Database("append_message requires room_id".to_string())
-        })?;
+        let room_id = msg
+            .room_id
+            .ok_or_else(|| ClawzError::Database("append_message requires room_id".to_string()))?;
 
         if let Some(client_id) = msg.client_message_id {
             if let Some(existing) = sqlx::query_as::<_, DbMessage>(
@@ -1119,12 +1117,11 @@ impl RoomRepo {
 
         let mut tx = pool.begin().await?;
 
-        let next_seq: (i64,) = sqlx::query_as(
-            "SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE room_id = $1",
-        )
-        .bind(room_id)
-        .fetch_one(&mut *tx)
-        .await?;
+        let next_seq: (i64,) =
+            sqlx::query_as("SELECT COALESCE(MAX(seq), 0) + 1 FROM messages WHERE room_id = $1")
+                .bind(room_id)
+                .fetch_one(&mut *tx)
+                .await?;
 
         msg.seq = next_seq.0;
 
@@ -1327,12 +1324,11 @@ impl MessageRepo {
     }
 
     pub async fn count_for_conversation(pool: &PgPool, conversation_id: Uuid) -> Result<i64> {
-        let row: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*)::BIGINT FROM messages WHERE conversation_id = $1",
-        )
-        .bind(conversation_id)
-        .fetch_one(pool)
-        .await?;
+        let row: (i64,) =
+            sqlx::query_as("SELECT COUNT(*)::BIGINT FROM messages WHERE conversation_id = $1")
+                .bind(conversation_id)
+                .fetch_one(pool)
+                .await?;
         Ok(row.0)
     }
 }
@@ -1409,11 +1405,7 @@ impl CostRepo {
     }
 
     /// Return the total cost for `agent_id` since `since`.
-    pub async fn total_since(
-        pool: &PgPool,
-        agent_id: Uuid,
-        since: DateTime<Utc>,
-    ) -> Result<f64> {
+    pub async fn total_since(pool: &PgPool, agent_id: Uuid, since: DateTime<Utc>) -> Result<f64> {
         let row: (f64,) = sqlx::query_as(
             "SELECT COALESCE(SUM(cost_usd), 0.0) \
              FROM cost_records \
@@ -1518,11 +1510,10 @@ impl DeploymentRepo {
     }
 
     pub async fn find_by_id(pool: &PgPool, id: Uuid) -> Result<Option<DbDeployment>> {
-        let row =
-            sqlx::query_as::<_, DbDeployment>("SELECT * FROM deployments WHERE id = $1")
-                .bind(id)
-                .fetch_optional(pool)
-                .await?;
+        let row = sqlx::query_as::<_, DbDeployment>("SELECT * FROM deployments WHERE id = $1")
+            .bind(id)
+            .fetch_optional(pool)
+            .await?;
         Ok(row)
     }
 

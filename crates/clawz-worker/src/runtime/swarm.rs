@@ -70,9 +70,7 @@ impl ConflictResolver {
                     .map(|(k, _)| k.to_string())
                     .unwrap_or_default()
             }
-            ResolutionStrategy::Authority => {
-                options.first().cloned().unwrap_or_default()
-            }
+            ResolutionStrategy::Authority => options.first().cloned().unwrap_or_default(),
             ResolutionStrategy::Arbitration => {
                 options.get(options.len() / 2).cloned().unwrap_or_default()
             }
@@ -113,7 +111,10 @@ impl DependencyGraph {
         let mut dependents: HashMap<String, Vec<String>> = HashMap::new();
         for (node, deps) in &self.edges {
             for dep in deps {
-                dependents.entry(dep.clone()).or_default().push(node.clone());
+                dependents
+                    .entry(dep.clone())
+                    .or_default()
+                    .push(node.clone());
             }
         }
 
@@ -290,7 +291,11 @@ mod tests {
     #[test]
     fn conflict_resolver_voting() {
         let resolver = ConflictResolver::new(ResolutionStrategy::Voting);
-        let options = vec!["opt_a".to_string(), "opt_b".to_string(), "opt_a".to_string()];
+        let options = vec![
+            "opt_a".to_string(),
+            "opt_b".to_string(),
+            "opt_a".to_string(),
+        ];
         assert_eq!(resolver.resolve(&options), "opt_a");
     }
 

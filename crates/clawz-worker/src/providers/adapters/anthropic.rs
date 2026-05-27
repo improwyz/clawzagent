@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
-use super::{http_error, AdapterConfig, ProviderAdapter};
+use super::{AdapterConfig, ProviderAdapter, http_error};
 
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 
@@ -150,7 +150,10 @@ enum AnthropicStreamBlock {
         #[allow(dead_code)]
         text: String,
     },
-    ToolUse { id: String, name: String },
+    ToolUse {
+        id: String,
+        name: String,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -271,8 +274,7 @@ impl ProviderAdapter for AnthropicAdapter {
             m if m.contains("haiku") => (0.00025, 0.00125),
             _ => (0.003, 0.015),
         };
-        (input_tokens as f64 / 1_000.0) * in_per_1k
-            + (output_tokens as f64 / 1_000.0) * out_per_1k
+        (input_tokens as f64 / 1_000.0) * in_per_1k + (output_tokens as f64 / 1_000.0) * out_per_1k
     }
 }
 
@@ -352,21 +354,19 @@ fn convert_message(msg: &Message) -> Result<AnthropicMessage, ClawzError> {
             let blocks: Vec<AnthropicBlock> = parts
                 .iter()
                 .filter_map(|p| match p {
-                    ContentPart::Text { text } => {
-                        Some(AnthropicBlock::Text { text: text.clone() })
-                    }
-                    ContentPart::ImageBase64 { media_type, data } => {
-                        Some(AnthropicBlock::Image {
-                            source: AnthropicImageSource {
-                                source_type: "base64".to_string(),
-                                media_type: media_type.clone(),
-                                data: data.clone(),
-                            },
-                        })
-                    }
+                    ContentPart::Text { text } => Some(AnthropicBlock::Text { text: text.clone() }),
+                    ContentPart::ImageBase64 { media_type, data } => Some(AnthropicBlock::Image {
+                        source: AnthropicImageSource {
+                            source_type: "base64".to_string(),
+                            media_type: media_type.clone(),
+                            data: data.clone(),
+                        },
+                    }),
                     ContentPart::ImageUrl { url, .. } => {
                         // Anthropic doesn't support URL images directly; skip or use text
-                        Some(AnthropicBlock::Text { text: format!("[image: {}]", url) })
+                        Some(AnthropicBlock::Text {
+                            text: format!("[image: {}]", url),
+                        })
                     }
                     ContentPart::AudioBase64 { .. } => None,
                 })
@@ -597,7 +597,10 @@ mod tests {
     #[test]
     fn test_context_window() {
         let adapter = AnthropicAdapter;
-        assert_eq!(adapter.context_window("claude-3-5-sonnet-20241022"), 200_000);
+        assert_eq!(
+            adapter.context_window("claude-3-5-sonnet-20241022"),
+            200_000
+        );
     }
 
     #[test]
@@ -612,10 +615,7 @@ mod tests {
     fn test_build_request_separates_system() {
         let request = ChatRequest {
             model: "claude-3-5-sonnet-20241022".to_string(),
-            messages: vec![
-                Message::system("You are helpful."),
-                Message::user("Hello"),
-            ],
+            messages: vec![Message::system("You are helpful."), Message::user("Hello")],
             ..Default::default()
         };
         let body = build_request(&request, false).unwrap();
@@ -665,7 +665,9 @@ mod tests {
 
         let response = parse_response(raw);
         let choice = &response.choices[0];
-        assert!(matches!(&choice.message.content, MessageContent::ToolCalls(calls) if calls.len() == 1));
+        assert!(
+            matches!(&choice.message.content, MessageContent::ToolCalls(calls) if calls.len() == 1)
+        );
     }
 
     #[test]
@@ -674,8 +676,7 @@ mod tests {
             id: Uuid::new_v4(),
             role: Role::Tool,
             content: MessageContent::ToolResult(clawz_core::types::tool::ToolResult::ok(
-                "toolu_01",
-                "sunny",
+                "toolu_01", "sunny",
             )),
             created_at: Utc::now(),
             name: None,

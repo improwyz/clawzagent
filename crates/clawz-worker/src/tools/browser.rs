@@ -62,9 +62,8 @@ pub struct BrowserTab {
 }
 
 /// Page pool entry — a held WebSocket connection to a tab.
-type WsStream = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type WsStream =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 struct TabConnection {
     ws: WsStream,
@@ -89,14 +88,11 @@ impl TabConnection {
 
         // Read until we get the matching response id
         loop {
-            let msg = tokio::time::timeout(
-                std::time::Duration::from_secs(30),
-                self.ws.next(),
-            )
-            .await
-            .map_err(|_| ClawzError::Tool("CDP response timeout".into()))?
-            .ok_or_else(|| ClawzError::Tool("CDP WebSocket closed".into()))?
-            .map_err(|e| ClawzError::Tool(format!("CDP WebSocket error: {e}")))?;
+            let msg = tokio::time::timeout(std::time::Duration::from_secs(30), self.ws.next())
+                .await
+                .map_err(|_| ClawzError::Tool("CDP response timeout".into()))?
+                .ok_or_else(|| ClawzError::Tool("CDP WebSocket closed".into()))?
+                .map_err(|e| ClawzError::Tool(format!("CDP WebSocket error: {e}")))?;
 
             if let Message::Text(text) = msg {
                 let val: Value = serde_json::from_str(&text)
@@ -168,7 +164,10 @@ impl BrowserManager {
             "--disable-background-networking",
             "--disable-sync",
         ])
-        .arg(format!("--remote-debugging-port={}", self.config.debug_port))
+        .arg(format!(
+            "--remote-debugging-port={}",
+            self.config.debug_port
+        ))
         .arg(format!(
             "--window-size={},{}",
             self.config.window_width, self.config.window_height
@@ -178,9 +177,9 @@ impl BrowserManager {
             cmd.arg(flag);
         }
 
-        let child = cmd
-            .spawn()
-            .map_err(|e| ClawzError::Tool(format!("failed to launch Chrome '{}': {e}", chrome_bin)))?;
+        let child = cmd.spawn().map_err(|e| {
+            ClawzError::Tool(format!("failed to launch Chrome '{}': {e}", chrome_bin))
+        })?;
 
         *self.process.lock().await = Some(child);
 
@@ -191,7 +190,9 @@ impl BrowserManager {
                 return Ok(());
             }
             if attempt == 19 {
-                return Err(ClawzError::Tool("Chrome CDP did not become available after 4s".into()));
+                return Err(ClawzError::Tool(
+                    "Chrome CDP did not become available after 4s".into(),
+                ));
             }
         }
 
@@ -232,10 +233,7 @@ impl BrowserManager {
                 id: t["id"].as_str().unwrap_or("").to_string(),
                 url: t["url"].as_str().unwrap_or("").to_string(),
                 title: t["title"].as_str().unwrap_or("").to_string(),
-                ws_url: t["webSocketDebuggerUrl"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string(),
+                ws_url: t["webSocketDebuggerUrl"].as_str().unwrap_or("").to_string(),
             })
             .collect();
 

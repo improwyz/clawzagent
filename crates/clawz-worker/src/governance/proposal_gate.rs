@@ -43,10 +43,7 @@ const IDENTITY_CORE_FIELDS: &[&str] = &[
 /// Parse an approval ID string to Uuid, propagating errors as ClawzError.
 fn parse_approval_id(id: &str) -> Result<Uuid, ClawzError> {
     Uuid::parse_str(id).map_err(|_| {
-        ClawzError::Internal(format!(
-            "ApprovalWorkflow returned malformed UUID: {}",
-            id
-        ))
+        ClawzError::Internal(format!("ApprovalWorkflow returned malformed UUID: {}", id))
     })
 }
 
@@ -162,8 +159,8 @@ impl ProposalGatekeeper {
             }
         }
 
-        let context = serde_json::to_value(&proposal)
-            .map_err(|e| ClawzError::Internal(e.to_string()))?;
+        let context =
+            serde_json::to_value(&proposal).map_err(|e| ClawzError::Internal(e.to_string()))?;
 
         match self.config.mode {
             DeploymentMode::Standalone => {
@@ -177,24 +174,24 @@ impl ProposalGatekeeper {
                     )
                     .await;
                 Ok(GateDecision::Pending(parse_approval_id(&approval_id)?))
-        }
-        DeploymentMode::Micro => {
-            let approval_id = self
-                .approval_workflow
-                .request(
-                    "system",
-                    "improvement:apply",
-                    context,
-                    self.config.required_approvals,
-                )
-                .await;
-
-            // Schedule monthly audit for this proposal
-            if let Some(scheduler) = &self.audit_scheduler {
-                scheduler.schedule_audit("monthly", proposal.proposal_id)?;
             }
+            DeploymentMode::Micro => {
+                let approval_id = self
+                    .approval_workflow
+                    .request(
+                        "system",
+                        "improvement:apply",
+                        context,
+                        self.config.required_approvals,
+                    )
+                    .await;
 
-            Ok(GateDecision::Pending(parse_approval_id(&approval_id)?))
+                // Schedule monthly audit for this proposal
+                if let Some(scheduler) = &self.audit_scheduler {
+                    scheduler.schedule_audit("monthly", proposal.proposal_id)?;
+                }
+
+                Ok(GateDecision::Pending(parse_approval_id(&approval_id)?))
             }
             DeploymentMode::Elastic => {
                 if let Some(council) = &self.council {
@@ -209,28 +206,26 @@ impl ProposalGatekeeper {
                         .map_err(|e| ClawzError::Internal(e.to_string()))?;
 
                     if decision.approved {
-                        self.audit_logger
-                            .append(
-                                "system",
-                                "improvement_approved",
-                                AuditResult::Allow,
-                                serde_json::json!({
-                                    "proposal_id": proposal.proposal_id.to_string(),
-                                    "council_approved": true
-                                }),
-                            );
+                        self.audit_logger.append(
+                            "system",
+                            "improvement_approved",
+                            AuditResult::Allow,
+                            serde_json::json!({
+                                "proposal_id": proposal.proposal_id.to_string(),
+                                "council_approved": true
+                            }),
+                        );
                         Ok(GateDecision::Pending(proposal.proposal_id))
                     } else {
-                        self.audit_logger
-                            .append(
-                                "system",
-                                "improvement_rejected",
-                                AuditResult::Deny,
-                                serde_json::json!({
-                                    "proposal_id": proposal.proposal_id.to_string(),
-                                    "council_approved": false
-                                }),
-                            );
+                        self.audit_logger.append(
+                            "system",
+                            "improvement_rejected",
+                            AuditResult::Deny,
+                            serde_json::json!({
+                                "proposal_id": proposal.proposal_id.to_string(),
+                                "council_approved": false
+                            }),
+                        );
                         Ok(GateDecision::Rejected("council_rejected".into()))
                     }
                 } else {
@@ -319,7 +314,10 @@ mod tests {
             .add_member("arbiter", crate::governance::council::CouncilRole::Arbiter)
             .await;
         council
-            .add_member("reviewer", crate::governance::council::CouncilRole::Reviewer)
+            .add_member(
+                "reviewer",
+                crate::governance::council::CouncilRole::Reviewer,
+            )
             .await;
 
         let gate = ProposalGatekeeper::new(

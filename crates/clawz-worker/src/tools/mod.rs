@@ -35,18 +35,21 @@
 //! println!("{:?}", result);
 //! ```
 
-#[path = "trait.rs"]
-pub mod tool_trait;
-pub mod builtin;
 pub mod browser;
+pub mod builtin;
+pub mod capability_registry;
 pub mod docker;
 pub mod mcp;
 pub mod registry;
-pub mod capability_registry;
+#[path = "trait.rs"]
+pub mod tool_trait;
 
-pub use tool_trait::{Tool, ToolConfig, ToolContext};
-pub use registry::ToolRegistry;
-pub use builtin::web_fetch::WebFetchTool;
-pub use docker::{DockerToolEntry, DockerToolManager, RunningTool, ToolContainerConfig, ToolHealth, docker_tool_library};
-pub use mcp::{McpClient, McpServerManager};
 pub use browser::BrowserManager;
+pub use builtin::web_fetch::WebFetchTool;
+pub use docker::{
+    DockerToolEntry, DockerToolManager, RunningTool, ToolContainerConfig, ToolHealth,
+    docker_tool_library,
+};
+pub use mcp::{McpClient, McpServerManager};
+pub use registry::ToolRegistry;
+pub use tool_trait::{Tool, ToolConfig, ToolContext};

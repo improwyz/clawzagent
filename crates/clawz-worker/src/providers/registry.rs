@@ -199,7 +199,10 @@ mod tests {
     #[test]
     fn test_exact_model_resolution() {
         let mut configs = HashMap::new();
-        configs.insert("openai".into(), make_config(vec!["gpt-4", "gpt-3.5-turbo"], vec![]));
+        configs.insert(
+            "openai".into(),
+            make_config(vec!["gpt-4", "gpt-3.5-turbo"], vec![]),
+        );
         let registry = ProviderRegistry::new(configs);
 
         assert_eq!(registry.resolve("gpt-4").unwrap(), "openai");
@@ -264,8 +267,14 @@ mod tests {
     #[test]
     fn test_all_models() {
         let mut configs = HashMap::new();
-        configs.insert("openai".into(), make_config(vec!["gpt-4", "gpt-4o"], vec![]));
-        configs.insert("anthropic".into(), make_config(vec!["claude-3-opus"], vec![]));
+        configs.insert(
+            "openai".into(),
+            make_config(vec!["gpt-4", "gpt-4o"], vec![]),
+        );
+        configs.insert(
+            "anthropic".into(),
+            make_config(vec!["claude-3-opus"], vec![]),
+        );
         let registry = ProviderRegistry::new(configs);
 
         let models = registry.all_models();

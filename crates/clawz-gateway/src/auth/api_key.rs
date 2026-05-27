@@ -15,7 +15,7 @@
 //! - `chrono` — expiry timestamp handling.
 //! - `serde` — serialisable record structure.
 
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -71,10 +71,7 @@ impl ApiKeyValidator {
             .find(|record| {
                 !record.revoked
                     && record.key_hash == hash
-                    && record
-                        .expires_at
-                        .map(|exp| exp > now)
-                        .unwrap_or(true)
+                    && record.expires_at.map(|exp| exp > now).unwrap_or(true)
             })
             .cloned()
     }

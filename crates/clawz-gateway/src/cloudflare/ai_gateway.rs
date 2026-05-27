@@ -127,7 +127,10 @@ impl AiGateway {
     /// Returns the inner `result` value on success, or a [`ClawzError::Provider`]
     /// containing the concatenated error messages.
     fn unwrap_cf_response(json: Value) -> Result<Value, ClawzError> {
-        let success = json.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+        let success = json
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if !success {
             let errors = json
                 .get("errors")
@@ -144,7 +147,9 @@ impl AiGateway {
                         .join("; ")
                 })
                 .unwrap_or_else(|| "unknown error".into());
-            return Err(ClawzError::Provider(format!("Cloudflare AI Gateway: {errors}")));
+            return Err(ClawzError::Provider(format!(
+                "Cloudflare AI Gateway: {errors}"
+            )));
         }
         Ok(json.get("result").cloned().unwrap_or(Value::Null))
     }
@@ -184,7 +189,9 @@ impl AiGateway {
                 .unwrap_or("unknown provider error");
             if status.as_u16() == 429 {
                 // Cloudflare signals rate-limiting via HTTP 429.
-                return Err(ClawzError::RateLimited { retry_after_secs: 60 });
+                return Err(ClawzError::RateLimited {
+                    retry_after_secs: 60,
+                });
             }
             return Err(ClawzError::Provider(format!(
                 "AI Gateway proxy returned {status}: {msg}"
@@ -217,8 +224,13 @@ impl AiGateway {
         let result = Self::unwrap_cf_response(body)?;
 
         // The CF API sometimes nests items under `items`; fall back to the raw result.
-        let logs: Vec<GatewayLog> = serde_json::from_value(result.get("items").cloned().unwrap_or_else(|| result.clone()))
-            .unwrap_or_default();
+        let logs: Vec<GatewayLog> = serde_json::from_value(
+            result
+                .get("items")
+                .cloned()
+                .unwrap_or_else(|| result.clone()),
+        )
+        .unwrap_or_default();
 
         Ok(logs)
     }
@@ -233,12 +245,13 @@ impl AiGateway {
             .header("Authorization", self.auth_header())
             .send()
             .await
-            .map_err(|e| ClawzError::Transport(format!("AI Gateway analytics request failed: {e}")))?;
+            .map_err(|e| {
+                ClawzError::Transport(format!("AI Gateway analytics request failed: {e}"))
+            })?;
 
-        let body: Value = resp
-            .json()
-            .await
-            .map_err(|e| ClawzError::Transport(format!("AI Gateway analytics parse failed: {e}")))?;
+        let body: Value = resp.json().await.map_err(|e| {
+            ClawzError::Transport(format!("AI Gateway analytics parse failed: {e}"))
+        })?;
 
         let result = Self::unwrap_cf_response(body)?;
 

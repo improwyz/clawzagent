@@ -13,7 +13,10 @@
 //! - [`crate::ws`] — WebSocket upgrade handlers for streaming and real-time events.
 //! - [`crate::AppState`] — Shared in-memory state and broadcast channel.
 
-use axum::{middleware, routing::{get, post}, Router};
+use axum::{
+    Router, middleware,
+    routing::{get, post},
+};
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;

@@ -27,10 +27,10 @@ pub mod uf2;
 
 // ── detect re-exports ─────────────────────────────────────────────────────────
 
-/// CPU specifications: brand, core count, architecture, and feature flags.
-pub use detect::CpuInfo;
 /// Compute API available on a GPU (CUDA, ROCm, Metal, Vulkan, or none).
 pub use detect::ComputeApi;
+/// CPU specifications: brand, core count, architecture, and feature flags.
+pub use detect::CpuInfo;
 /// GPU specifications: name, vendor, VRAM, driver, and compute capability.
 pub use detect::GpuInfo;
 /// Known GPU vendors: NVIDIA, AMD, Intel, Apple, or unknown.

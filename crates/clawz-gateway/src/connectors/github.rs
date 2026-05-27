@@ -229,12 +229,7 @@ impl SaaSConnector for GitHubConnector {
         let client = self.client()?;
         let path = match obj {
             "repositories" => format!("/repos/{}", id),
-            "issues" => format!(
-                "/repos/{}/{}/issues/{}",
-                "owner",
-                "repo",
-                id
-            ),
+            "issues" => format!("/repos/{}/{}/issues/{}", "owner", "repo", id),
             _ => format!("/user/{}/{}", obj, id),
         };
         let resp = client
@@ -259,17 +254,26 @@ impl SaaSConnector for GitHubConnector {
                 "/repos/{}/{}/actions/workflows/{}/dispatches",
                 params.get("owner").and_then(|v| v.as_str()).unwrap_or(""),
                 params.get("repo").and_then(|v| v.as_str()).unwrap_or(""),
-                params.get("workflow_id").and_then(|v| v.as_str()).unwrap_or("")
+                params
+                    .get("workflow_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
             ),
             "merge" => format!(
                 "/repos/{}/{}/pulls/{}/merge",
                 params.get("owner").and_then(|v| v.as_str()).unwrap_or(""),
                 params.get("repo").and_then(|v| v.as_str()).unwrap_or(""),
-                params.get("pull_number").and_then(|v| v.as_str()).unwrap_or("")
+                params
+                    .get("pull_number")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
             ),
             "search" => format!(
                 "/search/{}",
-                params.get("type").and_then(|v| v.as_str()).unwrap_or("code")
+                params
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("code")
             ),
             _ => format!("/{}", action),
         };

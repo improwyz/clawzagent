@@ -54,8 +54,7 @@ pub struct AgentLocation {
 impl AgentLocation {
     /// Return true when the agent has reached or exceeded its task limit.
     pub fn is_overloaded(&self) -> bool {
-        self.max_concurrent_tasks > 0
-            && self.active_tasks >= self.max_concurrent_tasks
+        self.max_concurrent_tasks > 0 && self.active_tasks >= self.max_concurrent_tasks
     }
 
     /// Normalised load in the range [0.0, 1.0] (or 0.0 if unlimited).
@@ -214,12 +213,13 @@ impl FleetMesh {
         task_payload: &serde_json::Value,
         target_agent_id: &str,
     ) -> Result<serde_json::Value> {
-        let location = self.locate_agent(target_agent_id).await.ok_or_else(|| {
-            ClawzError::NotFound {
-                entity: "agent".to_string(),
-                id: target_agent_id.to_string(),
-            }
-        })?;
+        let location =
+            self.locate_agent(target_agent_id)
+                .await
+                .ok_or_else(|| ClawzError::NotFound {
+                    entity: "agent".to_string(),
+                    id: target_agent_id.to_string(),
+                })?;
 
         // Reject delegation to an already-saturated agent so the caller
         // can apply back-pressure or pick a different agent.
@@ -253,8 +253,8 @@ impl FleetMesh {
             .send_to_peer(&location.peer_id, &raw, TrafficType::Rpc)
             .await?;
 
-        let response: serde_json::Value = serde_json::from_slice(&response_bytes)
-            .unwrap_or(serde_json::json!({"status": "ok"}));
+        let response: serde_json::Value =
+            serde_json::from_slice(&response_bytes).unwrap_or(serde_json::json!({"status": "ok"}));
 
         Ok(response)
     }
@@ -271,8 +271,8 @@ impl FleetMesh {
             .filter(|p| matches!(p.state, PeerState::Active))
             .collect();
 
-        let query = serde_json::to_vec(&serde_json::json!({"type": "discover_agents"}))
-            .unwrap_or_default();
+        let query =
+            serde_json::to_vec(&serde_json::json!({"type": "discover_agents"})).unwrap_or_default();
 
         let mut all_locations: Vec<AgentLocation> = Vec::new();
 
@@ -289,7 +289,9 @@ impl FleetMesh {
                                 if let (Some(agent_id), Some(active), Some(max)) = (
                                     agent_val.get("agent_id").and_then(|v| v.as_str()),
                                     agent_val.get("active_tasks").and_then(|v| v.as_u64()),
-                                    agent_val.get("max_concurrent_tasks").and_then(|v| v.as_u64()),
+                                    agent_val
+                                        .get("max_concurrent_tasks")
+                                        .and_then(|v| v.as_u64()),
                                 ) {
                                     let loc = AgentLocation {
                                         agent_id: agent_id.to_string(),
@@ -306,10 +308,7 @@ impl FleetMesh {
                     }
                 }
                 Err(e) => {
-                    log::debug!(
-                        "Agent discovery failed for peer {}: {e}",
-                        peer.info.id
-                    );
+                    log::debug!("Agent discovery failed for peer {}: {e}", peer.info.id);
                 }
             }
         }
@@ -381,10 +380,7 @@ impl FleetMesh {
     /// A quorum is defined as `floor(N/2) + 1` where N = active peers + self.
     /// Peers respond with `{"vote": true}` to accept or `{"vote": false}` to reject.
     /// If a peer doesn't respond, its vote is counted as abstain (not for).
-    pub async fn consensus_check(
-        &self,
-        proposal: &ConsensusProposal,
-    ) -> Result<ConsensusResult> {
+    pub async fn consensus_check(&self, proposal: &ConsensusProposal) -> Result<ConsensusResult> {
         let peers = self.manager.get_peers().await;
         let active_peers: Vec<&MeshPeer> = peers
             .iter()
@@ -413,19 +409,14 @@ impl FleetMesh {
             {
                 Ok(response_bytes) => {
                     votes_total += 1;
-                    if let Ok(resp) =
-                        serde_json::from_slice::<serde_json::Value>(&response_bytes)
-                    {
+                    if let Ok(resp) = serde_json::from_slice::<serde_json::Value>(&response_bytes) {
                         if resp.get("vote").and_then(|v| v.as_bool()).unwrap_or(false) {
                             votes_for += 1;
                         }
                     }
                 }
                 Err(e) => {
-                    log::debug!(
-                        "Consensus vote failed for peer {}: {e}",
-                        peer.info.id
-                    );
+                    log::debug!("Consensus vote failed for peer {}: {e}", peer.info.id);
                 }
             }
         }
@@ -465,9 +456,9 @@ impl FleetMesh {
             .map(|p| p.info.id)
             .filter(|pid| {
                 // Check if any agent on this peer has spare capacity.
-                agents.values().any(|a| {
-                    a.peer_id == *pid && !a.is_overloaded()
-                })
+                agents
+                    .values()
+                    .any(|a| a.peer_id == *pid && !a.is_overloaded())
             })
             .collect();
 

@@ -36,11 +36,13 @@ use clawz_core::error::{ClawzError, Result};
 // Dependency: ChannelPlugin trait lives in the shared core crate
 use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 // Dependency: canonical message and attachment types defined in core
-use clawz_core::types::channel::{Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage};
+use clawz_core::types::channel::{
+    Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage,
+};
 // Dependency: hmac + sha1 for Webex's legacy HMAC-SHA1 webhook signature verification
 use hmac::{Hmac, Mac};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha1::Sha1;
 
 // Dependency: helper utilities from the parent plugin module (worker-internal)
@@ -217,10 +219,7 @@ impl ChannelPlugin for WebexChannel {
         let mut before_message: Option<String> = None;
 
         loop {
-            let mut params = vec![
-                ("roomId", room_id.to_string()),
-                ("max", "200".into()),
-            ];
+            let mut params = vec![("roomId", room_id.to_string()), ("max", "200".into())];
             if let Some(ref bm) = before_message {
                 params.push(("beforeMessage", bm.clone()));
             }
@@ -338,7 +337,11 @@ impl ChannelPlugin for WebexChannel {
         }
 
         let data = body.get("data").cloned().unwrap_or_default();
-        let msg_id = data.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let msg_id = data
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let sender_id = data
             .get("personId")
             .and_then(|v| v.as_str())
@@ -351,12 +354,8 @@ impl ChannelPlugin for WebexChannel {
             .to_string();
 
         // Webhook does not include message text; callers must fetch via messages.get
-        let mut im = IncomingMessage::new(
-            uuid::Uuid::new_v4(),
-            sender_id,
-            sender_email,
-            String::new(),
-        );
+        let mut im =
+            IncomingMessage::new(uuid::Uuid::new_v4(), sender_id, sender_email, String::new());
         im.metadata
             .insert("webex_msg_id".into(), Value::String(msg_id));
 

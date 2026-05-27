@@ -305,12 +305,7 @@ impl PolicyEngine {
     /// // Universal match / block-all
     /// "true"
     /// ```
-    fn condition_matches(
-        &self,
-        rule: &PolicyRule,
-        action: &str,
-        context: &Value,
-    ) -> bool {
+    fn condition_matches(&self, rule: &PolicyRule, action: &str, context: &Value) -> bool {
         let cond = rule.condition.trim();
 
         // Literal booleans.
@@ -356,10 +351,7 @@ impl PolicyEngine {
             let value_part = &cond[pos + 11..];
             let val = value_part.trim_end_matches('\'');
             if let Some(field_val) = context.get(field) {
-                return field_val
-                    .as_str()
-                    .map(|s| s.contains(val))
-                    .unwrap_or(false);
+                return field_val.as_str().map(|s| s.contains(val)).unwrap_or(false);
             }
             return false;
         }
@@ -370,10 +362,7 @@ impl PolicyEngine {
             let threshold_str = &cond[pos + 3..];
             if let Ok(threshold) = threshold_str.trim().parse::<f64>() {
                 if let Some(field_val) = context.get(field) {
-                    return field_val
-                        .as_f64()
-                        .map(|v| v > threshold)
-                        .unwrap_or(false);
+                    return field_val.as_f64().map(|v| v > threshold).unwrap_or(false);
                 }
             }
             return false;
@@ -385,10 +374,7 @@ impl PolicyEngine {
             let threshold_str = &cond[pos + 3..];
             if let Ok(threshold) = threshold_str.trim().parse::<f64>() {
                 if let Some(field_val) = context.get(field) {
-                    return field_val
-                        .as_f64()
-                        .map(|v| v < threshold)
-                        .unwrap_or(false);
+                    return field_val.as_f64().map(|v| v < threshold).unwrap_or(false);
                 }
             }
             return false;
@@ -462,8 +448,14 @@ mod tests {
         );
         engine.add_policy(policy);
 
-        assert_eq!(engine.evaluate("delete_file", &serde_json::json!({})).len(), 1);
-        assert_eq!(engine.evaluate("bulk_delete", &serde_json::json!({})).len(), 1);
+        assert_eq!(
+            engine.evaluate("delete_file", &serde_json::json!({})).len(),
+            1
+        );
+        assert_eq!(
+            engine.evaluate("bulk_delete", &serde_json::json!({})).len(),
+            1
+        );
         assert!(engine.evaluate("create", &serde_json::json!({})).is_empty());
     }
 
@@ -474,7 +466,11 @@ mod tests {
         policy.enabled = false;
         engine.add_policy(policy);
 
-        assert!(engine.evaluate("anything", &serde_json::json!({})).is_empty());
+        assert!(
+            engine
+                .evaluate("anything", &serde_json::json!({}))
+                .is_empty()
+        );
     }
 
     #[test]
@@ -493,9 +489,11 @@ mod tests {
                 .len(),
             1
         );
-        assert!(engine
-            .evaluate("deploy", &serde_json::json!({"env": "staging"}))
-            .is_empty());
+        assert!(
+            engine
+                .evaluate("deploy", &serde_json::json!({"env": "staging"}))
+                .is_empty()
+        );
     }
 
     #[test]
@@ -529,8 +527,10 @@ mod tests {
                 .len(),
             1
         );
-        assert!(engine
-            .evaluate("buy", &serde_json::json!({"cost": 50.0}))
-            .is_empty());
+        assert!(
+            engine
+                .evaluate("buy", &serde_json::json!({"cost": 50.0}))
+                .is_empty()
+        );
     }
 }

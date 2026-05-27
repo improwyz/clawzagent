@@ -35,43 +35,43 @@ pub mod slack;
 pub mod stripe;
 
 // CRM & Sales
-pub mod zoho;
-pub mod pipedrive;
 pub mod freshsales;
+pub mod pipedrive;
+pub mod zoho;
 
 // Productivity & Collaboration
-pub mod notion;
 pub mod asana;
-pub mod monday;
-pub mod linear;
 pub mod clickup;
+pub mod linear;
+pub mod monday;
+pub mod notion;
 
 // Communication
-pub mod twilio;
-pub mod sendgrid;
 pub mod intercom;
+pub mod sendgrid;
+pub mod twilio;
 
 // Finance & Payments
 pub mod quickbooks;
 pub mod xero;
 
 // Marketing & Analytics
-pub mod mailchimp;
 pub mod google_analytics;
+pub mod mailchimp;
 pub mod meta_ads;
 
 // Developer & DevOps
-pub mod gitlab;
-pub mod datadog;
-pub mod pagerduty;
 pub mod aws;
+pub mod datadog;
+pub mod gitlab;
+pub mod pagerduty;
 
 // E-Commerce
 pub mod shopify;
 
 // Storage & Documents
-pub mod dropbox;
 pub mod box_com;
+pub mod dropbox;
 
 // Re-exports from common
 pub use common::{ApiClient, OAuth2Flow, TokenResponse};
@@ -87,29 +87,29 @@ pub use slack::SlackConnector;
 pub use stripe::StripeConnector;
 
 // Re-exports for new connectors
-pub use zoho::ZohoConnector;
-pub use pipedrive::PipedriveConnector;
-pub use freshsales::FreshsalesConnector;
-pub use notion::NotionConnector;
 pub use asana::AsanaConnector;
-pub use monday::MondayConnector;
-pub use linear::LinearConnector;
-pub use clickup::ClickUpConnector;
-pub use twilio::TwilioConnector;
-pub use sendgrid::SendGridConnector;
-pub use intercom::IntercomConnector;
-pub use quickbooks::QuickBooksConnector;
-pub use xero::XeroConnector;
-pub use mailchimp::MailchimpConnector;
-pub use google_analytics::GoogleAnalyticsConnector;
-pub use meta_ads::MetaAdsConnector;
-pub use gitlab::GitLabConnector;
-pub use datadog::DatadogConnector;
-pub use pagerduty::PagerDutyConnector;
 pub use aws::AwsConnector;
-pub use shopify::ShopifyConnector;
-pub use dropbox::DropboxConnector;
 pub use box_com::BoxConnector;
+pub use clickup::ClickUpConnector;
+pub use datadog::DatadogConnector;
+pub use dropbox::DropboxConnector;
+pub use freshsales::FreshsalesConnector;
+pub use gitlab::GitLabConnector;
+pub use google_analytics::GoogleAnalyticsConnector;
+pub use intercom::IntercomConnector;
+pub use linear::LinearConnector;
+pub use mailchimp::MailchimpConnector;
+pub use meta_ads::MetaAdsConnector;
+pub use monday::MondayConnector;
+pub use notion::NotionConnector;
+pub use pagerduty::PagerDutyConnector;
+pub use pipedrive::PipedriveConnector;
+pub use quickbooks::QuickBooksConnector;
+pub use sendgrid::SendGridConnector;
+pub use shopify::ShopifyConnector;
+pub use twilio::TwilioConnector;
+pub use xero::XeroConnector;
+pub use zoho::ZohoConnector;
 
 // Trait re-exports
 pub use r#trait::{AuthType, Credentials, Filters, SaaSConnector};

@@ -8,10 +8,7 @@ pub mod esp32_watchdog {
     use embassy_executor::peripherals::WATCHDOG;
 
     /// Start ESP-IDF hardware watchdog with given timeout in milliseconds.
-    pub fn start_esp32_watchdog<W: Watchdog>(
-        _watchdog: &mut W,
-        timeout_ms: u64,
-    ) {
+    pub fn start_esp32_watchdog<W: Watchdog>(_watchdog: &mut W, timeout_ms: u64) {
         // ESP-IDF: `esp_idf_svc::hal::watchdog::WatchdogDriver::new()`
         // Timeout range: 40,000µs to 4,294,967,295µs
         eprintln!("ESP32 watchdog started with {}ms timeout", timeout_ms);
@@ -99,11 +96,14 @@ impl DriftCheckpoint {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        let mut file = std::fs::File::create(&path).unwrap_or_else(|_| {
-            panic!("failed to create checkpoint file at {:?}", path)
-        });
-        file.write_all(serde_json::to_string_pretty(&checkpoint).unwrap().as_bytes())
-            .unwrap_or_else(|_| panic!("failed to write checkpoint to {:?}", path));
+        let mut file = std::fs::File::create(&path)
+            .unwrap_or_else(|_| panic!("failed to create checkpoint file at {:?}", path));
+        file.write_all(
+            serde_json::to_string_pretty(&checkpoint)
+                .unwrap()
+                .as_bytes(),
+        )
+        .unwrap_or_else(|_| panic!("failed to write checkpoint to {:?}", path));
 
         eprintln!("identity drift checkpoint written to {:?}", path);
         path

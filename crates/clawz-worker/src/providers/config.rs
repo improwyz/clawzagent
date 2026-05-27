@@ -145,8 +145,8 @@ pub fn config_from_env() -> ProviderRouterConfig {
     }
 
     // Always add Ollama as a local option (no auth needed)
-    let ollama_url = std::env::var("OLLAMA_HOST")
-        .unwrap_or_else(|_| "http://localhost:11434".to_string());
+    let ollama_url =
+        std::env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".to_string());
     providers.insert(
         "ollama".to_string(),
         ProviderConfig {
@@ -196,8 +196,8 @@ pub fn config_from_env() -> ProviderRouterConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::router::ProviderConfig;
+    use super::*;
     use std::path::PathBuf;
 
     fn provider_toml_path() -> PathBuf {

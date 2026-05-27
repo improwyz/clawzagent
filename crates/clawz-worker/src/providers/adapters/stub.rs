@@ -6,10 +6,7 @@ use std::pin::Pin;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use clawz_core::{
-    error::ClawzError,
-    types::message::*,
-};
+use clawz_core::{error::ClawzError, types::message::*};
 use futures_core::Stream;
 use futures_util::stream;
 use reqwest::Client;
@@ -88,10 +85,7 @@ impl ProviderAdapter for StubAdapter {
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ClawzError>> + Send>>, ClawzError>
     {
         let response = Self::build_response(request);
-        let text = response
-            .first_text()
-            .unwrap_or("")
-            .to_string();
+        let text = response.first_text().unwrap_or("").to_string();
         let chunk = StreamChunk {
             id: response.id.clone(),
             model: response.model.clone(),

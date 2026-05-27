@@ -28,10 +28,7 @@ use chrono::{DateTime, Utc};
 // Dependency: core error types and agent/message primitives.
 use clawz_core::{
     error::{ClawzError, Result},
-    types::{
-        agent::AgentStatus,
-        message::Message,
-    },
+    types::{agent::AgentStatus, message::Message},
 };
 use serde::{Deserialize, Serialize};
 // Dependency: async read-write lock for concurrent team operations.
@@ -201,10 +198,7 @@ impl Team {
     ///
     /// The leader is automatically inserted as the first member with
     /// [`TeamRole::Leader`].
-    pub fn new(
-        name: impl Into<String>,
-        leader_id: impl Into<String>,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, leader_id: impl Into<String>) -> Self {
         let leader_id = leader_id.into();
         let mut members = HashMap::new();
         members.insert(
@@ -251,10 +245,12 @@ impl Team {
     /// Fails with [`ClawzError::NotFound`] if the agent is not a member.
     pub async fn remove_member(&self, agent_id: &str) -> Result<()> {
         let mut members = self.members.write().await;
-        members.remove(agent_id).ok_or_else(|| ClawzError::NotFound {
-            entity: "team member".into(),
-            id: agent_id.into(),
-        })?;
+        members
+            .remove(agent_id)
+            .ok_or_else(|| ClawzError::NotFound {
+                entity: "team member".into(),
+                id: agent_id.into(),
+            })?;
         Ok(())
     }
 
@@ -300,12 +296,12 @@ impl Team {
     /// member's `active_tasks` counter.
     pub async fn delegate(&self, mut task: Task, agent_id: &str) -> Result<()> {
         let mut members = self.members.write().await;
-        let member = members.get_mut(agent_id).ok_or_else(|| {
-            ClawzError::NotFound {
+        let member = members
+            .get_mut(agent_id)
+            .ok_or_else(|| ClawzError::NotFound {
                 entity: "team member".into(),
                 id: agent_id.into(),
-            }
-        })?;
+            })?;
 
         if !member.is_available() {
             return Err(ClawzError::Validation(format!(
@@ -371,12 +367,12 @@ impl Team {
     /// if no tasks remain.
     pub async fn complete_task(&self, agent_id: &str) -> Result<()> {
         let mut members = self.members.write().await;
-        let member = members.get_mut(agent_id).ok_or_else(|| {
-            ClawzError::NotFound {
+        let member = members
+            .get_mut(agent_id)
+            .ok_or_else(|| ClawzError::NotFound {
                 entity: "team member".into(),
                 id: agent_id.into(),
-            }
-        })?;
+            })?;
         if member.active_tasks > 0 {
             member.active_tasks -= 1;
         }

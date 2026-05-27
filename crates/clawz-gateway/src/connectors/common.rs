@@ -118,8 +118,8 @@ impl OAuth2Flow {
             .text()
             .await
             .map_err(|e| ClawzError::Internal(format!("read body failed: {e}")))?;
-        let token_resp: TokenResponse = serde_json::from_str(&body)
-            .map_err(|e| ClawzError::Serialization(e.to_string()))?;
+        let token_resp: TokenResponse =
+            serde_json::from_str(&body).map_err(|e| ClawzError::Serialization(e.to_string()))?;
 
         // Convert expires_in (seconds) to an absolute UTC timestamp.
         let expires_at = token_resp
@@ -169,8 +169,8 @@ impl OAuth2Flow {
             .text()
             .await
             .map_err(|e| ClawzError::Internal(format!("read body failed: {e}")))?;
-        let token_resp: TokenResponse = serde_json::from_str(&body)
-            .map_err(|e| ClawzError::Serialization(e.to_string()))?;
+        let token_resp: TokenResponse =
+            serde_json::from_str(&body).map_err(|e| ClawzError::Serialization(e.to_string()))?;
 
         // Convert expires_in (seconds) to an absolute UTC timestamp.
         let expires_at = token_resp
@@ -180,7 +180,9 @@ impl OAuth2Flow {
         Ok(Credentials {
             access_token: Some(token_resp.access_token),
             // Preserve the old refresh token if the provider does not rotate it.
-            refresh_token: token_resp.refresh_token.or_else(|| Some(refresh_token.into())),
+            refresh_token: token_resp
+                .refresh_token
+                .or_else(|| Some(refresh_token.into())),
             expires_at,
             api_key: None,
             username: None,
@@ -295,9 +297,7 @@ impl ApiClient {
 /// For 2xx statuses, the body is read as text and deserialized into `T`. For non-2xx
 /// statuses, a [`ClawzError::Provider`] is returned containing the HTTP status code and
 /// raw response body so callers can surface meaningful error messages to users.
-pub async fn parse_json<T: serde::de::DeserializeOwned>(
-    response: reqwest::Response,
-) -> Result<T> {
+pub async fn parse_json<T: serde::de::DeserializeOwned>(response: reqwest::Response) -> Result<T> {
     let status = response.status();
     if status.is_success() {
         let body = response

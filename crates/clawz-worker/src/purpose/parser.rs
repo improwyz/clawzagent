@@ -4,11 +4,11 @@
 //! to turn vague human intent into machine-readable goals.
 
 use clawz_core::types::{
-    ClarificationQuestion, Comparator, Constraint, ConstraintKind, GoalObject,
-    Milestone, ParseOutcome, SuccessCriterion,
+    ClarificationQuestion, Comparator, Constraint, ConstraintKind, GoalObject, Milestone,
+    ParseOutcome, SuccessCriterion,
 };
 
-use crate::purpose::{classify, Extractor, Validator};
+use crate::purpose::{Extractor, Validator, classify};
 
 /// Goal parser that turns natural language into structured goals.
 #[derive(Debug, Clone)]
@@ -85,12 +85,10 @@ impl GoalParser {
 
         // If nothing concrete was extracted, ask for clarification
         if criteria.is_empty() && target.len() < 5 {
-            return ParseOutcome::NeedsClarification(vec![
-                ClarificationQuestion::new(
-                    "Could you specify a metric or target?",
-                    "no concrete metric found in input",
-                ),
-            ]);
+            return ParseOutcome::NeedsClarification(vec![ClarificationQuestion::new(
+                "Could you specify a metric or target?",
+                "no concrete metric found in input",
+            )]);
         }
 
         // Check if we have concrete material before building (must check before moving)

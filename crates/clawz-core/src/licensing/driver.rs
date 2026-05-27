@@ -36,16 +36,9 @@ pub trait LicenseDriver: Send + Sync {
         plan: String,
     ) -> Result<(), LicenseError>;
 
-    async fn deactivate_subscription(
-        &self,
-        account: &Self::AccountId,
-    ) -> Result<(), LicenseError>;
+    async fn deactivate_subscription(&self, account: &Self::AccountId) -> Result<(), LicenseError>;
 
-    async fn validate_webhook_signature(
-        &self,
-        payload: &[u8],
-        signature: &[u8],
-    ) -> bool;
+    async fn validate_webhook_signature(&self, payload: &[u8], signature: &[u8]) -> bool;
 }
 
 pub struct NoOpLicenseDriver;
@@ -75,12 +68,36 @@ impl LicenseDriver for NoOpLicenseDriver {
             plan: "unlimited".to_string(),
             expires_at: None,
             quotas: vec![
-                QuotaRemaining { resource: ResourceType::Messages, remaining: -1, resets_at: None },
-                QuotaRemaining { resource: ResourceType::AgentMinutes, remaining: -1, resets_at: None },
-                QuotaRemaining { resource: ResourceType::ToolInvocations, remaining: -1, resets_at: None },
-                QuotaRemaining { resource: ResourceType::ConcurrentAgents, remaining: -1, resets_at: None },
-                QuotaRemaining { resource: ResourceType::StorageGb, remaining: -1, resets_at: None },
-                QuotaRemaining { resource: ResourceType::MeshPeers, remaining: -1, resets_at: None },
+                QuotaRemaining {
+                    resource: ResourceType::Messages,
+                    remaining: -1,
+                    resets_at: None,
+                },
+                QuotaRemaining {
+                    resource: ResourceType::AgentMinutes,
+                    remaining: -1,
+                    resets_at: None,
+                },
+                QuotaRemaining {
+                    resource: ResourceType::ToolInvocations,
+                    remaining: -1,
+                    resets_at: None,
+                },
+                QuotaRemaining {
+                    resource: ResourceType::ConcurrentAgents,
+                    remaining: -1,
+                    resets_at: None,
+                },
+                QuotaRemaining {
+                    resource: ResourceType::StorageGb,
+                    remaining: -1,
+                    resets_at: None,
+                },
+                QuotaRemaining {
+                    resource: ResourceType::MeshPeers,
+                    remaining: -1,
+                    resets_at: None,
+                },
             ],
             enabled_tiers: vec![
                 crate::PlatformTier::T0,
@@ -97,7 +114,11 @@ impl LicenseDriver for NoOpLicenseDriver {
         _account: &Self::AccountId,
         resource: ResourceType,
     ) -> Result<QuotaRemaining, LicenseError> {
-        Ok(QuotaRemaining { resource, remaining: -1, resets_at: None })
+        Ok(QuotaRemaining {
+            resource,
+            remaining: -1,
+            resets_at: None,
+        })
     }
 
     async fn record_usage(
@@ -116,15 +137,14 @@ impl LicenseDriver for NoOpLicenseDriver {
         Ok(())
     }
 
-    async fn deactivate_subscription(&self, _account: &Self::AccountId) -> Result<(), LicenseError> {
+    async fn deactivate_subscription(
+        &self,
+        _account: &Self::AccountId,
+    ) -> Result<(), LicenseError> {
         Ok(())
     }
 
-    async fn validate_webhook_signature(
-        &self,
-        _payload: &[u8],
-        _signature: &[u8],
-    ) -> bool {
+    async fn validate_webhook_signature(&self, _payload: &[u8], _signature: &[u8]) -> bool {
         true
     }
 }
@@ -136,7 +156,10 @@ mod tests {
     #[tokio::test]
     async fn test_noop_driver_returns_unlimited() {
         let driver = NoOpLicenseDriver::new();
-        let scope = driver.get_entitlements(&"any-account".to_string()).await.unwrap();
+        let scope = driver
+            .get_entitlements(&"any-account".to_string())
+            .await
+            .unwrap();
         assert!(scope.is_active());
         assert!(scope.can_spawn(999));
         assert!(scope.has_feature("any-feature"));

@@ -9,7 +9,7 @@
 //! ## Key Components
 //!
 //! | Module | Responsibility |
-//! |--------|--------------| 
+//! |--------|--------------|
 //! | [`engine`] | [`ClawzGovernanceEngine`] — orchestrates all checks (policy, guardrails, trust, approval) and produces a final [`clawz_core::types::governance::GovernanceResult`]. |
 //! | [`policy`] | [`PolicyEngine`] — pattern-matching rule evaluation with priority ordering. |
 //! | [`trust`] | [`TrustScorer`] — score tracking with decay, tier mapping, and historical events. |
@@ -76,21 +76,23 @@ pub use trust::TrustScorer;
 /// Skill repository — skill.md / soul.md / agents.md lifecycle management.
 pub mod skill_repository;
 
-pub use skill_repository::{VersionedSkillRepository, SkillBundle, SkillSource, SkillRepository};
 /// Manages the request/approve/reject/escalate lifecycle for human-in-the-loop actions.
 pub use approval::ApprovalWorkflow;
 /// SHA-256 hash-chained audit logger for tamper-evident records.
 pub use audit::AuditLogger;
+/// Exports audit evidence mapped to external compliance frameworks (SOC2, GDPR, EU AI Act).
+pub use compliance::ComplianceExporter;
+/// Multi-agent deliberation body with configurable voting rules and tie-breaking.
+pub use council::Council;
 /// G-dimension runtime guardrails — safety/compliance enforcement for the G dimension (PRISM-G Vol 9).
 pub use guardrails::GovernanceGuardrails;
 /// G-dimension oversight level enforcement — maps RiskLevel to OversightLevel and checks pre-approval requirements.
 pub use oversight::{effective_oversight, minimum_oversight_for_risk, requires_pre_approval};
-/// Multi-agent deliberation body with configurable voting rules and tie-breaking.
-pub use council::Council;
-/// Exports audit evidence mapped to external compliance frameworks (SOC2, GDPR, EU AI Act).
-pub use compliance::ComplianceExporter;
 /// Routing bridge between the improvement pipeline and mode-appropriate governance.
-pub use proposal_gate::{ProposalGatekeeper, GateConfig, GateDecision};
+pub use proposal_gate::{GateConfig, GateDecision, ProposalGatekeeper};
+pub use skill_repository::{SkillBundle, SkillRepository, SkillSource, VersionedSkillRepository};
 /// Constitutional Convention — agent-driven rule amendment via deliberative voting.
 pub mod constitution;
-pub use constitution::{ConstitutionalConvention, ProposedAmendment, AmendmentStatus, ConstitutionalDecision};
+pub use constitution::{
+    AmendmentStatus, ConstitutionalConvention, ConstitutionalDecision, ProposedAmendment,
+};

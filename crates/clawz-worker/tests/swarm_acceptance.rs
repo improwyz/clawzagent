@@ -58,10 +58,22 @@ fn dependency_graph_critical_path() {
     // Critical path is A, C, D (NOT B)
 
     let path = graph.critical_path();
-    assert!(path.contains(&"A".to_string()), "A must be on critical path");
-    assert!(path.contains(&"C".to_string()), "C must be on critical path");
-    assert!(path.contains(&"D".to_string()), "D must be on critical path");
-    assert!(!path.contains(&"B".to_string()), "B must NOT be on critical path");
+    assert!(
+        path.contains(&"A".to_string()),
+        "A must be on critical path"
+    );
+    assert!(
+        path.contains(&"C".to_string()),
+        "C must be on critical path"
+    );
+    assert!(
+        path.contains(&"D".to_string()),
+        "D must be on critical path"
+    );
+    assert!(
+        !path.contains(&"B".to_string()),
+        "B must NOT be on critical path"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -71,7 +83,11 @@ fn dependency_graph_critical_path() {
 #[test]
 fn conflict_resolver_voting() {
     let resolver = ConflictResolver::new(ResolutionStrategy::Voting);
-    let options = vec!["option_a".to_string(), "option_b".to_string(), "option_a".to_string()];
+    let options = vec![
+        "option_a".to_string(),
+        "option_b".to_string(),
+        "option_a".to_string(),
+    ];
     assert_eq!(resolver.resolve(&options), "option_a");
 }
 

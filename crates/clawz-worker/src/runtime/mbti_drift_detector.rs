@@ -12,7 +12,10 @@ pub struct MBTIDriftDetector {
 
 impl MBTIDriftDetector {
     pub fn new(min_sessions: u64, confidence_threshold: f32) -> Self {
-        Self { min_sessions, confidence_threshold }
+        Self {
+            min_sessions,
+            confidence_threshold,
+        }
     }
 
     /// Returns `Some(new_label)` if drift is detected, `None` otherwise.
@@ -33,8 +36,12 @@ impl MBTIDriftDetector {
         }
     }
 
-    fn infer_type_from_behaviour(&self, behaviour: &std::collections::HashMap<BehaviourType, f32>) -> Option<&'static str> {
-        let dominant = behaviour.iter()
+    fn infer_type_from_behaviour(
+        &self,
+        behaviour: &std::collections::HashMap<BehaviourType, f32>,
+    ) -> Option<&'static str> {
+        let dominant = behaviour
+            .iter()
             .filter(|(_, v)| **v > 0.6)
             .map(|(k, _)| *k)
             .collect::<Vec<_>>();
@@ -103,13 +110,19 @@ impl MBTIDriftDetector {
         };
 
         if let (Some(ei), Some(sn), Some(tf), Some(jp)) = (e_or_i, s_or_n, t_or_f, j_or_p) {
-            Some(Box::leak(format!("{}{}{}{}", ei, sn, tf, jp).into_boxed_str()))
+            Some(Box::leak(
+                format!("{}{}{}{}", ei, sn, tf, jp).into_boxed_str(),
+            ))
         } else {
             None
         }
     }
 
-    fn compute_confidence(&self, behaviour: &std::collections::HashMap<BehaviourType, f32>, inferred_type: Option<&str>) -> f32 {
+    fn compute_confidence(
+        &self,
+        behaviour: &std::collections::HashMap<BehaviourType, f32>,
+        inferred_type: Option<&str>,
+    ) -> f32 {
         let inferred = match inferred_type {
             Some(t) => t,
             None => return 0.0,
@@ -125,14 +138,39 @@ impl MBTIDriftDetector {
             }
             // Check if this behaviour type contributes to any of the inferred dimensions
             let contributes = match btype {
-                BehaviourType::Assertive => dimension_chars.contains(&'E') || dimension_chars.contains(&'T'),
-                BehaviourType::Aggressive => dimension_chars.contains(&'E') || dimension_chars.contains(&'T') || dimension_chars.contains(&'J'),
-                BehaviourType::Seeking => dimension_chars.contains(&'E') || dimension_chars.contains(&'N') || dimension_chars.contains(&'P'),
-                BehaviourType::Impulsive => dimension_chars.contains(&'E') || dimension_chars.contains(&'N') || dimension_chars.contains(&'P'),
-                BehaviourType::Cooperative => dimension_chars.contains(&'E') || dimension_chars.contains(&'F'),
-                BehaviourType::Compliant => dimension_chars.contains(&'I') || dimension_chars.contains(&'S') || dimension_chars.contains(&'F') || dimension_chars.contains(&'J'),
+                BehaviourType::Assertive => {
+                    dimension_chars.contains(&'E') || dimension_chars.contains(&'T')
+                }
+                BehaviourType::Aggressive => {
+                    dimension_chars.contains(&'E')
+                        || dimension_chars.contains(&'T')
+                        || dimension_chars.contains(&'J')
+                }
+                BehaviourType::Seeking => {
+                    dimension_chars.contains(&'E')
+                        || dimension_chars.contains(&'N')
+                        || dimension_chars.contains(&'P')
+                }
+                BehaviourType::Impulsive => {
+                    dimension_chars.contains(&'E')
+                        || dimension_chars.contains(&'N')
+                        || dimension_chars.contains(&'P')
+                }
+                BehaviourType::Cooperative => {
+                    dimension_chars.contains(&'E') || dimension_chars.contains(&'F')
+                }
+                BehaviourType::Compliant => {
+                    dimension_chars.contains(&'I')
+                        || dimension_chars.contains(&'S')
+                        || dimension_chars.contains(&'F')
+                        || dimension_chars.contains(&'J')
+                }
                 BehaviourType::Passive => dimension_chars.contains(&'I'),
-                BehaviourType::Ritualistic => dimension_chars.contains(&'I') || dimension_chars.contains(&'S') || dimension_chars.contains(&'J'),
+                BehaviourType::Ritualistic => {
+                    dimension_chars.contains(&'I')
+                        || dimension_chars.contains(&'S')
+                        || dimension_chars.contains(&'J')
+                }
             };
             if contributes {
                 match_count += 1.0;
@@ -140,7 +178,11 @@ impl MBTIDriftDetector {
         }
 
         // Normalize by total possible contributors (roughly 4 per dimension = 16, cap at 8)
-        let max_relevant = if match_count < 1.0 { 1.0_f32 } else { 8.0_f32.min(match_count) };
+        let max_relevant = if match_count < 1.0 {
+            1.0_f32
+        } else {
+            8.0_f32.min(match_count)
+        };
         let confidence = match_count / max_relevant;
         confidence.clamp(0.0, 1.0)
     }
@@ -173,7 +215,10 @@ mod tests {
         let mut identity = create_test_identity("INTJ");
         identity.session_count = 3;
         // low confidence - only 1 behaviour above threshold
-        identity.state.behaviour.insert(BehaviourType::Cooperative, 0.7);
+        identity
+            .state
+            .behaviour
+            .insert(BehaviourType::Cooperative, 0.7);
         assert!(detector.detect_drift(&identity).is_none());
     }
 
@@ -183,9 +228,15 @@ mod tests {
         let mut identity = create_test_identity("INTJ");
         identity.session_count = 3;
         // high confidence - 3 behaviours above threshold, mapping to ENTP
-        identity.state.behaviour.insert(BehaviourType::Assertive, 0.9);
+        identity
+            .state
+            .behaviour
+            .insert(BehaviourType::Assertive, 0.9);
         identity.state.behaviour.insert(BehaviourType::Seeking, 0.9);
-        identity.state.behaviour.insert(BehaviourType::Impulsive, 0.8);
+        identity
+            .state
+            .behaviour
+            .insert(BehaviourType::Impulsive, 0.8);
         let drift = detector.detect_drift(&identity);
         assert!(drift.is_some());
         // INTJ original preserved

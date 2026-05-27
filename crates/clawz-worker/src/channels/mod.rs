@@ -22,12 +22,12 @@
 //! ```
 
 // Dependency: clawz_core::traits::ChannelPlugin — shared trait all plugins implement.
-pub mod plugin;
 /// Dynamic plugin loader — loads `.so`/`.dylib` channel plugins at runtime.
 pub mod loader;
-/// In-memory registry — maps channel IDs and platform names to active plugin instances.
-pub mod registry;
 /// Built-in native channel implementations (e.g. Slack, Discord) compiled into the worker binary.
 pub mod native;
+pub mod plugin;
+/// In-memory registry — maps channel IDs and platform names to active plugin instances.
+pub mod registry;
 /// Platform name → native plugin instance.
 pub mod resolve;

@@ -40,7 +40,10 @@ impl ReceiveMessageStep {
     /// Returns `Some(pattern)` if the text contains a known injection pattern.
     fn detect_injection<'a>(text: &str) -> Option<&'a str> {
         let lower = text.to_lowercase();
-        INJECTION_PATTERNS.iter().find(|&pattern| lower.contains(pattern)).map(|v| v as _)
+        INJECTION_PATTERNS
+            .iter()
+            .find(|&pattern| lower.contains(pattern))
+            .map(|v| v as _)
     }
 }
 
@@ -58,9 +61,10 @@ impl PipelineStep for ReceiveMessageStep {
 
     async fn execute(&self, ctx: &mut PipelineContext) -> Result<StepOutcome> {
         // Ensure there is at least one message.
-        let last = ctx.messages.last().ok_or_else(|| {
-            ClawzError::Validation("pipeline context has no messages".into())
-        })?;
+        let last = ctx
+            .messages
+            .last()
+            .ok_or_else(|| ClawzError::Validation("pipeline context has no messages".into()))?;
 
         // Expect the latest message to be from the user.
         if last.role != Role::User {
@@ -74,9 +78,7 @@ impl PipelineStep for ReceiveMessageStep {
         match &last.content {
             MessageContent::Text(text) => {
                 if text.trim().is_empty() {
-                    return Err(ClawzError::Validation(
-                        "user message text is empty".into(),
-                    ));
+                    return Err(ClawzError::Validation("user message text is empty".into()));
                 }
                 // Injection check.
                 if let Some(pattern) = Self::detect_injection(text) {
@@ -110,10 +112,7 @@ impl PipelineStep for ReceiveMessageStep {
                         "[receive] injection pattern in multimodal part: '{}'",
                         pattern
                     );
-                    ctx.insert_meta(
-                        "injection_detected",
-                        serde_json::Value::String(pattern),
-                    );
+                    ctx.insert_meta("injection_detected", serde_json::Value::String(pattern));
                 }
             }
             MessageContent::ToolCalls(_) | MessageContent::ToolResult(_) => {
@@ -124,10 +123,7 @@ impl PipelineStep for ReceiveMessageStep {
         }
 
         // Record that receive was successful.
-        ctx.insert_meta(
-            "receive_ok",
-            serde_json::Value::Bool(true),
-        );
+        ctx.insert_meta("receive_ok", serde_json::Value::Bool(true));
 
         Ok(StepOutcome::Continue)
     }
@@ -155,7 +151,10 @@ mod tests {
         let step = ReceiveMessageStep::new();
         let outcome = step.execute(&mut ctx).await.unwrap();
         assert!(matches!(outcome, StepOutcome::Continue));
-        assert_eq!(ctx.get_meta("receive_ok"), Some(&serde_json::Value::Bool(true)));
+        assert_eq!(
+            ctx.get_meta("receive_ok"),
+            Some(&serde_json::Value::Bool(true))
+        );
     }
 
     #[tokio::test]

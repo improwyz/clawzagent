@@ -33,7 +33,9 @@ pub fn effective_oversight(
     let elevated = if has_active_goal {
         match minimum.autonomy_rank() {
             r if r < OversightLevel::Monitored.autonomy_rank() => OversightLevel::Monitored,
-            r if r < OversightLevel::HumanInTheLoop.autonomy_rank() => OversightLevel::HumanInTheLoop,
+            r if r < OversightLevel::HumanInTheLoop.autonomy_rank() => {
+                OversightLevel::HumanInTheLoop
+            }
             _ => minimum,
         }
     } else {
@@ -65,17 +67,26 @@ mod tests {
 
     #[test]
     fn minimum_oversight_low_risk_is_autonomous() {
-        assert_eq!(minimum_oversight_for_risk(RiskLevel::Low), OversightLevel::Autonomous);
+        assert_eq!(
+            minimum_oversight_for_risk(RiskLevel::Low),
+            OversightLevel::Autonomous
+        );
     }
 
     #[test]
     fn minimum_oversight_medium_risk_is_monitored() {
-        assert_eq!(minimum_oversight_for_risk(RiskLevel::Medium), OversightLevel::Monitored);
+        assert_eq!(
+            minimum_oversight_for_risk(RiskLevel::Medium),
+            OversightLevel::Monitored
+        );
     }
 
     #[test]
     fn minimum_oversight_high_risk_is_hitl() {
-        assert_eq!(minimum_oversight_for_risk(RiskLevel::High), OversightLevel::HumanInTheLoop);
+        assert_eq!(
+            minimum_oversight_for_risk(RiskLevel::High),
+            OversightLevel::HumanInTheLoop
+        );
     }
 
     #[test]

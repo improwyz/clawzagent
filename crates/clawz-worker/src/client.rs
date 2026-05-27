@@ -8,7 +8,8 @@ use clawz_services::dto::{
     ChannelWebhookRequest, ChannelWebhookResponse, EvaluateGovernanceRequest,
     EvaluateGovernanceResponse, ExecuteToolRequest, ExecuteToolResponse, FanOutRequest,
     FanOutResponse, OrchestrateRequest, OrchestrateResponse, ProviderHealthRequest,
-    ProviderHealthResponse, RunTurnRequest, RunTurnResponse, TestChannelRequest, TestChannelResponse,
+    ProviderHealthResponse, RunTurnRequest, RunTurnResponse, TestChannelRequest,
+    TestChannelResponse,
 };
 use clawz_services::execution::{ExecutionClient, ExecutionError, ExecutionResult};
 
@@ -31,7 +32,11 @@ impl InProcessExecutionClient {
 
 #[async_trait]
 impl ExecutionClient for InProcessExecutionClient {
-    async fn run_turn(&self, agent_id: &str, req: RunTurnRequest) -> ExecutionResult<RunTurnResponse> {
+    async fn run_turn(
+        &self,
+        agent_id: &str,
+        req: RunTurnRequest,
+    ) -> ExecutionResult<RunTurnResponse> {
         self.service
             .run_turn(agent_id, req)
             .await

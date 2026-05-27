@@ -40,7 +40,7 @@ use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 // Dependency: canonical message types defined in core
 use clawz_core::types::channel::{ChannelCapabilities, IncomingMessage, OutgoingMessage};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 // Dependency: Arc + RwLock used for the token cache because ChannelPlugin is Send + Sync
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -110,9 +110,7 @@ impl TeamsChannel {
         let client_id = cred_str(&ctx.config.credentials, "client_id")?;
         let client_secret = cred_str(&ctx.config.credentials, "client_secret")?;
 
-        let url = format!(
-            "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-        );
+        let url = format!("https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token");
         let params = [
             ("grant_type", "client_credentials"),
             ("client_id", client_id),
@@ -189,8 +187,7 @@ impl TeamsChannel {
             .to_string();
 
         let mut im = IncomingMessage::new(ctx.config.id, sender_id, sender_name, content);
-        im.metadata
-            .insert("teams_msg_id".into(), Value::String(id));
+        im.metadata.insert("teams_msg_id".into(), Value::String(id));
         Some(im)
     }
 }

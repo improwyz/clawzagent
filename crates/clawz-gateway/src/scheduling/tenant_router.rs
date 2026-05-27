@@ -112,11 +112,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl AgentScheduler for NullScheduler {
-        async fn spawn_agent(
-            &self,
-            ctx: &TenantContext,
-            _spec: AgentSpec,
-        ) -> Result<AgentHandle> {
+        async fn spawn_agent(&self, ctx: &TenantContext, _spec: AgentSpec) -> Result<AgentHandle> {
             Ok(AgentHandle::new(
                 ctx.tenant_id.clone(),
                 "agent".into(),

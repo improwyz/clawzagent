@@ -3,11 +3,12 @@
 use async_trait::async_trait;
 
 use crate::dto::{
-    A2aInvokeRequest, A2aInvokeResponse, EvaluateGovernanceRequest, EvaluateGovernanceResponse,
-    ChannelSendRequest, ChannelSendResponse, ChannelWebhookRequest, ChannelWebhookResponse,
-    ExecuteToolRequest, ExecuteToolResponse, FanOutRequest, FanOutResponse, OrchestrateRequest,
-    OrchestrateResponse, ProviderHealthRequest, ProviderHealthResponse, RunTurnRequest,
-    RunTurnResponse, TestChannelRequest, TestChannelResponse,
+    A2aInvokeRequest, A2aInvokeResponse, ChannelSendRequest, ChannelSendResponse,
+    ChannelWebhookRequest, ChannelWebhookResponse, EvaluateGovernanceRequest,
+    EvaluateGovernanceResponse, ExecuteToolRequest, ExecuteToolResponse, FanOutRequest,
+    FanOutResponse, OrchestrateRequest, OrchestrateResponse, ProviderHealthRequest,
+    ProviderHealthResponse, RunTurnRequest, RunTurnResponse, TestChannelRequest,
+    TestChannelResponse,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -25,12 +26,13 @@ pub type ExecutionResult<T> = Result<T, ExecutionError>;
 /// All runtime operations the gateway delegates to the worker control plane.
 #[async_trait]
 pub trait ExecutionClient: Send + Sync {
-    async fn run_turn(&self, agent_id: &str, req: RunTurnRequest) -> ExecutionResult<RunTurnResponse>;
-
-    async fn execute_tool(
+    async fn run_turn(
         &self,
-        req: ExecuteToolRequest,
-    ) -> ExecutionResult<ExecuteToolResponse>;
+        agent_id: &str,
+        req: RunTurnRequest,
+    ) -> ExecutionResult<RunTurnResponse>;
+
+    async fn execute_tool(&self, req: ExecuteToolRequest) -> ExecutionResult<ExecuteToolResponse>;
 
     async fn evaluate_governance(
         &self,
@@ -111,7 +113,11 @@ impl HttpExecutionClient {
 
 #[async_trait]
 impl ExecutionClient for HttpExecutionClient {
-    async fn run_turn(&self, agent_id: &str, req: RunTurnRequest) -> ExecutionResult<RunTurnResponse> {
+    async fn run_turn(
+        &self,
+        agent_id: &str,
+        req: RunTurnRequest,
+    ) -> ExecutionResult<RunTurnResponse> {
         self.post_json(&format!("/v1/agents/{agent_id}/run"), &req)
             .await
     }

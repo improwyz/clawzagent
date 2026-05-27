@@ -37,7 +37,9 @@ impl DeployProvider for FlyIoAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::NativeBinary,
         ]
     }
@@ -74,7 +76,7 @@ impl DeployProvider for FlyIoAdapter {
             _ => {
                 return Err(ClawzError::Validation(
                     "Fly.io does not support Wasm mode".into(),
-                ))
+                ));
             }
         };
 

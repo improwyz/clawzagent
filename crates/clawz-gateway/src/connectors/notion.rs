@@ -51,9 +51,16 @@ impl NotionConnector {
             redirect_uri,
             "https://api.notion.com/v1/oauth/authorize",
             "https://api.notion.com/v1/oauth/token",
-            vec!["read_content".into(), "update_content".into(), "insert_content".into()],
+            vec![
+                "read_content".into(),
+                "update_content".into(),
+                "insert_content".into(),
+            ],
         );
-        Self { oauth, credentials: None }
+        Self {
+            oauth,
+            credentials: None,
+        }
     }
 
     /// Create with an integration token (internal integrations).
@@ -181,7 +188,9 @@ impl SaaSConnector for NotionConnector {
                         .json(&data)
                         .send()
                         .await
-                        .map_err(|e| ClawzError::Provider(format!("Notion create block failed: {e}")))?;
+                        .map_err(|e| {
+                            ClawzError::Provider(format!("Notion create block failed: {e}"))
+                        })?;
                     crate::connectors::common::parse_json(resp).await
                 };
             }

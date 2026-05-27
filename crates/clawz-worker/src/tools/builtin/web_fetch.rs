@@ -1,8 +1,8 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -120,9 +120,12 @@ impl Tool for WebFetchTool {
         "Fetch a URL with configurable method, headers, and body. Returns status, headers, and body content. SSRF-protected."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Read }
-    fn risk(&self) -> RiskLevel { RiskLevel::Low }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Read
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::Low
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "web_fetch".into(),
@@ -215,7 +218,10 @@ impl Tool for WebFetchTool {
             let mut map = serde_json::Map::new();
             for (k, v) in response.headers().iter() {
                 if let Ok(vs) = v.to_str() {
-                    map.insert(k.as_str().to_string(), serde_json::Value::String(vs.to_string()));
+                    map.insert(
+                        k.as_str().to_string(),
+                        serde_json::Value::String(vs.to_string()),
+                    );
                 }
             }
             serde_json::Value::Object(map)

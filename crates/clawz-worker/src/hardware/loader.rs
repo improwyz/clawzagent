@@ -270,8 +270,7 @@ impl ModelLoader {
                 return Ok(ModelFormat::GGML);
             }
             // PyTorch pickle starts with 0x80 0x02 or 0x50 0x4b (ZIP)
-            if (header[0] == 0x80 && header[1] == 0x02)
-                || (header[0] == 0x50 && header[1] == 0x4b)
+            if (header[0] == 0x80 && header[1] == 0x02) || (header[0] == 0x50 && header[1] == 0x4b)
             {
                 return Ok(ModelFormat::PyTorch);
             }
@@ -423,8 +422,7 @@ impl ModelLoader {
             } else {
                 format!(
                     "Model requires {}MB but only {}MB available. Consider a smaller quantization.",
-                    info.estimated_memory_mb,
-                    compute_memory_mb
+                    info.estimated_memory_mb, compute_memory_mb
                 )
             },
         })
@@ -563,12 +561,14 @@ fn read_gguf_kv(file: &mut std::fs::File) -> Result<(String, String)> {
     let value = match value_type {
         GGUF_TYPE_UINT8 => {
             let mut b = [0u8; 1];
-            file.read_exact(&mut b).map_err(|e| ClawzError::Hardware(e.to_string()))?;
+            file.read_exact(&mut b)
+                .map_err(|e| ClawzError::Hardware(e.to_string()))?;
             b[0].to_string()
         }
         GGUF_TYPE_INT8 => {
             let mut b = [0u8; 1];
-            file.read_exact(&mut b).map_err(|e| ClawzError::Hardware(e.to_string()))?;
+            file.read_exact(&mut b)
+                .map_err(|e| ClawzError::Hardware(e.to_string()))?;
             (b[0] as i8).to_string()
         }
         GGUF_TYPE_UINT16 => read_u16_le(file)?.to_string(),
@@ -581,7 +581,8 @@ fn read_gguf_kv(file: &mut std::fs::File) -> Result<(String, String)> {
         }
         GGUF_TYPE_BOOL => {
             let mut b = [0u8; 1];
-            file.read_exact(&mut b).map_err(|e| ClawzError::Hardware(e.to_string()))?;
+            file.read_exact(&mut b)
+                .map_err(|e| ClawzError::Hardware(e.to_string()))?;
             (b[0] != 0).to_string()
         }
         GGUF_TYPE_STRING => read_gguf_string(file)?,
@@ -602,7 +603,7 @@ fn read_gguf_kv(file: &mut std::fs::File) -> Result<(String, String)> {
         _ => {
             return Err(ClawzError::Hardware(format!(
                 "unknown GGUF value type: {value_type}"
-            )))
+            )));
         }
     };
 
@@ -646,15 +647,12 @@ fn skip_gguf_array(file: &mut std::fs::File, elem_type: u32, count: u64) -> Resu
 fn read_gguf_string(file: &mut std::fs::File) -> Result<String> {
     let len = read_u64_le(file)? as usize;
     if len > 4096 {
-        return Err(ClawzError::Hardware(format!(
-            "GGUF string too long: {len}"
-        )));
+        return Err(ClawzError::Hardware(format!("GGUF string too long: {len}")));
     }
     let mut buf = vec![0u8; len];
     file.read_exact(&mut buf)
         .map_err(|e| ClawzError::Hardware(format!("GGUF string read error: {e}")))?;
-    String::from_utf8(buf)
-        .map_err(|e| ClawzError::Hardware(format!("GGUF string not UTF-8: {e}")))
+    String::from_utf8(buf).map_err(|e| ClawzError::Hardware(format!("GGUF string not UTF-8: {e}")))
 }
 
 /// Read a little-endian `u16` from the file.
@@ -807,12 +805,8 @@ fn guess_quantization_from_filename(path: &Path) -> Option<Quantization> {
         .to_uppercase();
 
     let quants = [
-        "Q4_K_M", "Q4_K_S", "Q4_K", "Q4_0", "Q4_1",
-        "Q5_K_M", "Q5_K_S", "Q5_K", "Q5_0", "Q5_1",
-        "Q6_K",
-        "Q8_0", "Q8_K",
-        "Q2_K", "Q3_K_M", "Q3_K_S", "Q3_K",
-        "F16", "BF16", "F32",
+        "Q4_K_M", "Q4_K_S", "Q4_K", "Q4_0", "Q4_1", "Q5_K_M", "Q5_K_S", "Q5_K", "Q5_0", "Q5_1",
+        "Q6_K", "Q8_0", "Q8_K", "Q2_K", "Q3_K_M", "Q3_K_S", "Q3_K", "F16", "BF16", "F32",
     ];
 
     for q in &quants {
@@ -917,7 +911,10 @@ mod tests {
             ModelFormat::from_extension("safetensors"),
             Some(ModelFormat::SafeTensors)
         );
-        assert_eq!(ModelFormat::from_extension("pt"), Some(ModelFormat::PyTorch));
+        assert_eq!(
+            ModelFormat::from_extension("pt"),
+            Some(ModelFormat::PyTorch)
+        );
         assert_eq!(ModelFormat::from_extension("onnx"), Some(ModelFormat::ONNX));
         assert_eq!(ModelFormat::from_extension("xyz"), None);
     }

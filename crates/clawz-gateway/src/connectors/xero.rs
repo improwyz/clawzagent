@@ -61,7 +61,11 @@ impl XeroConnector {
                 "accounting.settings".into(),
             ],
         );
-        Self { oauth, credentials: None, tenant_id: None }
+        Self {
+            oauth,
+            credentials: None,
+            tenant_id: None,
+        }
     }
 
     /// Build an [`ApiClient`] against the Xero Accounting API root.
@@ -70,7 +74,10 @@ impl XeroConnector {
             .credentials
             .as_ref()
             .ok_or_else(|| ClawzError::Auth("not authenticated".into()))?;
-        Ok(ApiClient::new("https://api.xero.com/api.xro/2.0", creds.clone()))
+        Ok(ApiClient::new(
+            "https://api.xero.com/api.xro/2.0",
+            creds.clone(),
+        ))
     }
 
     /// Resolve the tenant ID for the `Xero-Tenant-Id` header.
@@ -173,7 +180,11 @@ impl SaaSConnector for XeroConnector {
         let client = self.client()?;
         let path = match obj {
             "invoices" => format!("/Invoices/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Cannot delete Xero {obj} directly; void instead"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Cannot delete Xero {obj} directly; void instead"
+                )));
+            }
         };
         // Xero doesn't delete invoices, it voids them via VOIDED status
         let body = serde_json::json!({ "Status": "VOIDED" });
@@ -207,7 +218,7 @@ impl SaaSConnector for XeroConnector {
                         self.credentials
                             .as_ref()
                             .and_then(|c| c.access_token.as_deref())
-                            .unwrap_or("")
+                            .unwrap_or(""),
                     )
                     .send()
                     .await
@@ -225,7 +236,9 @@ impl SaaSConnector for XeroConnector {
                     .map_err(|e| ClawzError::Provider(format!("Xero email invoice failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Xero action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Xero action: {action}"
+            ))),
         }
     }
 }

@@ -19,7 +19,8 @@ fn oversight_level_autonomy_ranking() {
     );
     // HumanInTheLoop (rank 2) > HumanDirected (rank 1)
     assert!(
-        OversightLevel::HumanInTheLoop.autonomy_rank() > OversightLevel::HumanDirected.autonomy_rank(),
+        OversightLevel::HumanInTheLoop.autonomy_rank()
+            > OversightLevel::HumanDirected.autonomy_rank(),
         "HumanInTheLoop should have higher autonomy rank than HumanDirected"
     );
     // HumanDirected (rank 1) > Manual (rank 0)

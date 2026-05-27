@@ -31,12 +31,7 @@
 //! - `clawz_core::types::mesh::PeerInfo` — destination peer descriptor.
 //! - [`crate::transport::config::QuicConfig`] — ports, TLS, timeouts.
 
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 
@@ -47,9 +42,7 @@ use clawz_core::{
     types::mesh::PeerInfo,
 };
 use quinn::{
-    ClientConfig, Endpoint, ServerConfig,
-    TransportConfig as QuinnTransportConfig,
-    VarInt,
+    ClientConfig, Endpoint, ServerConfig, TransportConfig as QuinnTransportConfig, VarInt,
 };
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::{
@@ -73,10 +66,7 @@ fn generate_self_signed(hostname: &str) -> Result<(Vec<u8>, Vec<u8>)> {
         "127.0.0.1".to_string(),
     ])
     .map_err(|e| ClawzError::Transport(format!("rcgen: {e}")))?;
-    Ok((
-        cert.cert.der().to_vec(),
-        cert.key_pair.serialize_der(),
-    ))
+    Ok((cert.cert.der().to_vec(), cert.key_pair.serialize_der()))
 }
 
 /// Build a [`ServerConfig`] from DER-encoded cert and key bytes.
@@ -98,10 +88,13 @@ fn build_server_config(
 
     let mut transport = QuinnTransportConfig::default();
     transport.max_idle_timeout(Some(
-        VarInt::from_u64(max_idle_ms).ok().map(|v| v.into()).unwrap_or_else(|| {
-            // Fallback to 30 s if the configured idle timeout is too large for a VarInt.
-            VarInt::from_u64(30_000).unwrap().into()
-        }),
+        VarInt::from_u64(max_idle_ms)
+            .ok()
+            .map(|v| v.into())
+            .unwrap_or_else(|| {
+                // Fallback to 30 s if the configured idle timeout is too large for a VarInt.
+                VarInt::from_u64(30_000).unwrap().into()
+            }),
     ));
 
     let mut server_config = ServerConfig::with_crypto(Arc::new(
@@ -267,7 +260,9 @@ impl TransportListener for QuicListener {
                 match reader.read(&mut buf).await {
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
-                        if send.write_all(&buf[..n]).await.is_err() { break; }
+                        if send.write_all(&buf[..n]).await.is_err() {
+                            break;
+                        }
                     }
                 }
             }
@@ -398,11 +393,8 @@ impl Transport for QuicTransport {
 
         let (cert_der, key_der) = generate_self_signed("clawz-worker")?;
 
-        let server_config = build_server_config(
-            cert_der,
-            key_der,
-            self.config.max_idle_timeout_ms,
-        )?;
+        let server_config =
+            build_server_config(cert_der, key_der, self.config.max_idle_timeout_ms)?;
 
         let endpoint = Endpoint::server(server_config, bind_addr)
             .map_err(|e| ClawzError::Transport(format!("quic server bind {addr}: {e}")))?;

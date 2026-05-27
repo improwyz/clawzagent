@@ -56,7 +56,9 @@ impl Default for TenantId {
 /// Role hierarchy in the ClawZ cascade authorization model.
 /// Higher levels have greater permissions and can spawn child roles.
 /// // Dependency: checked by TenantContext::scope_for_agent and scope_for_tool.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, PartialOrd, Ord, Default)]
+#[derive(
+    Debug, Clone, Copy, Eq, PartialEq, Hash, Serialize, Deserialize, PartialOrd, Ord, Default,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
     /// Organization owner — complete control and resource allocation.
@@ -363,7 +365,7 @@ impl TenantContext {
         }
 
         let mut child_context = Self::new(self.tenant_id.clone(), child_role);
-        
+
         // Sub-lease 50% of remaining budget to the agent
         child_context.budget = self.budget.clone();
         child_context.budget.sub_lease(0.5);
@@ -373,7 +375,10 @@ impl TenantContext {
             self.network_scope.mesh_network.clone(),
             self.network_scope.subnet.clone(),
         );
-        child_context.network_scope.allowed_peers.push(agent_id.to_string());
+        child_context
+            .network_scope
+            .allowed_peers
+            .push(agent_id.to_string());
 
         // Agent contexts expire in 24 hours
         child_context.expires_at = Some(Utc::now() + chrono::Duration::hours(24));
@@ -403,7 +408,10 @@ impl TenantContext {
             self.network_scope.subnet.clone(),
         );
         tool_context.network_scope.allowed_peers = vec![agent_id.to_string()];
-        tool_context.network_scope.allowed_peers.push(tool_id.to_string());
+        tool_context
+            .network_scope
+            .allowed_peers
+            .push(tool_id.to_string());
 
         // Tool contexts expire in 1 hour
         tool_context.expires_at = Some(Utc::now() + chrono::Duration::hours(1));
@@ -500,7 +508,9 @@ mod tests {
         let mut parent_ctx = TenantContext::new(tenant_id, Role::Operator);
         parent_ctx.budget = BudgetLease::new(100.0);
 
-        let agent_ctx = parent_ctx.scope_for_agent("agent-001").expect("should create agent scope");
+        let agent_ctx = parent_ctx
+            .scope_for_agent("agent-001")
+            .expect("should create agent scope");
 
         assert_eq!(agent_ctx.role, Role::Agent);
         assert_eq!(agent_ctx.tenant_id, parent_ctx.tenant_id);
@@ -534,7 +544,7 @@ mod tests {
     fn context_expiration() {
         let tenant_id = TenantId::new("tenant-001");
         let mut ctx = TenantContext::new(tenant_id, Role::Owner);
-        
+
         assert!(!ctx.is_expired());
 
         // Set expiration to 1 second ago

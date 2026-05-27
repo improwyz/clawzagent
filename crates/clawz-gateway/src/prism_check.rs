@@ -1,9 +1,9 @@
 //! Live PRISM-G dimension capability checks for `/api/v1/system/prism`.
 
-use clawz_core::deployment::DeploymentMode;
-use clawz_core::prism::{derive_status, dimension_registry, DimensionCapability, DimensionStatus};
 use clawz_core::Result;
-use serde_json::{json, Value};
+use clawz_core::deployment::DeploymentMode;
+use clawz_core::prism::{DimensionCapability, DimensionStatus, derive_status, dimension_registry};
+use serde_json::{Value, json};
 
 struct PurposeCheck;
 struct RealityCheck;

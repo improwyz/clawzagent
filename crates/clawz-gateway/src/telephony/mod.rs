@@ -81,8 +81,18 @@ mod tests {
         params.insert("To".into(), "+0987654321".into());
         let signature = "FfwvkTm82C4veRAoZ7E4Yus0rQE=";
 
-        assert!(!verify_twilio_signature("wrong-token", url, &params, signature));
-        assert!(!verify_twilio_signature("12345", url, &params, "not-valid-base64-sig="));
+        assert!(!verify_twilio_signature(
+            "wrong-token",
+            url,
+            &params,
+            signature
+        ));
+        assert!(!verify_twilio_signature(
+            "12345",
+            url,
+            &params,
+            "not-valid-base64-sig="
+        ));
     }
 
     #[test]
@@ -91,9 +101,9 @@ mod tests {
         let gather_url = "https://example.com/gather?x=1&y=2";
         let xml = twiml_say_and_gather(say, gather_url);
 
-        assert!(xml.contains(
-            "<Say>Tom &amp; Jerry say &quot;Hi&quot; &lt;3 &apos;bye&apos;</Say>"
-        ));
+        assert!(
+            xml.contains("<Say>Tom &amp; Jerry say &quot;Hi&quot; &lt;3 &apos;bye&apos;</Say>")
+        );
         assert!(xml.contains(r#"action="https://example.com/gather?x=1&y=2""#));
         assert!(xml.contains(r#"<Gather input="speech""#));
     }

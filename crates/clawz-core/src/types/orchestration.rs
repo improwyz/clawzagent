@@ -310,7 +310,11 @@ mod tests {
 
     #[test]
     fn tool_idle_seconds() {
-        let handle = ToolHandle::new("agent-1".to_string(), ToolType::Sandbox, "10.0.0.2".to_string());
+        let handle = ToolHandle::new(
+            "agent-1".to_string(),
+            ToolType::Sandbox,
+            "10.0.0.2".to_string(),
+        );
 
         let idle = handle.idle_seconds();
         assert!(idle < 2); // Should be nearly 0

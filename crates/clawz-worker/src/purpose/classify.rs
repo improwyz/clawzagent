@@ -25,7 +25,9 @@ use clawz_core::types::GoalType;
 pub fn classify(input: &str) -> GoalType {
     let lower = input.to_lowercase();
 
-    let optimize_keywords = ["minimize", "maximize", "optimize", "reduce", "increase", "best"];
+    let optimize_keywords = [
+        "minimize", "maximize", "optimize", "reduce", "increase", "best",
+    ];
     let explore_keywords = ["explore", "discover", "learn", "investigate", "research"];
     let maintain_keywords = ["maintain", "keep", "preserve", "sustain", "stable"];
 

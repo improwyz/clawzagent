@@ -3,7 +3,7 @@
 use chrono::Utc;
 use clawz_core::db::{
     AgentRepo, ConversationRepo, DbAgent, DbConversation, DbDeployment, DbFleetNode,
-    DbGatewayApiKey, DbGatewayChannel, DbGatewayProvider, DbGatewayAudit, DbGatewayTool,
+    DbGatewayApiKey, DbGatewayAudit, DbGatewayChannel, DbGatewayProvider, DbGatewayTool,
     DbGatewayUser, DbGovernancePolicy, DbMessage, DbOrchestrationRun, DbRoom, DbRoomParticipant,
     DeploymentRepo, FleetNodeRepo, GatewayApiKeyRepo, GatewayAuditRepo, GatewayChannelRepo,
     GatewayProviderRepo, GatewayToolRepo, GatewayUserRepo, GovernancePolicyRepo, MessageRepo,
@@ -60,7 +60,11 @@ pub async fn load_agents(pool: &PgPool) -> clawz_core::Result<Vec<AgentRecord>> 
             .get("system_prompt")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        let description = row.config.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
+        let description = row
+            .config
+            .get("description")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
         let status = match row.status.as_str() {
             "running" => crate::AgentStatus::Running,
             "stopped" => crate::AgentStatus::Stopped,
@@ -133,7 +137,10 @@ pub async fn persist_messages(
 }
 
 /// Persist a conversation header row (messages stored separately).
-pub async fn persist_conversation(pool: &PgPool, record: &ConversationRecord) -> clawz_core::Result<()> {
+pub async fn persist_conversation(
+    pool: &PgPool,
+    record: &ConversationRecord,
+) -> clawz_core::Result<()> {
     let conv_id = Uuid::parse_str(&record.id).unwrap_or_else(|_| Uuid::new_v4());
     let agent_id = Uuid::parse_str(&record.agent_id).unwrap_or_else(|_| Uuid::new_v4());
     let metadata = json!({
@@ -306,8 +313,8 @@ pub async fn load_fleet_nodes(pool: &PgPool) -> clawz_core::Result<Vec<FleetNode
     Ok(rows
         .into_iter()
         .map(|row| {
-            let agent_ids: Vec<String> = serde_json::from_value(row.agent_ids.clone())
-                .unwrap_or_default();
+            let agent_ids: Vec<String> =
+                serde_json::from_value(row.agent_ids.clone()).unwrap_or_default();
             FleetNodeRecord {
                 id: row.id.to_string(),
                 name: row.name,
@@ -399,7 +406,10 @@ pub async fn load_providers(pool: &PgPool) -> clawz_core::Result<Vec<ProviderRec
             id: row.id.to_string(),
             name: row.name,
             provider_type: row.provider_type,
-            api_key: row.api_key.as_ref().and_then(|k| crate::secrets::open_secret(k)),
+            api_key: row
+                .api_key
+                .as_ref()
+                .and_then(|k| crate::secrets::open_secret(k)),
             base_url: row.base_url,
             enabled: row.enabled,
             created_at: row.created_at,
@@ -481,10 +491,7 @@ pub async fn persist_cloud_deployment(
 }
 
 /// Remove a cloud deployment row after provider teardown.
-pub async fn delete_cloud_deployment(
-    pool: &PgPool,
-    deployment_id: &str,
-) -> clawz_core::Result<()> {
+pub async fn delete_cloud_deployment(pool: &PgPool, deployment_id: &str) -> clawz_core::Result<()> {
     let uuid = crate::deploy::common::deployment_db_uuid(deployment_id);
     DeploymentRepo::delete(pool, uuid).await
 }
@@ -603,9 +610,7 @@ fn room_message_from_db(row: DbMessage) -> RoomMessageRecord {
         id: row.id.to_string(),
         room_id: row.room_id.map(|id| id.to_string()).unwrap_or_default(),
         seq: u64::try_from(row.seq).unwrap_or(0),
-        sender_type: row
-            .sender_type
-            .unwrap_or_else(|| "user".to_string()),
+        sender_type: row.sender_type.unwrap_or_else(|| "user".to_string()),
         sender_id: row.sender_id.unwrap_or_default(),
         client_message_id: row.client_message_id.map(|id| id.to_string()),
         content,
@@ -785,7 +790,11 @@ fn default_tenant_id() -> String {
 }
 
 /// Persist a registered user account.
-pub async fn persist_user(pool: &PgPool, record: &UserRecord, tenant_id: &str) -> clawz_core::Result<()> {
+pub async fn persist_user(
+    pool: &PgPool,
+    record: &UserRecord,
+    tenant_id: &str,
+) -> clawz_core::Result<()> {
     let id = Uuid::parse_str(&record.id).unwrap_or_else(|_| Uuid::new_v4());
     GatewayUserRepo::upsert(
         pool,

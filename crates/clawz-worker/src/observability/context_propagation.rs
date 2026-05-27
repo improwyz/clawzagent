@@ -57,10 +57,16 @@ pub fn trace_env_for_container(
         ("CLAWZ_CONFIG_VERSION".into(), config_version.to_string()),
         // Service name embeds agent_id so each agent appears as a distinct
         // service in the trace backend, making per-agent filtering trivial.
-        ("OTEL_SERVICE_NAME".into(), format!("clawz-agent-{}", agent_id)),
+        (
+            "OTEL_SERVICE_NAME".into(),
+            format!("clawz-agent-{}", agent_id),
+        ),
         // Hardcoded to the in-cluster collector because workers run inside
         // the same k8s namespace as the otel-collector sidecar.
-        ("OTEL_EXPORTER_OTLP_ENDPOINT".into(), "http://otel-collector:4317".into()),
+        (
+            "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
+            "http://otel-collector:4317".into(),
+        ),
         // Default log level for Rust containers; downstream executors may override.
         ("RUST_LOG".into(), "info".into()),
     ]
@@ -109,10 +115,16 @@ pub fn trace_env_for_tool(
         ("CLAWZ_TOOL_TYPE".into(), tool_type.into()),
         // WHY format with tool_type: multiple tools share a binary image;
         // differentiating by type keeps service meshes clean in Jaeger/Tempo.
-        ("OTEL_SERVICE_NAME".into(), format!("clawz-tool-{}", tool_type)),
+        (
+            "OTEL_SERVICE_NAME".into(),
+            format!("clawz-tool-{}", tool_type),
+        ),
         // Dependency: otel-collector sidecar address is provisioned by the
         // infrastructure layer; this string must stay in sync with the Helm chart.
-        ("OTEL_EXPORTER_OTLP_ENDPOINT".into(), "http://otel-collector:4317".into()),
+        (
+            "OTEL_EXPORTER_OTLP_ENDPOINT".into(),
+            "http://otel-collector:4317".into(),
+        ),
         ("RUST_LOG".into(), "info".into()),
     ]
 }
@@ -134,7 +146,10 @@ mod tests {
         assert!(vars.iter().any(|(k, _)| k == "CLAWZ_CONFIG_VERSION"));
 
         // Verify value propagation — catches accidental key/value misalignment.
-        assert!(vars.iter().any(|(k, v)| k == "CLAWZ_TENANT_ID" && v == "tenant-1"));
+        assert!(
+            vars.iter()
+                .any(|(k, v)| k == "CLAWZ_TENANT_ID" && v == "tenant-1")
+        );
     }
 
     /// Ensures OpenTelemetry exporter configuration is present in the returned

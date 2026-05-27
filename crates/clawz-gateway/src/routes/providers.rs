@@ -15,16 +15,16 @@
 //! - None directly; providers are consumed by the agent execution layer (not yet
 //!   fully wired in the route handlers below).
 
-use clawz_services::dto::ProviderHealthRequest;
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::Utc;
+use clawz_services::dto::ProviderHealthRequest;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 // Dependency: AppState, GatewayError, ProviderRecord defined in crate root.
@@ -36,7 +36,12 @@ use crate::{AppState, GatewayError, ProviderRecord};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_providers).post(create_provider))
-        .route("/{id}", get(get_provider).put(update_provider).delete(delete_provider))
+        .route(
+            "/{id}",
+            get(get_provider)
+                .put(update_provider)
+                .delete(delete_provider),
+        )
         .route("/{id}/test", post(test_provider))
         // Legacy health route kept for compatibility with older monitoring scripts.
         .route("/{id}/health", get(provider_health))
@@ -82,15 +87,20 @@ pub struct UpdateProviderBody {
 /// listing the providers does not leak credentials into logs or browser dev-tools.
 async fn list_providers(State(state): State<AppState>) -> Json<Value> {
     let providers = state.providers.read().await;
-    let masked: Vec<Value> = providers.iter().map(|p| json!({
-        "id": p.id,
-        "name": p.name,
-        "provider_type": p.provider_type,
-        "base_url": p.base_url,
-        "enabled": p.enabled,
-        "created_at": p.created_at,
-        "updated_at": p.updated_at,
-    })).collect();
+    let masked: Vec<Value> = providers
+        .iter()
+        .map(|p| {
+            json!({
+                "id": p.id,
+                "name": p.name,
+                "provider_type": p.provider_type,
+                "base_url": p.base_url,
+                "enabled": p.enabled,
+                "created_at": p.created_at,
+                "updated_at": p.updated_at,
+            })
+        })
+        .collect();
     Json(json!({ "data": masked, "total": masked.len() }))
 }
 
@@ -103,9 +113,9 @@ async fn create_provider(
     State(state): State<AppState>,
     Json(body): Json<CreateProviderBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let name = body.name.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'name' is required".to_string())
-    })?;
+    let name = body
+        .name
+        .ok_or_else(|| GatewayError::Unprocessable("field 'name' is required".to_string()))?;
     let provider_type = body.provider_type.ok_or_else(|| {
         GatewayError::Unprocessable("field 'provider_type' is required".to_string())
     })?;
@@ -128,15 +138,18 @@ async fn create_provider(
         let _ = crate::postgres_store::persist_provider(pool, &record).await;
     }
 
-    Ok((StatusCode::CREATED, Json(json!({
-        "id": record.id,
-        "name": record.name,
-        "provider_type": record.provider_type,
-        "base_url": record.base_url,
-        "enabled": record.enabled,
-        "created_at": record.created_at,
-        "updated_at": record.updated_at,
-    }))))
+    Ok((
+        StatusCode::CREATED,
+        Json(json!({
+            "id": record.id,
+            "name": record.name,
+            "provider_type": record.provider_type,
+            "base_url": record.base_url,
+            "enabled": record.enabled,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+        })),
+    ))
 }
 
 /// `GET /providers/{id}` — fetch a single provider (secret masked).
@@ -175,11 +188,21 @@ async fn update_provider(
         .find(|p| p.id == id)
         .ok_or_else(|| GatewayError::not_found("Provider", &id))?;
 
-    if let Some(name) = body.name { record.name = name; }
-    if let Some(pt) = body.provider_type { record.provider_type = pt; }
-    if let Some(key) = body.api_key { record.api_key = Some(key); }
-    if let Some(url) = body.base_url { record.base_url = Some(url); }
-    if let Some(enabled) = body.enabled { record.enabled = enabled; }
+    if let Some(name) = body.name {
+        record.name = name;
+    }
+    if let Some(pt) = body.provider_type {
+        record.provider_type = pt;
+    }
+    if let Some(key) = body.api_key {
+        record.api_key = Some(key);
+    }
+    if let Some(url) = body.base_url {
+        record.base_url = Some(url);
+    }
+    if let Some(enabled) = body.enabled {
+        record.enabled = enabled;
+    }
     record.updated_at = Utc::now();
     let snapshot = record.clone();
     drop(providers);

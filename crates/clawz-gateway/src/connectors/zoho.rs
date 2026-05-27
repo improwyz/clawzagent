@@ -59,10 +59,7 @@ impl ZohoConnector {
             redirect_uri,
             format!("{}/oauth/v2/auth", auth_domain),
             format!("{}/oauth/v2/token", auth_domain),
-            vec![
-                "ZohoCRM.modules.ALL".into(),
-                "ZohoCRM.settings.ALL".into(),
-            ],
+            vec!["ZohoCRM.modules.ALL".into(), "ZohoCRM.settings.ALL".into()],
         );
         Self {
             oauth,
@@ -215,7 +212,11 @@ impl SaaSConnector for ZohoConnector {
                 let id = params["id"].as_str().unwrap_or("");
                 format!("/Leads/{}/actions/convert", id)
             }
-            _ => format!("/{}/?action={}", params["module"].as_str().unwrap_or("Contacts"), action),
+            _ => format!(
+                "/{}/?action={}",
+                params["module"].as_str().unwrap_or("Contacts"),
+                action
+            ),
         };
         let resp = client
             .post(&path)

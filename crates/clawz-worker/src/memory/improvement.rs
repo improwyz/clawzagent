@@ -60,17 +60,26 @@ pub struct ThresholdEvaluator {
 }
 
 impl ThresholdEvaluator {
-    pub fn new(thresholds: HashMap<clawz_core::metrics::PerfDimension, f32>) -> Self { Self { thresholds } }
+    pub fn new(thresholds: HashMap<clawz_core::metrics::PerfDimension, f32>) -> Self {
+        Self { thresholds }
+    }
 }
 
 impl Evaluator for ThresholdEvaluator {
     fn evaluate(&self, metrics: &[(clawz_core::metrics::PerfDimension, f32)]) -> Vec<PerfGap> {
-        metrics.iter()
+        metrics
+            .iter()
             .filter_map(|(dim, current)| {
                 self.thresholds.get(dim).and_then(|&target| {
                     if *current < target {
-                        Some(PerfGap { dimension: *dim, current: *current, target })
-                    } else { None }
+                        Some(PerfGap {
+                            dimension: *dim,
+                            current: *current,
+                            target,
+                        })
+                    } else {
+                        None
+                    }
                 })
             })
             .collect()
@@ -81,7 +90,9 @@ pub struct SimplePatternRecognizer;
 
 impl PatternRecognizer for SimplePatternRecognizer {
     fn recognize(&self, gaps: &[PerfGap]) -> Vec<Pattern> {
-        if gaps.is_empty() { return vec![]; }
+        if gaps.is_empty() {
+            return vec![];
+        }
         vec![Pattern {
             name: "performance_gaps".into(),
             description: format!("{} dimensions below threshold", gaps.len()),
@@ -94,14 +105,17 @@ pub struct BasicImprovementGenerator;
 
 impl ImprovementGenerator for BasicImprovementGenerator {
     fn generate(&self, patterns: &[Pattern]) -> Vec<ImprovementProposal> {
-        patterns.iter().map(|p| ImprovementProposal {
-            proposal_id: Uuid::new_v4(),
-            generated_at: Utc::now(),
-            triggering_metrics: p.gaps.iter().map(|g| (g.dimension, g.current)).collect(),
-            suggested_changes: vec![format!("address {} gap(s): {}", p.gaps.len(), p.name)],
-            confidence: 0.8,
-            identity_modification: None,
-        }).collect()
+        patterns
+            .iter()
+            .map(|p| ImprovementProposal {
+                proposal_id: Uuid::new_v4(),
+                generated_at: Utc::now(),
+                triggering_metrics: p.gaps.iter().map(|g| (g.dimension, g.current)).collect(),
+                suggested_changes: vec![format!("address {} gap(s): {}", p.gaps.len(), p.name)],
+                confidence: 0.8,
+                identity_modification: None,
+            })
+            .collect()
     }
 }
 
@@ -127,17 +141,30 @@ impl SelfImprovementLoop {
         gatekeeper: Arc<crate::governance::proposal_gate::ProposalGatekeeper>,
         adaptor: Arc<super::behavioral_adaptor::BehavioralAdaptor>,
     ) -> Self {
-        Self { outcome_tracker, evaluator, recognizer, generator, gatekeeper, adaptor }
+        Self {
+            outcome_tracker,
+            evaluator,
+            recognizer,
+            generator,
+            gatekeeper,
+            adaptor,
+        }
     }
 
     /// Run one iteration: metrics → gaps → patterns → proposals → gatekeeper → apply
-    pub async fn run_once(&self) -> Result<Vec<super::behavioral_adaptor::AppliedChange>, clawz_core::ClawzError> {
+    pub async fn run_once(
+        &self,
+    ) -> Result<Vec<super::behavioral_adaptor::AppliedChange>, clawz_core::ClawzError> {
         let metrics = self.outcome_tracker.current_metrics().await;
         let gaps = self.evaluator.evaluate(&metrics);
-        if gaps.is_empty() { return Ok(vec![]); }
+        if gaps.is_empty() {
+            return Ok(vec![]);
+        }
 
         let patterns = self.recognizer.recognize(&gaps);
-        if patterns.is_empty() { return Ok(vec![]); }
+        if patterns.is_empty() {
+            return Ok(vec![]);
+        }
 
         let proposals = self.generator.generate(&patterns);
         let mut all_changes = Vec::new();
@@ -147,7 +174,8 @@ impl SelfImprovementLoop {
                 let mut proposal_to_apply = proposal.clone();
                 // Wire identity_modification into suggested_changes so parse_and_apply can consume it.
                 if let Some(ref identity_mod) = proposal.identity_modification {
-                    let suggestion = format!("identity {} {}", identity_mod.field, identity_mod.delta);
+                    let suggestion =
+                        format!("identity {} {}", identity_mod.field, identity_mod.delta);
                     proposal_to_apply.suggested_changes.push(suggestion);
                 }
                 let changes = self.adaptor.apply(&proposal_to_apply).await?;
@@ -205,10 +233,20 @@ mod tests {
         struct DummySkillRepo;
         #[async_trait::async_trait]
         impl SkillRepository for DummySkillRepo {
-            async fn get_skill(&self, _: &str) -> Result<Option<crate::governance::skill_repository::SkillBundle>, clawz_core::ClawzError> {
+            async fn get_skill(
+                &self,
+                _: &str,
+            ) -> Result<
+                Option<crate::governance::skill_repository::SkillBundle>,
+                clawz_core::ClawzError,
+            > {
                 Ok(None)
             }
-            async fn update_skill(&self, _: &str, _: crate::governance::skill_repository::SkillBundle) -> Result<(), clawz_core::ClawzError> {
+            async fn update_skill(
+                &self,
+                _: &str,
+                _: crate::governance::skill_repository::SkillBundle,
+            ) -> Result<(), clawz_core::ClawzError> {
                 Ok(())
             }
         }
@@ -217,22 +255,18 @@ mod tests {
         let evaluator = Arc::new(ThresholdEvaluator::new(HashMap::new()));
         let recognizer = Arc::new(SimplePatternRecognizer);
         let generator = Arc::new(BasicImprovementGenerator);
-        let gatekeeper = Arc::new(
-            crate::governance::proposal_gate::ProposalGatekeeper::new(
-                crate::governance::proposal_gate::GateConfig {
-                    mode: clawz_core::deployment::DeploymentMode::Micro,
-                    required_approvals: 0,
-                },
-                Arc::new(crate::governance::approval::ApprovalWorkflow::new()),
-                Arc::new(crate::governance::audit::AuditLogger::new()),
-                None,
-            ),
-        );
-        let adaptor = Arc::new(
-            crate::memory::behavioral_adaptor::BehavioralAdaptor::new(
-                Arc::new(DummySkillRepo),
-            ),
-        );
+        let gatekeeper = Arc::new(crate::governance::proposal_gate::ProposalGatekeeper::new(
+            crate::governance::proposal_gate::GateConfig {
+                mode: clawz_core::deployment::DeploymentMode::Micro,
+                required_approvals: 0,
+            },
+            Arc::new(crate::governance::approval::ApprovalWorkflow::new()),
+            Arc::new(crate::governance::audit::AuditLogger::new()),
+            None,
+        ));
+        let adaptor = Arc::new(crate::memory::behavioral_adaptor::BehavioralAdaptor::new(
+            Arc::new(DummySkillRepo),
+        ));
 
         let loop_ = SelfImprovementLoop::new(
             tracker, evaluator, recognizer, generator, gatekeeper, adaptor,
@@ -259,6 +293,9 @@ mod tests {
         };
 
         assert!(proposal.identity_modification.is_some());
-        assert_eq!(proposal.identity_modification.as_ref().unwrap().field, "self_esteem");
+        assert_eq!(
+            proposal.identity_modification.as_ref().unwrap().field,
+            "self_esteem"
+        );
     }
 }

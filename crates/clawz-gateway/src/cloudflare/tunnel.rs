@@ -86,7 +86,10 @@ impl TunnelClient {
 
     /// Parse the standard Cloudflare API envelope.
     fn unwrap_cf_response(json: Value) -> Result<Value, ClawzError> {
-        let success = json.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+        let success = json
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if !success {
             let errors = json
                 .get("errors")
@@ -156,7 +159,8 @@ impl TunnelClient {
     /// required by the create endpoint.
     pub async fn create_tunnel(&self, name: &str) -> Result<TunnelInfo, ClawzError> {
         let url = self.base_url();
-        let body = serde_json::json!({ "name": name, "tunnel_secret": uuid::Uuid::new_v4().to_string() });
+        let body =
+            serde_json::json!({ "name": name, "tunnel_secret": uuid::Uuid::new_v4().to_string() });
 
         let resp = self
             .client
@@ -291,12 +295,9 @@ impl TunnelClient {
             .await
             .map_err(|e| ClawzError::Transport(format!("Tunnel configure_route failed: {e}")))?;
 
-        let json: Value = resp
-            .json()
-            .await
-            .map_err(|e| {
-                ClawzError::Transport(format!("Tunnel configure_route parse failed: {e}"))
-            })?;
+        let json: Value = resp.json().await.map_err(|e| {
+            ClawzError::Transport(format!("Tunnel configure_route parse failed: {e}"))
+        })?;
 
         Self::unwrap_cf_response(json)?;
         Ok(())

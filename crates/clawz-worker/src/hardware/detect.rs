@@ -369,11 +369,30 @@ fn detect_cpu_features() -> Vec<String> {
 
                         // x86 features we care about
                         let interesting = [
-                            "sse4_1", "sse4_2", "avx", "avx2", "avx512f", "avx512bw",
-                            "avx512cd", "avx512dq", "avx512vl", "fma", "bmi1", "bmi2",
-                            "aes", "vaes", "vpclmulqdq", "amx_bf16", "amx_int8",
+                            "sse4_1",
+                            "sse4_2",
+                            "avx",
+                            "avx2",
+                            "avx512f",
+                            "avx512bw",
+                            "avx512cd",
+                            "avx512dq",
+                            "avx512vl",
+                            "fma",
+                            "bmi1",
+                            "bmi2",
+                            "aes",
+                            "vaes",
+                            "vpclmulqdq",
+                            "amx_bf16",
+                            "amx_int8",
                             // ARM
-                            "asimd", "neon", "sve", "sve2", "fp16", "dotprod",
+                            "asimd",
+                            "neon",
+                            "sve",
+                            "sve2",
+                            "fp16",
+                            "dotprod",
                         ];
 
                         for flag in &flags {
@@ -457,11 +476,7 @@ fn detect_nvidia_gpus() -> Option<Vec<GpuInfo>> {
         });
     }
 
-    if gpus.is_empty() {
-        None
-    } else {
-        Some(gpus)
-    }
+    if gpus.is_empty() { None } else { Some(gpus) }
 }
 
 /// Parse a CUDA compute capability string of the form "major.minor".
@@ -531,11 +546,7 @@ fn detect_amd_gpus() -> Option<Vec<GpuInfo>> {
         }
     }
 
-    if gpus.is_empty() {
-        None
-    } else {
-        Some(gpus)
-    }
+    if gpus.is_empty() { None } else { Some(gpus) }
 }
 
 /// macOS: detect GPUs via `system_profiler SPDisplaysDataType`.
@@ -552,12 +563,9 @@ fn detect_metal_gpus() -> Option<Vec<GpuInfo>> {
         return None;
     }
 
-    let json: serde_json::Value =
-        serde_json::from_slice(&output.stdout).ok()?;
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
 
-    let displays = json
-        .get("SPDisplaysDataType")
-        .and_then(|v| v.as_array())?;
+    let displays = json.get("SPDisplaysDataType").and_then(|v| v.as_array())?;
 
     let mut gpus = Vec::new();
 
@@ -579,9 +587,7 @@ fn detect_metal_gpus() -> Option<Vec<GpuInfo>> {
             GpuVendor::Apple
         } else if name.to_lowercase().contains("intel") {
             GpuVendor::Intel
-        } else if name.to_lowercase().contains("amd")
-            || name.to_lowercase().contains("radeon")
-        {
+        } else if name.to_lowercase().contains("amd") || name.to_lowercase().contains("radeon") {
             GpuVendor::Amd
         } else {
             GpuVendor::Unknown
@@ -598,11 +604,7 @@ fn detect_metal_gpus() -> Option<Vec<GpuInfo>> {
         });
     }
 
-    if gpus.is_empty() {
-        None
-    } else {
-        Some(gpus)
-    }
+    if gpus.is_empty() { None } else { Some(gpus) }
 }
 
 /// Parse a VRAM string like "16 GB", "8192 MB" → megabytes.
@@ -637,7 +639,10 @@ fn detect_lspci_gpus() -> Option<Vec<GpuInfo>> {
     for line in stdout.lines() {
         let lower = line.to_lowercase();
         // Match VGA, 3D, Display controllers
-        if lower.contains("vga") || lower.contains("3d controller") || lower.contains("display controller") {
+        if lower.contains("vga")
+            || lower.contains("3d controller")
+            || lower.contains("display controller")
+        {
             let name = extract_lspci_device_name(line);
             let vendor = detect_vendor_from_name(&name);
 
@@ -661,11 +666,7 @@ fn detect_lspci_gpus() -> Option<Vec<GpuInfo>> {
         }
     }
 
-    if gpus.is_empty() {
-        None
-    } else {
-        Some(gpus)
-    }
+    if gpus.is_empty() { None } else { Some(gpus) }
 }
 
 /// Extract a human-readable device name from an `lspci -mm` line.
@@ -674,10 +675,7 @@ fn detect_lspci_gpus() -> Option<Vec<GpuInfo>> {
 /// Quoted tokens after splitting on `"` give vendor + device name.
 fn extract_lspci_device_name(line: &str) -> String {
     // Collect quoted tokens
-    let parts: Vec<&str> = line
-        .split('"')
-        .filter(|s| !s.trim().is_empty())
-        .collect();
+    let parts: Vec<&str> = line.split('"').filter(|s| !s.trim().is_empty()).collect();
 
     // Vendor is parts[1], device is parts[2] (when 0-indexed after split on quotes)
     if parts.len() >= 3 {
@@ -692,7 +690,8 @@ fn detect_vendor_from_name(name: &str) -> GpuVendor {
     let lower = name.to_lowercase();
     if lower.contains("nvidia") || lower.contains("geforce") || lower.contains("quadro") {
         GpuVendor::Nvidia
-    } else if lower.contains("amd") || lower.contains("radeon") || lower.contains("advanced micro") {
+    } else if lower.contains("amd") || lower.contains("radeon") || lower.contains("advanced micro")
+    {
         GpuVendor::Amd
     } else if lower.contains("intel") {
         GpuVendor::Intel
@@ -793,7 +792,11 @@ mod tests {
     #[test]
     fn test_suggest_model() {
         assert!(suggest_model(80.0).contains("70b"));
-        assert!(suggest_model(5.0).contains("phi") || suggest_model(5.0).contains("gemma") || suggest_model(5.0).contains("8b"));
+        assert!(
+            suggest_model(5.0).contains("phi")
+                || suggest_model(5.0).contains("gemma")
+                || suggest_model(5.0).contains("8b")
+        );
         assert!(!suggest_model(1.0).is_empty());
     }
 

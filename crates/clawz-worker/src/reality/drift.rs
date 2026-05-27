@@ -53,7 +53,10 @@ impl DriftDetector {
             } else {
                 signals.push(DriftSignal {
                     kind: DriftKind::ChangeNotification,
-                    detail: format!("resource '{}' disappeared from inventory", pred_limit.resource),
+                    detail: format!(
+                        "resource '{}' disappeared from inventory",
+                        pred_limit.resource
+                    ),
                 });
             }
         }
@@ -67,10 +70,7 @@ impl DriftDetector {
             if pred_opt.is_none() {
                 signals.push(DriftSignal {
                     kind: DriftKind::ChangeNotification,
-                    detail: format!(
-                        "resource '{}' appeared in inventory",
-                        obs_limit.resource
-                    ),
+                    detail: format!("resource '{}' appeared in inventory", obs_limit.resource),
                 });
             }
         }

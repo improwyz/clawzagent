@@ -1,7 +1,7 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,7 +21,10 @@ impl WebSearchTool {
     }
 
     /// Search using DuckDuckGo Instant Answer API (free, no key required).
-    async fn search_duckduckgo(query: &str, max_results: usize) -> Result<Vec<SearchResult>, ClawzError> {
+    async fn search_duckduckgo(
+        query: &str,
+        max_results: usize,
+    ) -> Result<Vec<SearchResult>, ClawzError> {
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(15))
             .user_agent("ClawZ-Agent/1.0")
@@ -192,9 +195,12 @@ impl Tool for WebSearchTool {
         "Search the web for information. Returns a list of {title, url, snippet} results."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Read }
-    fn risk(&self) -> RiskLevel { RiskLevel::Low }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Read
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::Low
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "web_search".into(),
@@ -225,19 +231,12 @@ impl Tool for WebSearchTool {
         }
     }
 
-    async fn execute(
-        &self,
-        _ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, _ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let query = args["query"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("query required".into()))?;
 
-        let max_results = args["max_results"]
-            .as_u64()
-            .unwrap_or(10)
-            .min(20) as usize;
+        let max_results = args["max_results"].as_u64().unwrap_or(10).min(20) as usize;
 
         let engine = args["engine"].as_str().unwrap_or("duckduckgo");
 
@@ -257,7 +256,8 @@ impl Tool for WebSearchTool {
             _ => {
                 // Default to DuckDuckGo, fall back to SearXNG if configured
                 if let Some(base) = searxng_base {
-                    Self::search_searxng(&base, query, max_results).await
+                    Self::search_searxng(&base, query, max_results)
+                        .await
                         .unwrap_or_else(|_| vec![])
                 } else {
                     Self::search_duckduckgo(query, max_results).await?
@@ -286,8 +286,9 @@ mod urlencoding {
         let mut out = String::new();
         for b in s.bytes() {
             match b {
-                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9'
-                | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                    out.push(b as char)
+                }
                 b' ' => out.push('+'),
                 _ => out.push_str(&format!("%{:02X}", b)),
             }
@@ -312,7 +313,12 @@ mod tests {
         let schema = tool.schema();
         assert_eq!(schema.name, "web_search");
         assert!(schema.parameters["properties"]["query"].is_object());
-        assert!(schema.parameters["required"].as_array().unwrap().contains(&serde_json::json!("query")));
+        assert!(
+            schema.parameters["required"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("query"))
+        );
     }
 
     #[tokio::test]

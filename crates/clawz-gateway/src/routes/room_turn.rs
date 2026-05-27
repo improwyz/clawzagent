@@ -95,7 +95,9 @@ pub async fn spawn_room_agent_turn(state: AppState, params: RoomTurnParams) {
         match turn {
             Ok(turn) => {
                 let agent_msg = RoomMessageRecord {
-                    id: turn.message_id.unwrap_or_else(|| Uuid::new_v4().to_string()),
+                    id: turn
+                        .message_id
+                        .unwrap_or_else(|| Uuid::new_v4().to_string()),
                     room_id: room_id.clone(),
                     seq: 0,
                     sender_type: "agent".to_string(),
@@ -107,9 +109,7 @@ pub async fn spawn_room_agent_turn(state: AppState, params: RoomTurnParams) {
                     thread_id: thread_id.clone(),
                     created_at: Utc::now(),
                 };
-                if let Err(e) =
-                    append_room_message(&state, &tenant_id, &room_id, agent_msg).await
-                {
+                if let Err(e) = append_room_message(&state, &tenant_id, &room_id, agent_msg).await {
                     tracing::warn!("failed to append agent message for room {room_id}: {e}");
                 }
             }
@@ -128,8 +128,7 @@ pub async fn spawn_room_agent_turn(state: AppState, params: RoomTurnParams) {
                     thread_id: None,
                     created_at: Utc::now(),
                 };
-                if let Err(err) =
-                    append_room_message(&state, &tenant_id, &room_id, error_msg).await
+                if let Err(err) = append_room_message(&state, &tenant_id, &room_id, error_msg).await
                 {
                     tracing::warn!(
                         "failed to append system error message for room {room_id}: {err}"

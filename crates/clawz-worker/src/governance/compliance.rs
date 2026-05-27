@@ -268,10 +268,7 @@ impl ComplianceBundle {
             .iter()
             .filter(|c| c.status == ControlStatus::NotSatisfied)
             .count();
-        let total_evidence_entries = controls
-            .iter()
-            .map(|c| c.evidence.len())
-            .sum();
+        let total_evidence_entries = controls.iter().map(|c| c.evidence.len()).sum();
 
         Self {
             framework: framework.to_string(),
@@ -609,14 +606,9 @@ impl<'a> ComplianceExporter<'a> {
     ///
     /// Returns [`ClawzError::Serialization`] if the bundle cannot be
     /// serialised to JSON (should be rare in practice).
-    pub fn export_json(
-        &self,
-        framework: ComplianceFramework,
-        range: DateRange,
-    ) -> Result<String> {
+    pub fn export_json(&self, framework: ComplianceFramework, range: DateRange) -> Result<String> {
         let bundle = self.export_evidence(framework, range);
-        serde_json::to_string_pretty(&bundle)
-            .map_err(|e| ClawzError::Serialization(e.to_string()))
+        serde_json::to_string_pretty(&bundle).map_err(|e| ClawzError::Serialization(e.to_string()))
     }
 }
 
@@ -630,7 +622,12 @@ mod tests {
         let logger = AuditLogger::new();
         logger.append("a1", "chat", AuditResult::Allow, serde_json::json!({}));
         logger.append("a2", "deploy", AuditResult::Deny, serde_json::json!({}));
-        logger.append("a3", "governance_check", AuditResult::Review, serde_json::json!({}));
+        logger.append(
+            "a3",
+            "governance_check",
+            AuditResult::Review,
+            serde_json::json!({}),
+        );
         logger
     }
 
@@ -642,7 +639,11 @@ mod tests {
         assert_eq!(bundle.framework, "SOC2");
         assert!(!bundle.controls.is_empty());
         // CC7.2 (monitoring) should have all 3 entries.
-        let cc7 = bundle.controls.iter().find(|c| c.control_id == "CC7.2").unwrap();
+        let cc7 = bundle
+            .controls
+            .iter()
+            .find(|c| c.control_id == "CC7.2")
+            .unwrap();
         assert_eq!(cc7.evidence.len(), 3);
     }
 
@@ -658,10 +659,15 @@ mod tests {
     fn test_eu_ai_act_export() {
         let logger = populated_logger();
         let exporter = ComplianceExporter::new(&logger);
-        let bundle = exporter.export_evidence(ComplianceFramework::EuAiAct, DateRange::last_30_days());
+        let bundle =
+            exporter.export_evidence(ComplianceFramework::EuAiAct, DateRange::last_30_days());
         assert_eq!(bundle.framework, "EU AI Act");
         // Art.12 should have all entries.
-        let art12 = bundle.controls.iter().find(|c| c.control_id == "Art.12").unwrap();
+        let art12 = bundle
+            .controls
+            .iter()
+            .find(|c| c.control_id == "Art.12")
+            .unwrap();
         assert_eq!(art12.evidence.len(), 3);
     }
 
@@ -671,7 +677,11 @@ mod tests {
         let exporter = ComplianceExporter::new(&logger);
         let bundle = exporter.export_evidence(ComplianceFramework::Soc2, DateRange::last_30_days());
         // CC6.1 (access) should have no evidence.
-        let cc6 = bundle.controls.iter().find(|c| c.control_id == "CC6.1").unwrap();
+        let cc6 = bundle
+            .controls
+            .iter()
+            .find(|c| c.control_id == "CC6.1")
+            .unwrap();
         assert_eq!(cc6.status, ControlStatus::NotSatisfied);
     }
 
@@ -690,10 +700,7 @@ mod tests {
         let logger = populated_logger();
         let exporter = ComplianceExporter::new(&logger);
         let bundle = exporter.export_evidence(ComplianceFramework::Soc2, DateRange::last_30_days());
-        assert_eq!(
-            bundle.summary.total_controls,
-            bundle.controls.len()
-        );
+        assert_eq!(bundle.summary.total_controls, bundle.controls.len());
         assert_eq!(
             bundle.summary.satisfied + bundle.summary.partial + bundle.summary.not_satisfied,
             bundle.summary.total_controls

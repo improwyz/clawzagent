@@ -9,14 +9,14 @@
 //! - No direct dependency on other route modules; operates only on `AppState.channels`.
 
 use axum::{
+    Json, Router,
     extract::{Extension, Path, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::Utc;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 // Dependency: AppState, ChannelRecord, GatewayError defined in crate root.
@@ -31,14 +31,16 @@ use crate::{AppState, ChannelRecord, GatewayError};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_channels).post(create_channel))
-        .route("/{id}", get(get_channel).put(update_channel).delete(delete_channel))
+        .route(
+            "/{id}",
+            get(get_channel).put(update_channel).delete(delete_channel),
+        )
         .route("/{id}/test", post(test_channel))
 }
 
 fn caller_tenant(auth: Option<Extension<AuthContext>>) -> Result<String, GatewayError> {
-    auth.map(|Extension(ctx)| ctx.tenant_id.clone()).ok_or_else(|| {
-        GatewayError::Unauthorized("authentication required".to_string())
-    })
+    auth.map(|Extension(ctx)| ctx.tenant_id.clone())
+        .ok_or_else(|| GatewayError::Unauthorized("authentication required".to_string()))
 }
 
 fn require_tenant_channel(channel: &ChannelRecord, tenant_id: &str) -> Result<(), GatewayError> {
@@ -103,9 +105,9 @@ async fn create_channel(
     Json(body): Json<CreateChannelBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
     let tenant_id = caller_tenant(auth)?;
-    let name = body.name.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'name' is required".to_string())
-    })?;
+    let name = body
+        .name
+        .ok_or_else(|| GatewayError::Unprocessable("field 'name' is required".to_string()))?;
     let channel_type = body.channel_type.ok_or_else(|| {
         GatewayError::Unprocessable("field 'channel_type' is required".to_string())
     })?;

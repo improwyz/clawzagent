@@ -195,14 +195,12 @@ impl MemoryBackend for PostgresMemoryBackend {
     }
 
     async fn retrieve(&self, agent_id: &str, key: &str) -> Result<Option<Value>> {
-        let row = sqlx::query(
-            "SELECT value FROM clawz_memory WHERE agent_id = $1 AND key = $2",
-        )
-        .bind(agent_id)
-        .bind(key)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| ClawzError::Database(e.to_string()))?;
+        let row = sqlx::query("SELECT value FROM clawz_memory WHERE agent_id = $1 AND key = $2")
+            .bind(agent_id)
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| ClawzError::Database(e.to_string()))?;
 
         Ok(row.map(|r| r.get::<Value, _>("value")))
     }
@@ -286,8 +284,8 @@ impl MemoryBackend for PostgresMemoryBackend {
     }
 
     async fn save_message(&self, conversation_id: &str, message: &Message) -> Result<()> {
-        let content = serde_json::to_value(message)
-            .map_err(|e| ClawzError::Serialization(e.to_string()))?;
+        let content =
+            serde_json::to_value(message).map_err(|e| ClawzError::Serialization(e.to_string()))?;
         let role = message.role.as_str();
         sqlx::query(
             r#"
@@ -317,8 +315,8 @@ impl MemoryBackend for PostgresMemoryBackend {
     }
 
     async fn save_agent_state(&self, agent_id: &str, state: &AgentState) -> Result<()> {
-        let value = serde_json::to_value(state)
-            .map_err(|e| ClawzError::Serialization(e.to_string()))?;
+        let value =
+            serde_json::to_value(state).map_err(|e| ClawzError::Serialization(e.to_string()))?;
         // Use a reserved key so it does not collide with user keys.
         self.store(agent_id, "__state__", value, None).await
     }
@@ -530,10 +528,7 @@ mod tests {
             .store("a", "k2", serde_json::json!("v2"), Some(vec![0.0, 1.0]))
             .await
             .unwrap();
-        let results = backend
-            .search("a", vec![1.0, 0.0], 2)
-            .await
-            .unwrap();
+        let results = backend.search("a", vec![1.0, 0.0], 2).await.unwrap();
         assert!(!results.is_empty());
         assert_eq!(results[0].key, "k1");
         assert!((results[0].score - 1.0).abs() < 1e-6);

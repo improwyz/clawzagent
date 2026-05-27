@@ -59,7 +59,7 @@ use clawz_core::types::channel::{ChannelCapabilities, IncomingMessage, OutgoingM
 // Dependency: hmac + sha2 for configurable HMAC-SHA256 webhook signature verification
 use hmac::{Hmac, Mac};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use sha2::Sha256;
 
 // Dependency: helper utilities from the parent plugin module (worker-internal)
@@ -139,7 +139,9 @@ impl WebhookChannel {
             .unwrap_or(&sig);
 
         if computed_hex != expected {
-            return Err(ClawzError::Auth("Webhook HMAC signature mismatch".to_string()));
+            return Err(ClawzError::Auth(
+                "Webhook HMAC signature mismatch".to_string(),
+            ));
         }
 
         Ok(())
@@ -197,10 +199,20 @@ impl ChannelPlugin for WebhookChannel {
         let mut req = ctx.http_client.get(url);
 
         // Auth headers from credentials: try bearer first, then API key.
-        if let Some(token) = ctx.config.credentials.get("bearer_token").and_then(|v| v.as_str()) {
+        if let Some(token) = ctx
+            .config
+            .credentials
+            .get("bearer_token")
+            .and_then(|v| v.as_str())
+        {
             req = req.bearer_auth(token);
         }
-        if let Some(key) = ctx.config.credentials.get("api_key").and_then(|v| v.as_str()) {
+        if let Some(key) = ctx
+            .config
+            .credentials
+            .get("api_key")
+            .and_then(|v| v.as_str())
+        {
             let header_name = ctx
                 .config
                 .credentials
@@ -290,7 +302,8 @@ impl ChannelPlugin for WebhookChannel {
 
             let mut im = IncomingMessage::new(ctx.config.id, sender_id, sender_name, text);
             if !id.is_empty() {
-                im.metadata.insert("webhook_item_id".to_string(), Value::String(id));
+                im.metadata
+                    .insert("webhook_item_id".to_string(), Value::String(id));
             }
             // Store raw payload for downstream processing so agents can access extra fields.
             im.metadata.insert("webhook_raw".to_string(), item.clone());
@@ -328,9 +341,7 @@ impl ChannelPlugin for WebhookChannel {
             // Simple {{content}} substitution
             let rendered = template.replace("{{content}}", &msg.content);
             // If the rendered string is valid JSON, use it; otherwise fall back to a simple object.
-            serde_json::from_str(&rendered).unwrap_or_else(|_| {
-                json!({ "text": &msg.content })
-            })
+            serde_json::from_str(&rendered).unwrap_or_else(|_| json!({ "text": &msg.content }))
         } else {
             json!({ "text": &msg.content })
         };
@@ -343,10 +354,20 @@ impl ChannelPlugin for WebhookChannel {
         };
 
         // Auth: same fallback chain as receive (bearer then API key).
-        if let Some(token) = ctx.config.credentials.get("bearer_token").and_then(|v| v.as_str()) {
+        if let Some(token) = ctx
+            .config
+            .credentials
+            .get("bearer_token")
+            .and_then(|v| v.as_str())
+        {
             req = req.bearer_auth(token);
         }
-        if let Some(key) = ctx.config.credentials.get("api_key").and_then(|v| v.as_str()) {
+        if let Some(key) = ctx
+            .config
+            .credentials
+            .get("api_key")
+            .and_then(|v| v.as_str())
+        {
             let header_name = ctx
                 .config
                 .credentials
@@ -383,11 +404,10 @@ impl ChannelPlugin for WebhookChannel {
     /// wrapped as opaque text messages.
     async fn webhook(&self, payload: &[u8], _headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
         // Parse the raw payload as JSON
-        let body: Value = serde_json::from_slice(payload)
-            .unwrap_or_else(|_| {
-                // If not JSON, treat the raw bytes as text content
-                Value::String(String::from_utf8_lossy(payload).into_owned())
-            });
+        let body: Value = serde_json::from_slice(payload).unwrap_or_else(|_| {
+            // If not JSON, treat the raw bytes as text content
+            Value::String(String::from_utf8_lossy(payload).into_owned())
+        });
 
         // Determine content using configured path or common field names
         let content = if let Some(s) = body.as_str() {
@@ -429,7 +449,11 @@ impl ChannelPlugin for WebhookChannel {
             .unwrap_or(&sender_id)
             .to_string();
 
-        let id = body.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let id = body
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
 
         let mut im = IncomingMessage::new(uuid::Uuid::new_v4(), sender_id, sender_name, content);
         if !id.is_empty() {

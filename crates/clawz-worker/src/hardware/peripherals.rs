@@ -112,7 +112,7 @@ impl UsbDeviceInfo {
     /// checking the product name string.
     pub fn inferred_type(&self) -> PeripheralType {
         match self.usb_class {
-            0x01 => PeripheralType::Speaker, // Audio
+            0x01 => PeripheralType::Speaker,       // Audio
             0x02 | 0x0a => PeripheralType::Serial, // CDC / CDC-Data
             0x03 => {
                 // HID — try to distinguish keyboard vs mouse from product name
@@ -238,10 +238,7 @@ impl SerialConnection {
             .custom_flags(libc_o_noctty() | libc_o_nonblock())
             .open(path)
             .map_err(|e| {
-                ClawzError::Hardware(format!(
-                    "cannot open serial port {}: {e}",
-                    path.display()
-                ))
+                ClawzError::Hardware(format!("cannot open serial port {}: {e}", path.display()))
             })?;
 
         // Configure baud rate via platform-specific code
@@ -774,16 +771,21 @@ fn scan_serial_ports() -> Vec<PathBuf> {
         };
         for entry in rd.flatten() {
             let path = entry.path();
-            let dev_name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let dev_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             // Only include ttyS0-ttyS3 to avoid listing all 64 virtual terminals
-            let include = patterns[..2].iter().any(|p| {
-                path.to_str().map(|s| s.starts_with(p)).unwrap_or(false)
-            }) || (dev_name.starts_with("ttyS") && {
-                dev_name[4..].parse::<u32>().map(|n| n <= 3).unwrap_or(false)
-            }) || path.to_str().map(|s| s.starts_with("/dev/rfcomm")).unwrap_or(false);
+            let include = patterns[..2]
+                .iter()
+                .any(|p| path.to_str().map(|s| s.starts_with(p)).unwrap_or(false))
+                || (dev_name.starts_with("ttyS") && {
+                    dev_name[4..]
+                        .parse::<u32>()
+                        .map(|n| n <= 3)
+                        .unwrap_or(false)
+                })
+                || path
+                    .to_str()
+                    .map(|s| s.starts_with("/dev/rfcomm"))
+                    .unwrap_or(false);
 
             if include && path.exists() {
                 ports.push(path);
@@ -878,8 +880,14 @@ mod tests {
             sysfs_path: PathBuf::new(),
         };
 
-        assert_eq!(make(0x03, Some("USB Keyboard")).inferred_type(), PeripheralType::Keyboard);
-        assert_eq!(make(0x03, Some("USB Mouse")).inferred_type(), PeripheralType::Mouse);
+        assert_eq!(
+            make(0x03, Some("USB Keyboard")).inferred_type(),
+            PeripheralType::Keyboard
+        );
+        assert_eq!(
+            make(0x03, Some("USB Mouse")).inferred_type(),
+            PeripheralType::Mouse
+        );
         assert_eq!(make(0x0e, None).inferred_type(), PeripheralType::Camera);
         assert_eq!(make(0x02, None).inferred_type(), PeripheralType::Serial);
     }

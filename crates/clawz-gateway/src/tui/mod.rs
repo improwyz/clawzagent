@@ -45,7 +45,11 @@ pub fn run_onboarding() {
     };
     let anthropic_key = prompt(&mut reader, "Anthropic API key", "");
     let openai_key = prompt(&mut reader, "OpenAI API key (optional)", "");
-    let log_level = prompt(&mut reader, "Log level (trace/debug/info/warn/error)", "info");
+    let log_level = prompt(
+        &mut reader,
+        "Log level (trace/debug/info/warn/error)",
+        "info",
+    );
     let data_dir = prompt(&mut reader, "Data directory", "/var/lib/clawz");
 
     println!("\n┌──────────────────────────────────────────────────┐");
@@ -157,9 +161,17 @@ fn config_providers(reader: &mut impl BufRead) {
     let _ = reader.read_line(&mut choice);
     match choice.trim() {
         "a" => {
-            let name = prompt(reader, "Provider name (anthropic/openai/gemini)", "anthropic");
+            let name = prompt(
+                reader,
+                "Provider name (anthropic/openai/gemini)",
+                "anthropic",
+            );
             let key = prompt_secret(reader, "API key");
-            println!("  [+] Provider '{}' configured (key: {}).", name, mask_key(&key));
+            println!(
+                "  [+] Provider '{}' configured (key: {}).",
+                name,
+                mask_key(&key)
+            );
         }
         "l" => {
             println!("  Providers:");
@@ -192,7 +204,11 @@ fn config_channels(reader: &mut impl BufRead) {
 /// high-risk actions and per-task spend caps.
 fn config_governance(reader: &mut impl BufRead) {
     println!("\n--- Governance Configuration ---");
-    let require_approval = prompt(reader, "Require human approval for high-risk actions? [y/N]", "n");
+    let require_approval = prompt(
+        reader,
+        "Require human approval for high-risk actions? [y/N]",
+        "n",
+    );
     let max_cost = prompt(reader, "Max cost per task in USD [0 = unlimited]", "0");
     println!(
         "  Governance: approval={}, max_cost_usd={}",
@@ -210,7 +226,10 @@ fn config_deploy(reader: &mut impl BufRead) {
     let target = prompt(reader, "Deploy target", "fly");
     let region = prompt(reader, "Region", "iad");
     println!("  [+] Deploy target: {} in {}.", target, region);
-    println!("  Run `clawz-gateway deploy --target {}` to deploy.", target);
+    println!(
+        "  Run `clawz-gateway deploy --target {}` to deploy.",
+        target
+    );
 }
 
 // ---------------------------------------------------------------------------

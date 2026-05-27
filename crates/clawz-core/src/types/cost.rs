@@ -57,7 +57,14 @@ impl CostRecord {
         output_tokens: u64,
     ) -> Self {
         let cost = pricing.compute_cost(input_tokens, output_tokens);
-        Self::new(agent_id, provider, &pricing.model, input_tokens, output_tokens, cost)
+        Self::new(
+            agent_id,
+            provider,
+            &pricing.model,
+            input_tokens,
+            output_tokens,
+            cost,
+        )
     }
 }
 

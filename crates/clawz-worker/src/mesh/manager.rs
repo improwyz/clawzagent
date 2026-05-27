@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -122,7 +122,10 @@ impl MeshPeer {
 
     /// Return true if the peer can still receive messages.
     pub fn is_reachable(&self) -> bool {
-        matches!(self.state, PeerState::Connected | PeerState::Active | PeerState::Suspect)
+        matches!(
+            self.state,
+            PeerState::Connected | PeerState::Active | PeerState::Suspect
+        )
     }
 }
 
@@ -144,7 +147,11 @@ pub enum MeshEvent {
     /// The peer has been removed from the registry (stale or explicit).
     PeerRemoved(Uuid),
     /// A heartbeat (pong) was received from the peer on a specific path.
-    HeartbeatReceived { peer_id: Uuid, path: String, rtt_ms: f64 },
+    HeartbeatReceived {
+        peer_id: Uuid,
+        path: String,
+        rtt_ms: f64,
+    },
     /// An opaque payload was received from the peer.
     MessageReceived { from: Uuid, payload: Vec<u8> },
 }
@@ -251,7 +258,10 @@ impl MeshManager {
         // Stale peer reaper task.
         handles.push(self.spawn_reaper_task());
 
-        log::info!("Mesh manager started with {} background tasks", handles.len());
+        log::info!(
+            "Mesh manager started with {} background tasks",
+            handles.len()
+        );
         Ok(())
     }
 
@@ -336,11 +346,9 @@ impl MeshManager {
             peers.get(peer_id).cloned()
         };
 
-        let peer = peer.ok_or_else(|| {
-            ClawzError::NotFound {
-                entity: "mesh_peer".to_string(),
-                id: peer_id.to_string(),
-            }
+        let peer = peer.ok_or_else(|| ClawzError::NotFound {
+            entity: "mesh_peer".to_string(),
+            id: peer_id.to_string(),
         })?;
 
         if !peer.is_reachable() {
@@ -354,9 +362,7 @@ impl MeshManager {
             .router
             .select_path(*peer_id, traffic_type)
             .await
-            .ok_or_else(|| {
-                ClawzError::Mesh(format!("No healthy path to peer {peer_id}"))
-            })?;
+            .ok_or_else(|| ClawzError::Mesh(format!("No healthy path to peer {peer_id}")))?;
 
         log::debug!(
             "Sending {} bytes to peer {peer_id} via {} (latency={}ms)",
@@ -403,9 +409,7 @@ impl MeshManager {
 
     /// Process an incoming heartbeat (pong) from a peer.
     pub async fn receive_heartbeat(&self, peer_id: Uuid, path: &str, rtt_ms: f64) {
-        self.heartbeat
-            .record_received(&peer_id, path, rtt_ms)
-            .await;
+        self.heartbeat.record_received(&peer_id, path, rtt_ms).await;
 
         // Update router path stats based on measured RTT.
         {
@@ -424,7 +428,10 @@ impl MeshManager {
             if let Some(peer) = peers.get_mut(&peer_id) {
                 // Any heartbeat response proves the path is alive; upgrade
                 // state so the peer can receive traffic again.
-                if matches!(peer.state, PeerState::Suspect | PeerState::Connected | PeerState::Connecting) {
+                if matches!(
+                    peer.state,
+                    PeerState::Suspect | PeerState::Connected | PeerState::Connecting
+                ) {
                     peer.transition_to(PeerState::Active);
                     let _ = self.event_tx.send(MeshEvent::PeerActive(peer_id));
                 }
@@ -490,7 +497,9 @@ impl MeshManager {
                             _ => 20.0,
                         };
 
-                        heartbeat.record_received(&peer_id, path_name, simulated_rtt).await;
+                        heartbeat
+                            .record_received(&peer_id, path_name, simulated_rtt)
+                            .await;
 
                         // Update router with measured RTT so subsequent sends
                         // pick the truly fastest path, not just the optimistic default.
@@ -566,9 +575,7 @@ impl MeshManager {
                 }
 
                 // Check each peer's paths for health degradation.
-                let peer_ids: Vec<Uuid> = {
-                    peers.read().await.keys().copied().collect()
-                };
+                let peer_ids: Vec<Uuid> = { peers.read().await.keys().copied().collect() };
 
                 for peer_id in peer_ids {
                     for path_name in &["grpc", "quic", "wss"] {
@@ -579,7 +586,10 @@ impl MeshManager {
                                     use crate::mesh::heartbeat::PathHealthStatus;
                                     if matches!(status, PathHealthStatus::Down) {
                                         router.mark_path_unhealthy(&peer_id, name).await;
-                                    } else if matches!(status, PathHealthStatus::Active | PathHealthStatus::Recovering) {
+                                    } else if matches!(
+                                        status,
+                                        PathHealthStatus::Active | PathHealthStatus::Recovering
+                                    ) {
                                         router.mark_path_healthy(&peer_id, name).await;
                                     }
                                 }
@@ -707,7 +717,10 @@ mod tests {
         // Manually transition to Connected to simulate a connection.
         {
             let mut peers = mgr.peers.write().await;
-            peers.get_mut(&peer_id).unwrap().transition_to(PeerState::Connected);
+            peers
+                .get_mut(&peer_id)
+                .unwrap()
+                .transition_to(PeerState::Connected);
         }
 
         mgr.receive_heartbeat(peer_id, "grpc", 12.5).await;
@@ -727,8 +740,14 @@ mod tests {
         // Transition both to Active.
         {
             let mut peers = mgr.peers.write().await;
-            peers.get_mut(&peer_id1).unwrap().transition_to(PeerState::Active);
-            peers.get_mut(&peer_id2).unwrap().transition_to(PeerState::Active);
+            peers
+                .get_mut(&peer_id1)
+                .unwrap()
+                .transition_to(PeerState::Active);
+            peers
+                .get_mut(&peer_id2)
+                .unwrap()
+                .transition_to(PeerState::Active);
         }
 
         let results = mgr.broadcast(b"hello mesh", TrafficType::Metrics).await;

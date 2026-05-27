@@ -36,12 +36,14 @@ use clawz_core::error::{ClawzError, Result};
 // Dependency: ChannelPlugin trait lives in the shared core crate
 use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 // Dependency: canonical message and attachment types defined in core
-use clawz_core::types::channel::{Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage};
+use clawz_core::types::channel::{
+    Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage,
+};
 use http::HeaderMap;
 // Dependency: hmac + sha2 for Slack's HMAC-SHA256 request signature verification
 use hmac::{Hmac, Mac};
+use serde_json::{Value, json};
 use sha2::Sha256;
-use serde_json::{json, Value};
 
 // Dependency: helper utilities from the parent plugin module (worker-internal)
 use crate::channels::plugin::{cred_str, map_http_error, markdown_to_slack_mrkdwn};
@@ -101,7 +103,8 @@ impl SlackChannel {
             .to_string();
 
         let mut im = IncomingMessage::new(ctx.config.id, user.clone(), user, text);
-        im.metadata.insert("slack_ts".to_string(), Value::String(ts.clone()));
+        im.metadata
+            .insert("slack_ts".to_string(), Value::String(ts.clone()));
 
         // thread_ts present means message is in a thread; we map it to thread_id.
         if let Some(thread_ts) = msg.get("thread_ts").and_then(|v| v.as_str()) {
@@ -111,14 +114,25 @@ impl SlackChannel {
         // Files / attachments: Slack uses a `files` array with private URLs.
         if let Some(files) = msg.get("files").and_then(|v| v.as_array()) {
             for f in files {
-                let id = f.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let name = f.get("name").and_then(|v| v.as_str()).unwrap_or("file").to_string();
+                let id = f
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let name = f
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("file")
+                    .to_string();
                 let mime = f
                     .get("mimetype")
                     .and_then(|v| v.as_str())
                     .unwrap_or("application/octet-stream")
                     .to_string();
-                let url = f.get("url_private").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let url = f
+                    .get("url_private")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 let size = f.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
                 im.attachments.push(Attachment {
                     id,
@@ -250,7 +264,10 @@ impl ChannelPlugin for SlackChannel {
 
             // Slack returns HTTP 200 even for API errors; we must inspect `ok`.
             if body.get("ok").and_then(|v| v.as_bool()) != Some(true) {
-                let err = body.get("error").and_then(|v| v.as_str()).unwrap_or("unknown");
+                let err = body
+                    .get("error")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
                 return Err(ClawzError::Channel(format!("Slack API error: {err}")));
             }
 
@@ -391,9 +408,10 @@ impl ChannelPlugin for SlackChannel {
                 "Slack".to_string(),
                 challenge.to_string(),
             );
-            dummy
-                .metadata
-                .insert("_slack_challenge".to_string(), Value::String(challenge.to_string()));
+            dummy.metadata.insert(
+                "_slack_challenge".to_string(),
+                Value::String(challenge.to_string()),
+            );
             return Ok(vec![dummy]);
         }
 
@@ -424,12 +442,7 @@ impl ChannelPlugin for SlackChannel {
                     .unwrap_or("")
                     .to_string();
 
-                let mut im = IncomingMessage::new(
-                    uuid::Uuid::new_v4(),
-                    user.clone(),
-                    user,
-                    text,
-                );
+                let mut im = IncomingMessage::new(uuid::Uuid::new_v4(), user.clone(), user, text);
                 im.metadata
                     .insert("slack_ts".to_string(), Value::String(ts));
                 im.metadata

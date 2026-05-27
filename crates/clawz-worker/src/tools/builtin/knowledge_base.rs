@@ -1,7 +1,7 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -39,7 +39,11 @@ impl KnowledgeBaseTool {
         // Format embedding as pgvector literal
         let embedding_str = format!(
             "[{}]",
-            embedding.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(",")
+            embedding
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
         );
 
         let sql = format!(
@@ -100,11 +104,14 @@ impl KnowledgeBaseTool {
 
         let embedding_str = format!(
             "[{}]",
-            embedding.iter().map(|f| f.to_string()).collect::<Vec<_>>().join(",")
+            embedding
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
         );
 
-        let metadata_json = serde_json::to_string(&metadata)
-            .unwrap_or_else(|_| "null".into());
+        let metadata_json = serde_json::to_string(&metadata).unwrap_or_else(|_| "null".into());
 
         let sql = format!(
             r#"
@@ -166,8 +173,8 @@ async fn get_embedding(text: &str) -> Result<Vec<f32>, ClawzError> {
         .or_else(|_| std::env::var("EMBEDDING_API_KEY"))
         .map_err(|_| ClawzError::Config("OPENAI_API_KEY not set for embeddings".into()))?;
 
-    let model = std::env::var("EMBEDDING_MODEL")
-        .unwrap_or_else(|_| "text-embedding-3-small".into());
+    let model =
+        std::env::var("EMBEDDING_MODEL").unwrap_or_else(|_| "text-embedding-3-small".into());
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
@@ -220,9 +227,12 @@ impl Tool for KnowledgeBaseTool {
         "Query and store information in the agent's knowledge base using vector similarity search (RAG). Requires pgvector-enabled PostgreSQL."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Read }
-    fn risk(&self) -> RiskLevel { RiskLevel::Low }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Read
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::Low
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "knowledge_base".into(),
@@ -265,11 +275,7 @@ impl Tool for KnowledgeBaseTool {
         }
     }
 
-    async fn execute(
-        &self,
-        ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let operation = args["operation"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("operation required".into()))?;
@@ -284,8 +290,7 @@ impl Tool for KnowledgeBaseTool {
 
                 let top_k = args["top_k"].as_u64().unwrap_or(5) as usize;
 
-                let entries =
-                    Self::query_rag(query, top_k, &ctx.agent_id, namespace).await?;
+                let entries = Self::query_rag(query, top_k, &ctx.agent_id, namespace).await?;
 
                 serde_json::json!({
                     "query": query,
@@ -302,8 +307,7 @@ impl Tool for KnowledgeBaseTool {
 
                 let metadata = args["metadata"].clone();
 
-                let id =
-                    Self::store_entry(content, metadata, &ctx.agent_id, namespace).await?;
+                let id = Self::store_entry(content, metadata, &ctx.agent_id, namespace).await?;
 
                 serde_json::json!({
                     "stored": true,
@@ -357,9 +361,21 @@ mod tests {
         let schema = KnowledgeBaseTool::new().schema();
         assert_eq!(schema.name, "knowledge_base");
         let ops = &schema.parameters["properties"]["operation"]["enum"];
-        assert!(ops.as_array().unwrap().contains(&serde_json::json!("query")));
-        assert!(ops.as_array().unwrap().contains(&serde_json::json!("store")));
-        assert!(ops.as_array().unwrap().contains(&serde_json::json!("delete")));
+        assert!(
+            ops.as_array()
+                .unwrap()
+                .contains(&serde_json::json!("query"))
+        );
+        assert!(
+            ops.as_array()
+                .unwrap()
+                .contains(&serde_json::json!("store"))
+        );
+        assert!(
+            ops.as_array()
+                .unwrap()
+                .contains(&serde_json::json!("delete"))
+        );
     }
 
     #[tokio::test]

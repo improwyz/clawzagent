@@ -223,13 +223,34 @@ mod tests {
 
     #[tokio::test]
     async fn from_parallelism_classifies_tiers_correctly() {
-        assert_eq!(ComplexityScore::from_parallelism(0).complexity, TaskComplexity::Low);
-        assert_eq!(ComplexityScore::from_parallelism(1).complexity, TaskComplexity::Low);
-        assert_eq!(ComplexityScore::from_parallelism(2).complexity, TaskComplexity::Medium);
-        assert_eq!(ComplexityScore::from_parallelism(3).complexity, TaskComplexity::Medium);
-        assert_eq!(ComplexityScore::from_parallelism(4).complexity, TaskComplexity::High);
-        assert_eq!(ComplexityScore::from_parallelism(5).complexity, TaskComplexity::High);
-        assert_eq!(ComplexityScore::from_parallelism(6).complexity, TaskComplexity::Massive);
+        assert_eq!(
+            ComplexityScore::from_parallelism(0).complexity,
+            TaskComplexity::Low
+        );
+        assert_eq!(
+            ComplexityScore::from_parallelism(1).complexity,
+            TaskComplexity::Low
+        );
+        assert_eq!(
+            ComplexityScore::from_parallelism(2).complexity,
+            TaskComplexity::Medium
+        );
+        assert_eq!(
+            ComplexityScore::from_parallelism(3).complexity,
+            TaskComplexity::Medium
+        );
+        assert_eq!(
+            ComplexityScore::from_parallelism(4).complexity,
+            TaskComplexity::High
+        );
+        assert_eq!(
+            ComplexityScore::from_parallelism(5).complexity,
+            TaskComplexity::High
+        );
+        assert_eq!(
+            ComplexityScore::from_parallelism(6).complexity,
+            TaskComplexity::Massive
+        );
         // Above-cap inputs clamp to 8 (Massive).
         let capped = ComplexityScore::from_parallelism(99);
         assert_eq!(capped.parallelism_hint, 8);
@@ -287,7 +308,10 @@ mod tests {
         // Default floor is 1; one match -> still Low because hits.max(floor)==1.
         assert_eq!(score.complexity, TaskComplexity::Low);
 
-        let score2 = a.analyze("Refactor the AUTH layer and the API").await.unwrap();
+        let score2 = a
+            .analyze("Refactor the AUTH layer and the API")
+            .await
+            .unwrap();
         assert_eq!(score2.parallelism_hint, 2);
         assert_eq!(score2.complexity, TaskComplexity::Medium);
     }

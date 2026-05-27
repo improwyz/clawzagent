@@ -1,6 +1,6 @@
 use clawz_core::types::{
-    ClarificationQuestion, Comparator, Constraint, ConstraintKind, GoalObject, GoalType,
-    Milestone, ParseOutcome, RewardWeights, SuccessCriterion,
+    ClarificationQuestion, Comparator, Constraint, ConstraintKind, GoalObject, GoalType, Milestone,
+    ParseOutcome, RewardWeights, SuccessCriterion,
 };
 
 #[test]
@@ -18,7 +18,9 @@ fn goal_object_builder_roundtrip() {
             Comparator::LessThan,
             serde_json::json!(5000.0),
         )])
-        .milestones(vec![Milestone::new("q1-review").with_due_date(chrono::Utc::now())])
+        .milestones(vec![
+            Milestone::new("q1-review").with_due_date(chrono::Utc::now())
+        ])
         .reward_weights(RewardWeights {
             accuracy: 0.1,
             speed: 0.2,
@@ -74,8 +76,14 @@ fn clarification_question_serde_roundtrip() {
 
 #[test]
 fn goal_type_serde_is_snake_case() {
-    assert_eq!(serde_json::to_string(&GoalType::Optimize).unwrap(), "\"optimize\"");
-    assert_eq!(serde_json::to_string(&GoalType::Maintain).unwrap(), "\"maintain\"");
+    assert_eq!(
+        serde_json::to_string(&GoalType::Optimize).unwrap(),
+        "\"optimize\""
+    );
+    assert_eq!(
+        serde_json::to_string(&GoalType::Maintain).unwrap(),
+        "\"maintain\""
+    );
     let back: GoalType = serde_json::from_str("\"explore\"").unwrap();
     assert_eq!(back, GoalType::Explore);
 }

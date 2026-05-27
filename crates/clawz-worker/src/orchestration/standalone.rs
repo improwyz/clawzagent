@@ -159,7 +159,9 @@ impl AgentScheduler for StandaloneScheduler {
                 continue;
             }
             // Check if agent has all requested capabilities
-            let has_all = capabilities.iter().all(|cap| handle.capabilities.contains(cap));
+            let has_all = capabilities
+                .iter()
+                .all(|cap| handle.capabilities.contains(cap));
             if has_all {
                 return Some(handle.clone());
             }

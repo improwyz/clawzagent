@@ -82,10 +82,10 @@ impl AwsConnector {
         let credential_scope = format!("{}/{}/{}/aws4_request", date_stamp, self.region, service);
         let mut hasher = Sha256::new();
         hasher.update(canonical_request.as_bytes());
-        let canonical_request_hash = hasher
-            .finalize()
-            .iter()
-            .fold(String::new(), |mut s, b| { write!(s, "{:02x}", b).ok(); s });
+        let canonical_request_hash = hasher.finalize().iter().fold(String::new(), |mut s, b| {
+            write!(s, "{:02x}", b).ok();
+            s
+        });
 
         let string_to_sign = format!(
             "AWS4-HMAC-SHA256\n{}\n{}\n{}",
@@ -127,7 +127,10 @@ impl AwsConnector {
 
         let signature = hmac_sha256(&signing_key, string_to_sign.as_bytes())
             .iter()
-            .fold(String::new(), |mut s, b| { write!(s, "{:02x}", b).ok(); s });
+            .fold(String::new(), |mut s, b| {
+                write!(s, "{:02x}", b).ok();
+                s
+            });
 
         let authorization = format!(
             "AWS4-HMAC-SHA256 Credential={}/{},SignedHeaders={},Signature={}",
@@ -175,10 +178,13 @@ impl SaaSConnector for AwsConnector {
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
-                let resp = req.send().await
-                    .map_err(|e| ClawzError::Provider(format!("AWS S3 list buckets failed: {e}")))?;
+                let resp = req.send().await.map_err(|e| {
+                    ClawzError::Provider(format!("AWS S3 list buckets failed: {e}"))
+                })?;
                 // S3 returns XML; wrap it in a JSON envelope so callers get a consistent Value shape.
-                let text = resp.text().await
+                let text = resp
+                    .text()
+                    .await
                     .map_err(|e| ClawzError::Internal(format!("read body: {e}")))?;
                 Ok(vec![serde_json::json!({ "xml_response": text })])
             }
@@ -191,9 +197,12 @@ impl SaaSConnector for AwsConnector {
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
-                let resp = req.send().await
-                    .map_err(|e| ClawzError::Provider(format!("AWS SNS list topics failed: {e}")))?;
-                let text = resp.text().await
+                let resp = req.send().await.map_err(|e| {
+                    ClawzError::Provider(format!("AWS SNS list topics failed: {e}"))
+                })?;
+                let text = resp
+                    .text()
+                    .await
                     .map_err(|e| ClawzError::Internal(format!("read body: {e}")))?;
                 Ok(vec![serde_json::json!({ "xml_response": text })])
             }
@@ -212,19 +221,26 @@ impl SaaSConnector for AwsConnector {
                 let mut hasher = Sha256::new();
                 hasher.update(body_str.as_bytes());
                 let payload_hash = format!("{:x}", hasher.finalize());
-                let headers = self.sign_request("PUT", "s3", &host, &format!("/{}", key), "", &payload_hash);
-                let mut req = self.client
+                let headers =
+                    self.sign_request("PUT", "s3", &host, &format!("/{}", key), "", &payload_hash);
+                let mut req = self
+                    .client
                     .put(format!("https://{}/{}", host, key))
                     .body(body_str.to_string());
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
-                let resp = req.send().await
+                let resp = req
+                    .send()
+                    .await
                     .map_err(|e| ClawzError::Provider(format!("AWS S3 put object failed: {e}")))?;
                 if resp.status().is_success() {
                     Ok(serde_json::json!({ "status": "created", "key": key }))
                 } else {
-                    Err(ClawzError::Provider(format!("AWS S3 put failed: HTTP {}", resp.status().as_u16())))
+                    Err(ClawzError::Provider(format!(
+                        "AWS S3 put failed: HTTP {}",
+                        resp.status().as_u16()
+                    )))
                 }
             }
             "sns_topic" => {
@@ -237,9 +253,12 @@ impl SaaSConnector for AwsConnector {
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
-                let resp = req.send().await
-                    .map_err(|e| ClawzError::Provider(format!("AWS SNS create topic failed: {e}")))?;
-                let text = resp.text().await
+                let resp = req.send().await.map_err(|e| {
+                    ClawzError::Provider(format!("AWS SNS create topic failed: {e}"))
+                })?;
+                let text = resp
+                    .text()
+                    .await
                     .map_err(|e| ClawzError::Internal(format!("read body: {e}")))?;
                 Ok(serde_json::json!({ "xml_response": text }))
             }
@@ -250,7 +269,9 @@ impl SaaSConnector for AwsConnector {
     async fn update_object(&self, obj: &str, _id: &str, _data: Value) -> Result<Value> {
         // AWS REST APIs do not have a generic "update" semantic for S3/SNS/SES;
         // callers should use `execute_action` for platform-specific mutations.
-        Err(ClawzError::Provider(format!("AWS {obj} update not supported directly; use execute_action")))
+        Err(ClawzError::Provider(format!(
+            "AWS {obj} update not supported directly; use execute_action"
+        )))
     }
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
@@ -258,20 +279,29 @@ impl SaaSConnector for AwsConnector {
             "s3_object" => {
                 // id = "bucket/key"
                 let parts: Vec<&str> = id.splitn(2, '/').collect();
-                let (bucket, key) = (parts.first().copied().unwrap_or(""), parts.last().copied().unwrap_or(""));
+                let (bucket, key) = (
+                    parts.first().copied().unwrap_or(""),
+                    parts.last().copied().unwrap_or(""),
+                );
                 let host = format!("{}.s3.{}.amazonaws.com", bucket, self.region);
                 let empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-                let headers = self.sign_request("DELETE", "s3", &host, &format!("/{}", key), "", empty_hash);
+                let headers =
+                    self.sign_request("DELETE", "s3", &host, &format!("/{}", key), "", empty_hash);
                 let mut req = self.client.delete(format!("https://{}/{}", host, key));
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
-                let resp = req.send().await
+                let resp = req
+                    .send()
+                    .await
                     .map_err(|e| ClawzError::Provider(format!("AWS S3 delete failed: {e}")))?;
                 if resp.status().is_success() {
                     Ok(())
                 } else {
-                    Err(ClawzError::Provider(format!("AWS S3 delete failed: HTTP {}", resp.status().as_u16())))
+                    Err(ClawzError::Provider(format!(
+                        "AWS S3 delete failed: HTTP {}",
+                        resp.status().as_u16()
+                    )))
                 }
             }
             _ => Err(ClawzError::Provider(format!("Cannot delete AWS {obj}"))),
@@ -288,7 +318,10 @@ impl SaaSConnector for AwsConnector {
                 let body = params["body"].as_str().unwrap_or("");
                 let query = format!(
                     "Action=SendEmail&Source={}&Destination.ToAddresses.member.1={}&Message.Subject.Data={}&Message.Body.Text.Data={}&Version=2010-12-01",
-                    urlencoding_encode(from), urlencoding_encode(to), urlencoding_encode(subject), urlencoding_encode(body)
+                    urlencoding_encode(from),
+                    urlencoding_encode(to),
+                    urlencoding_encode(subject),
+                    urlencoding_encode(body)
                 );
                 let empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
                 let headers = self.sign_request("GET", "ses", &host, "/", &query, empty_hash);
@@ -296,9 +329,13 @@ impl SaaSConnector for AwsConnector {
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
-                let resp = req.send().await
+                let resp = req
+                    .send()
+                    .await
                     .map_err(|e| ClawzError::Provider(format!("AWS SES send email failed: {e}")))?;
-                let text = resp.text().await
+                let text = resp
+                    .text()
+                    .await
                     .map_err(|e| ClawzError::Internal(format!("read body: {e}")))?;
                 Ok(serde_json::json!({ "xml_response": text }))
             }
@@ -308,7 +345,8 @@ impl SaaSConnector for AwsConnector {
                 let message = params["message"].as_str().unwrap_or("");
                 let query = format!(
                     "Action=Publish&TopicArn={}&Message={}&Version=2010-03-31",
-                    urlencoding_encode(topic), urlencoding_encode(message)
+                    urlencoding_encode(topic),
+                    urlencoding_encode(message)
                 );
                 let empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
                 let headers = self.sign_request("GET", "sns", &host, "/", &query, empty_hash);
@@ -316,13 +354,19 @@ impl SaaSConnector for AwsConnector {
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
-                let resp = req.send().await
+                let resp = req
+                    .send()
+                    .await
                     .map_err(|e| ClawzError::Provider(format!("AWS SNS publish failed: {e}")))?;
-                let text = resp.text().await
+                let text = resp
+                    .text()
+                    .await
                     .map_err(|e| ClawzError::Internal(format!("read body: {e}")))?;
                 Ok(serde_json::json!({ "xml_response": text }))
             }
-            _ => Err(ClawzError::Provider(format!("Unknown AWS action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown AWS action: {action}"
+            ))),
         }
     }
 }

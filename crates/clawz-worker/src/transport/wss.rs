@@ -44,17 +44,13 @@ use clawz_core::{
     types::mesh::PeerInfo,
 };
 use futures_util::{SinkExt, StreamExt};
-use tokio::{
-    net::TcpListener,
-    time::timeout,
-};
+use tokio::{net::TcpListener, time::timeout};
 use tokio_tungstenite::{
-    accept_async,
-    connect_async,
+    accept_async, connect_async,
     tungstenite::{
+        Message,
         client::IntoClientRequest,
         http::header::{AUTHORIZATION, HeaderValue},
-        Message,
     },
 };
 
@@ -68,7 +64,7 @@ use crate::transport::config::WssConfig;
 /// This is a lightweight implementation that avoids pulling in a full JWT
 /// crate.  In production you would use `jsonwebtoken` or `josekit`.
 fn make_jwt(secret: &str, peer_id: &str) -> String {
-    use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
     let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
     let now = std::time::SystemTime::now()
@@ -77,10 +73,7 @@ fn make_jwt(secret: &str, peer_id: &str) -> String {
         .as_secs();
     // 5-minute expiry: long enough for the handshake, short enough to
     // limit replay window if the token is somehow intercepted.
-    let claims = format!(
-        r#"{{"sub":"{peer_id}","iat":{now},"exp":{}}}"#,
-        now + 300
-    );
+    let claims = format!(r#"{{"sub":"{peer_id}","iat":{now},"exp":{}}}"#, now + 300);
     let payload = URL_SAFE_NO_PAD.encode(&claims);
     let signing_input = format!("{header}.{payload}");
 
@@ -89,8 +82,8 @@ fn make_jwt(secret: &str, peer_id: &str) -> String {
     use sha2::Sha256;
     type HmacSha256 = Hmac<Sha256>;
 
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
-        .expect("HMAC accepts any key length");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC accepts any key length");
     mac.update(signing_input.as_bytes());
     let sig = URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes());
     format!("{signing_input}.{sig}")
@@ -136,8 +129,12 @@ impl TransportListener for WssListener {
                             // on the other side of the duplex can use the same
                             // framing logic as gRPC/QUIC.
                             let len = (data.len() as u32).to_be_bytes();
-                            if writer.write_all(&len).await.is_err() { break; }
-                            if writer.write_all(&data).await.is_err() { break; }
+                            if writer.write_all(&len).await.is_err() {
+                                break;
+                            }
+                            if writer.write_all(&data).await.is_err() {
+                                break;
+                            }
                         }
                         Ok(Message::Close(_)) | Err(_) => break,
                         _ => {}
@@ -152,11 +149,17 @@ impl TransportListener for WssListener {
                 use tokio::io::AsyncReadExt;
                 loop {
                     let mut len_buf = [0u8; 4];
-                    if reader.read_exact(&mut len_buf).await.is_err() { break; }
+                    if reader.read_exact(&mut len_buf).await.is_err() {
+                        break;
+                    }
                     let len = u32::from_be_bytes(len_buf) as usize;
                     let mut buf = vec![0u8; len];
-                    if reader.read_exact(&mut buf).await.is_err() { break; }
-                    if sink.send(Message::Binary(buf)).await.is_err() { break; }
+                    if reader.read_exact(&mut buf).await.is_err() {
+                        break;
+                    }
+                    if sink.send(Message::Binary(buf)).await.is_err() {
+                        break;
+                    }
                 }
             });
         }
@@ -243,7 +246,9 @@ impl WssTransport {
                 "wss unexpected frame type: {other:?}"
             ))),
             Some(Err(e)) => Err(ClawzError::Transport(format!("wss recv: {e}"))),
-            None => Err(ClawzError::Transport("wss stream closed unexpectedly".into())),
+            None => Err(ClawzError::Transport(
+                "wss stream closed unexpectedly".into(),
+            )),
         }
     }
 }

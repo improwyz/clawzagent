@@ -39,9 +39,11 @@ use clawz_core::error::{ClawzError, Result};
 // Dependency: ChannelPlugin trait lives in the shared core crate
 use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 // Dependency: canonical message and attachment types defined in core
-use clawz_core::types::channel::{Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage};
+use clawz_core::types::channel::{
+    Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage,
+};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 // Dependency: Arc + RwLock used for the token cache because ChannelPlugin is Send + Sync
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -168,7 +170,11 @@ impl RingCentralChannel {
     /// the post lacks a required `id` field.
     fn parse_post(&self, ctx: &ChannelContext, item: &Value) -> Option<IncomingMessage> {
         let id = item.get("id")?.as_str()?.to_string();
-        let text = item.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let text = item
+            .get("text")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let sender_id = item
             .pointer("/creator/id")
             .and_then(|v| v.as_str())
@@ -181,14 +187,27 @@ impl RingCentralChannel {
             .to_string();
 
         let mut im = IncomingMessage::new(ctx.config.id, sender_id, sender_name, text);
-        im.metadata.insert("rc_post_id".to_string(), Value::String(id));
+        im.metadata
+            .insert("rc_post_id".to_string(), Value::String(id));
 
         // Attachments
         if let Some(atts) = item.get("attachments").and_then(|v| v.as_array()) {
             for att in atts {
-                let att_id = att.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let fname = att.get("name").and_then(|v| v.as_str()).unwrap_or("file").to_string();
-                let ftype = att.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let att_id = att
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let fname = att
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("file")
+                    .to_string();
+                let ftype = att
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 im.attachments.push(Attachment {
                     id: att_id,
                     filename: fname,
@@ -341,16 +360,20 @@ impl ChannelPlugin for RingCentralChannel {
     /// - [`ClawzError::Serialization`] if the payload is not valid JSON.
     async fn webhook(&self, payload: &[u8], headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
         // RingCentral sends a validationToken header for subscription validation
-        if let Some(token) = headers.get("Validation-Token").and_then(|v| v.to_str().ok()) {
+        if let Some(token) = headers
+            .get("Validation-Token")
+            .and_then(|v| v.to_str().ok())
+        {
             let mut dummy = IncomingMessage::new(
                 uuid::Uuid::nil(),
                 "ringcentral_system".to_string(),
                 "RingCentral".to_string(),
                 token.to_string(),
             );
-            dummy
-                .metadata
-                .insert("_rc_validation_token".to_string(), Value::String(token.to_string()));
+            dummy.metadata.insert(
+                "_rc_validation_token".to_string(),
+                Value::String(token.to_string()),
+            );
             return Ok(vec![dummy]);
         }
 
@@ -359,7 +382,11 @@ impl ChannelPlugin for RingCentralChannel {
 
         let mut messages = Vec::new();
 
-        if let Some(records) = body.get("body").and_then(|b| b.get("records")).and_then(|v| v.as_array()) {
+        if let Some(records) = body
+            .get("body")
+            .and_then(|b| b.get("records"))
+            .and_then(|v| v.as_array())
+        {
             for rec in records {
                 let msg_type = rec.get("type").and_then(|v| v.as_str()).unwrap_or("");
                 // Filter to text-based messages only; ignore Presence, Call, etc.
@@ -367,7 +394,11 @@ impl ChannelPlugin for RingCentralChannel {
                     continue;
                 }
 
-                let text = rec.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let text = rec
+                    .get("text")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
                 let sender_id = rec
                     .pointer("/creator/id")
                     .and_then(|v| v.as_str())
@@ -378,10 +409,16 @@ impl ChannelPlugin for RingCentralChannel {
                     .and_then(|v| v.as_str())
                     .unwrap_or(&sender_id)
                     .to_string();
-                let record_id = rec.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let record_id = rec
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
 
-                let mut im = IncomingMessage::new(uuid::Uuid::new_v4(), sender_id, sender_name, text);
-                im.metadata.insert("rc_record_id".to_string(), Value::String(record_id));
+                let mut im =
+                    IncomingMessage::new(uuid::Uuid::new_v4(), sender_id, sender_name, text);
+                im.metadata
+                    .insert("rc_record_id".to_string(), Value::String(record_id));
                 messages.push(im);
             }
         }

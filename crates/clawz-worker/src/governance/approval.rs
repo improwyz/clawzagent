@@ -241,18 +241,14 @@ impl ApprovalWorkflow {
     ///   still required.
     /// * `Err(ClawzError::NotFound)` — Unknown `approval_id`.
     /// * `Err(ClawzError::Validation)` — The request has expired.
-    pub async fn approve(
-        &self,
-        approval_id: &str,
-        approver_id: &str,
-    ) -> Result<bool> {
+    pub async fn approve(&self, approval_id: &str, approver_id: &str) -> Result<bool> {
         let mut requests = self.requests.write().await;
-        let req = requests.get_mut(approval_id).ok_or_else(|| {
-            ClawzError::NotFound {
+        let req = requests
+            .get_mut(approval_id)
+            .ok_or_else(|| ClawzError::NotFound {
                 entity: "approval request".into(),
                 id: approval_id.into(),
-            }
-        })?;
+            })?;
 
         // Check expiry.
         if req.is_expired() {
@@ -287,12 +283,12 @@ impl ApprovalWorkflow {
     /// * `Err(ClawzError::NotFound)` if the ID does not exist.
     pub async fn reject(&self, approval_id: &str, approver_id: &str, reason: &str) -> Result<()> {
         let mut requests = self.requests.write().await;
-        let req = requests.get_mut(approval_id).ok_or_else(|| {
-            ClawzError::NotFound {
+        let req = requests
+            .get_mut(approval_id)
+            .ok_or_else(|| ClawzError::NotFound {
                 entity: "approval request".into(),
                 id: approval_id.into(),
-            }
-        })?;
+            })?;
         req.reject();
         log::info!(
             "[approval] id={} rejected by '{}': {}",
@@ -317,12 +313,12 @@ impl ApprovalWorkflow {
     /// * `Err(ClawzError::NotFound)` if the ID does not exist.
     pub async fn check_status(&self, approval_id: &str) -> Result<ApprovalStatus> {
         let mut requests = self.requests.write().await;
-        let req = requests.get_mut(approval_id).ok_or_else(|| {
-            ClawzError::NotFound {
+        let req = requests
+            .get_mut(approval_id)
+            .ok_or_else(|| ClawzError::NotFound {
                 entity: "approval request".into(),
                 id: approval_id.into(),
-            }
-        })?;
+            })?;
         // Auto-expire if needed.
         if req.status == ApprovalStatus::Pending && req.is_expired() {
             req.status = ApprovalStatus::Expired;
@@ -335,11 +331,7 @@ impl ApprovalWorkflow {
     /// Returns `None` if the ID is not present.  No expiry side-effects are
     /// performed; use [`check_status`] if you need auto-expiry evaluation.
     pub async fn get_request(&self, approval_id: &str) -> Option<ApprovalRequest> {
-        self.requests
-            .read()
-            .await
-            .get(approval_id)
-            .cloned()
+        self.requests.read().await.get(approval_id).cloned()
     }
 
     /// Returns every approval request regardless of status.

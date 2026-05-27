@@ -161,11 +161,7 @@ impl Pipeline {
             }
 
             let step_name = entry.step.name().to_string();
-            log::debug!(
-                "[pipeline:{}] executing step '{}'",
-                self.name,
-                step_name
-            );
+            log::debug!("[pipeline:{}] executing step '{}'", self.name, step_name);
 
             let start = Instant::now();
             match entry.step.execute(ctx).await {
@@ -217,25 +213,15 @@ impl Pipeline {
                         duration_ms: elapsed,
                         outcome: format!("error: {e}"),
                     });
-                    log::error!(
-                        "[pipeline:{}] step '{}' failed: {e}",
-                        self.name,
-                        step_name
-                    );
+                    log::error!("[pipeline:{}] step '{}' failed: {e}", self.name, step_name);
 
                     // Roll back completed steps in reverse order.
                     // This guarantees that if step 2 fails, step 1's rollback
                     // runs before step 0's, preserving nested side-effect order.
                     for &prev_idx in completed.iter().rev() {
                         let prev_name = self.steps[prev_idx].step.name();
-                        log::debug!(
-                            "[pipeline:{}] rolling back step '{}'",
-                            self.name,
-                            prev_name
-                        );
-                        if let Err(rb_err) =
-                            self.steps[prev_idx].step.rollback(ctx).await
-                        {
+                        log::debug!("[pipeline:{}] rolling back step '{}'", self.name, prev_name);
+                        if let Err(rb_err) = self.steps[prev_idx].step.rollback(ctx).await {
                             log::error!(
                                 "[pipeline:{}] rollback of '{}' failed: {rb_err}",
                                 self.name,
@@ -358,10 +344,7 @@ mod tests {
             fn name(&self) -> &str {
                 &self.name
             }
-            async fn execute(
-                &self,
-                _ctx: &mut PipelineContext,
-            ) -> Result<StepOutcome> {
+            async fn execute(&self, _ctx: &mut PipelineContext) -> Result<StepOutcome> {
                 self.counter.fetch_add(1, Ordering::SeqCst);
                 Ok(StepOutcome::Continue)
             }
@@ -390,10 +373,7 @@ mod tests {
             fn name(&self) -> &str {
                 "halt"
             }
-            async fn execute(
-                &self,
-                _ctx: &mut PipelineContext,
-            ) -> Result<StepOutcome> {
+            async fn execute(&self, _ctx: &mut PipelineContext) -> Result<StepOutcome> {
                 Ok(StepOutcome::Halt)
             }
         }
@@ -405,10 +385,7 @@ mod tests {
             fn name(&self) -> &str {
                 "count"
             }
-            async fn execute(
-                &self,
-                _ctx: &mut PipelineContext,
-            ) -> Result<StepOutcome> {
+            async fn execute(&self, _ctx: &mut PipelineContext) -> Result<StepOutcome> {
                 self.0.fetch_add(1, Ordering::SeqCst);
                 Ok(StepOutcome::Continue)
             }
@@ -440,10 +417,7 @@ mod tests {
             fn name(&self) -> &str {
                 &self.name
             }
-            async fn execute(
-                &self,
-                _ctx: &mut PipelineContext,
-            ) -> Result<StepOutcome> {
+            async fn execute(&self, _ctx: &mut PipelineContext) -> Result<StepOutcome> {
                 Ok(StepOutcome::Continue)
             }
             async fn rollback(&self, _ctx: &mut PipelineContext) -> Result<()> {
@@ -458,11 +432,10 @@ mod tests {
             fn name(&self) -> &str {
                 "fail"
             }
-            async fn execute(
-                &self,
-                _ctx: &mut PipelineContext,
-            ) -> Result<StepOutcome> {
-                Err(clawz_core::error::ClawzError::Internal("intentional failure".into()))
+            async fn execute(&self, _ctx: &mut PipelineContext) -> Result<StepOutcome> {
+                Err(clawz_core::error::ClawzError::Internal(
+                    "intentional failure".into(),
+                ))
             }
         }
 
@@ -494,10 +467,7 @@ mod tests {
             fn name(&self) -> &str {
                 "cond"
             }
-            async fn execute(
-                &self,
-                _ctx: &mut PipelineContext,
-            ) -> Result<StepOutcome> {
+            async fn execute(&self, _ctx: &mut PipelineContext) -> Result<StepOutcome> {
                 self.0.fetch_add(1, Ordering::SeqCst);
                 Ok(StepOutcome::Continue)
             }

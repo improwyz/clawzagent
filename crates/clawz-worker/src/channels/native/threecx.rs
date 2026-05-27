@@ -31,7 +31,7 @@ use clawz_core::error::{ClawzError, Result};
 use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 use clawz_core::types::channel::{ChannelCapabilities, IncomingMessage, OutgoingMessage};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
@@ -75,7 +75,10 @@ impl ThreeCXChannel {
     /// PBX host root without `/xapi/v1` (used for `/connect/token`).
     fn api_root(ctx: &ChannelContext) -> Result<String> {
         let base = cred_str(&ctx.config.credentials, "base_url")?;
-        Ok(strip_xapi_suffix(base.trim_end_matches('/'), Self::xapi_path(ctx)))
+        Ok(strip_xapi_suffix(
+            base.trim_end_matches('/'),
+            Self::xapi_path(ctx),
+        ))
     }
 
     fn poll_modes(ctx: &ChannelContext) -> (bool, bool) {
@@ -158,7 +161,12 @@ impl ThreeCXChannel {
         Ok(token)
     }
 
-    async fn xapi_get(&self, ctx: &ChannelContext, path: &str, query: &[(&str, String)]) -> Result<Value> {
+    async fn xapi_get(
+        &self,
+        ctx: &ChannelContext,
+        path: &str,
+        query: &[(&str, String)],
+    ) -> Result<Value> {
         let base = Self::xapi_base(ctx)?;
         let token = self.get_token(ctx).await?;
         let url = format!("{base}{path}");
@@ -226,10 +234,7 @@ impl ThreeCXChannel {
     }
 
     async fn receive_chat(&self, ctx: &ChannelContext) -> Result<Vec<IncomingMessage>> {
-        let mut query = vec![
-            ("$top", "100".into()),
-            ("$orderby", "TimeSent desc".into()),
-        ];
+        let mut query = vec![("$top", "100".into()), ("$orderby", "TimeSent desc".into())];
 
         if let Some(queue) = ctx
             .config
@@ -269,16 +274,13 @@ impl ThreeCXChannel {
                 .unwrap_or("unknown")
                 .to_string();
 
-            let mut im = IncomingMessage::new(
-                ctx.config.id,
-                sender_id.clone(),
-                sender_id,
-                text,
-            );
+            let mut im = IncomingMessage::new(ctx.config.id, sender_id.clone(), sender_id, text);
             im.metadata
                 .insert("threecx_message_id".into(), json!(msg_id));
-            im.metadata
-                .insert("threecx_source".into(), Value::String("chat_history".into()));
+            im.metadata.insert(
+                "threecx_source".into(),
+                Value::String("chat_history".into()),
+            );
             if let Some(conv) = item.get("ConversationId") {
                 im.metadata
                     .insert("threecx_conversation_id".into(), conv.clone());
@@ -303,14 +305,8 @@ impl ThreeCXChannel {
         let mut messages = Vec::with_capacity(items.len());
         for item in &items {
             let id = item.get("Id").map(|v| v.to_string()).unwrap_or_default();
-            let caller = item
-                .get("Caller")
-                .and_then(|v| v.as_str())
-                .unwrap_or("?");
-            let callee = item
-                .get("Callee")
-                .and_then(|v| v.as_str())
-                .unwrap_or("?");
+            let caller = item.get("Caller").and_then(|v| v.as_str()).unwrap_or("?");
+            let callee = item.get("Callee").and_then(|v| v.as_str()).unwrap_or("?");
             let status = item
                 .get("Status")
                 .and_then(|v| v.as_str())
@@ -325,8 +321,10 @@ impl ThreeCXChannel {
             );
             im.metadata
                 .insert("threecx_active_call_id".into(), json!(id));
-            im.metadata
-                .insert("threecx_source".into(), Value::String("active_calls".into()));
+            im.metadata.insert(
+                "threecx_source".into(),
+                Value::String("active_calls".into()),
+            );
             im.metadata.insert("threecx_status".into(), json!(status));
             messages.push(im);
         }
@@ -360,16 +358,12 @@ impl ThreeCXChannel {
             destination
         };
 
-        let dn = msg
-            .metadata
-            .get("dn")
-            .and_then(|v| v.as_str())
-            .or_else(|| {
-                ctx.config
-                    .credentials
-                    .get("default_dn")
-                    .and_then(|v| v.as_str())
-            });
+        let dn = msg.metadata.get("dn").and_then(|v| v.as_str()).or_else(|| {
+            ctx.config
+                .credentials
+                .get("default_dn")
+                .and_then(|v| v.as_str())
+        });
 
         let contact = msg.metadata.get("contact").and_then(|v| v.as_str());
 
@@ -390,9 +384,7 @@ impl ThreeCXChannel {
             body["contact"] = json!(c);
         }
 
-        let result = self
-            .xapi_post(ctx, "/Users/Pbx.MakeCall", body)
-            .await?;
+        let result = self.xapi_post(ctx, "/Users/Pbx.MakeCall", body).await?;
 
         if let Some(reason) = result.get("Reason").and_then(|v| v.as_str()) {
             if !reason.is_empty() && reason != "Success" {

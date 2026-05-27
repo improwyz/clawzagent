@@ -23,19 +23,16 @@ pub fn sign_headers(
     let date_stamp = now.format("%Y%m%d").to_string();
     let datetime_stamp = now.format("%Y%m%dT%H%M%SZ").to_string();
 
-    let canonical_headers = format!(
-        "host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{datetime_stamp}\n"
-    );
+    let canonical_headers =
+        format!("host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{datetime_stamp}\n");
     let signed_headers = "host;x-amz-content-sha256;x-amz-date";
-    let canonical_request = format!(
-        "{method}\n{path}\n{query}\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
-    );
+    let canonical_request =
+        format!("{method}\n{path}\n{query}\n{canonical_headers}\n{signed_headers}\n{payload_hash}");
 
     let credential_scope = format!("{date_stamp}/{region}/{service}/aws4_request");
     let canonical_request_hash = sha256_hex(canonical_request.as_bytes());
-    let string_to_sign = format!(
-        "AWS4-HMAC-SHA256\n{datetime_stamp}\n{credential_scope}\n{canonical_request_hash}"
-    );
+    let string_to_sign =
+        format!("AWS4-HMAC-SHA256\n{datetime_stamp}\n{credential_scope}\n{canonical_request_hash}");
 
     let signing_key = derive_signing_key(secret_key, &date_stamp, region, service);
     let signature = hmac_sha256_hex(&signing_key, string_to_sign.as_bytes());
@@ -55,13 +52,10 @@ pub fn sign_headers(
 fn sha256_hex(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(data);
-    hasher
-        .finalize()
-        .iter()
-        .fold(String::new(), |mut s, b| {
-            write!(s, "{b:02x}").ok();
-            s
-        })
+    hasher.finalize().iter().fold(String::new(), |mut s, b| {
+        write!(s, "{b:02x}").ok();
+        s
+    })
 }
 
 fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {

@@ -88,11 +88,15 @@ impl SaaSConnector for ClickUpConnector {
     }
 
     async fn auth_url(&self, _redirect: &str) -> Result<String> {
-        Err(ClawzError::Auth("ClickUp uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "ClickUp uses API key authentication".into(),
+        ))
     }
 
     async fn exchange_code(&self, _code: &str) -> Result<Credentials> {
-        Err(ClawzError::Auth("ClickUp uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "ClickUp uses API key authentication".into(),
+        ))
     }
 
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
@@ -105,9 +109,16 @@ impl SaaSConnector for ClickUpConnector {
             "folders" => format!("/space/{}/folder", parent_id),
             "lists" => format!("/folder/{}/list", parent_id),
             "teams" => "/team".to_string(),
-            _ => return Err(ClawzError::Provider(format!("Unknown ClickUp object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown ClickUp object: {obj}"
+                )));
+            }
         };
-        let resp = self.get(&path).send().await
+        let resp = self
+            .get(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("ClickUp list failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         Ok(json[obj].as_array().cloned().unwrap_or_default())
@@ -120,9 +131,17 @@ impl SaaSConnector for ClickUpConnector {
             "tasks" => format!("/list/{}/task", parent_id),
             "folders" => format!("/space/{}/folder", parent_id),
             "lists" => format!("/folder/{}/list", parent_id),
-            _ => return Err(ClawzError::Provider(format!("Unknown ClickUp object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown ClickUp object: {obj}"
+                )));
+            }
         };
-        let resp = self.post(&path).json(&data).send().await
+        let resp = self
+            .post(&path)
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("ClickUp create failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }
@@ -132,9 +151,17 @@ impl SaaSConnector for ClickUpConnector {
             "tasks" => format!("/task/{}", id),
             "folders" => format!("/folder/{}", id),
             "lists" => format!("/list/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown ClickUp object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown ClickUp object: {obj}"
+                )));
+            }
         };
-        let resp = self.put(&path).json(&data).send().await
+        let resp = self
+            .put(&path)
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("ClickUp update failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }
@@ -144,9 +171,16 @@ impl SaaSConnector for ClickUpConnector {
             "tasks" => format!("/task/{}", id),
             "folders" => format!("/folder/{}", id),
             "lists" => format!("/list/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown ClickUp object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown ClickUp object: {obj}"
+                )));
+            }
         };
-        let resp = self.delete(&path).send().await
+        let resp = self
+            .delete(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("ClickUp delete failed: {e}")))?;
         if resp.status().is_success() {
             Ok(())
@@ -170,9 +204,17 @@ impl SaaSConnector for ClickUpConnector {
                 let field_id = params["field_id"].as_str().unwrap_or("");
                 format!("/task/{}/field/{}", task_id, field_id)
             }
-            _ => return Err(ClawzError::Provider(format!("Unknown ClickUp action: {action}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown ClickUp action: {action}"
+                )));
+            }
         };
-        let resp = self.post(&path).json(&params).send().await
+        let resp = self
+            .post(&path)
+            .json(&params)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("ClickUp action failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }

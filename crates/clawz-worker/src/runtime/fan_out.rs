@@ -180,10 +180,7 @@ impl FanOut {
     ///
     /// Returns `None` when every model failed, so callers must handle the
     /// empty-success case explicitly.
-    fn aggregate(
-        &self,
-        results: &[(String, Result<ChatResponse>)],
-    ) -> Option<Message> {
+    fn aggregate(&self, results: &[(String, Result<ChatResponse>)]) -> Option<Message> {
         let successes: Vec<(&str, &ChatResponse)> = results
             .iter()
             .filter_map(|(m, r)| r.as_ref().ok().map(|resp| (m.as_str(), resp)))
@@ -243,7 +240,11 @@ pub struct MixtureOfAgents {
 
 impl MixtureOfAgents {
     /// Create a new MoA executor.
-    pub fn new(router: Arc<ProviderRouter>, config: FanOutConfig, judge_model: impl Into<String>) -> Self {
+    pub fn new(
+        router: Arc<ProviderRouter>,
+        config: FanOutConfig,
+        judge_model: impl Into<String>,
+    ) -> Self {
         Self {
             fan_out: FanOut::new(router.clone(), config),
             judge_model: judge_model.into(),
@@ -260,9 +261,7 @@ impl MixtureOfAgents {
 
         let successes = fan_result.successful_responses();
         if successes.is_empty() {
-            return Err(ClawzError::Provider(
-                "all fan-out models failed".into(),
-            ));
+            return Err(ClawzError::Provider("all fan-out models failed".into()));
         }
 
         // Build synthesis prompt.
@@ -280,8 +279,7 @@ impl MixtureOfAgents {
             }
         }
 
-        synthesis_parts
-            .push("\nSynthesise these into the best possible response:".to_string());
+        synthesis_parts.push("\nSynthesise these into the best possible response:".to_string());
 
         let synthesis_prompt = synthesis_parts.join("\n\n");
         let mut synthesis_req = base_request;
@@ -291,9 +289,7 @@ impl MixtureOfAgents {
         let resp = self.fan_out.router.route(synthesis_req).await?;
         let text = resp
             .first_text()
-            .ok_or_else(|| {
-                ClawzError::Internal("judge model returned empty response".into())
-            })?
+            .ok_or_else(|| ClawzError::Internal("judge model returned empty response".into()))?
             .to_string();
 
         Ok(Message::assistant(text))
@@ -305,23 +301,28 @@ impl MixtureOfAgents {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clawz_core::types::message::{ChatResponse, ChatChoice, Message, Usage};
+    use clawz_core::types::message::{ChatChoice, ChatResponse, Message, Usage};
 
     #[test]
     fn test_aggregation_first() {
         let resp = mock_response("hello", 5);
-        let results: Vec<(String, Result<ChatResponse>)> =
-            vec![("gpt-4".into(), Ok(resp))];
+        let results: Vec<(String, Result<ChatResponse>)> = vec![("gpt-4".into(), Ok(resp))];
 
         let config = FanOutConfig {
             strategy: AggregationStrategy::First,
             ..Default::default()
         };
 
-        let router = Arc::new(tokio::runtime::Builder::new_current_thread()
-            .enable_all().build().unwrap()
-            .block_on(ProviderRouter::new(crate::providers::ProviderRouterConfig::default()))
-            .unwrap());
+        let router = Arc::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(ProviderRouter::new(
+                    crate::providers::ProviderRouterConfig::default(),
+                ))
+                .unwrap(),
+        );
 
         let fan = FanOut::new(router, config);
         let agg = fan.aggregate(&results);
@@ -332,20 +333,24 @@ mod tests {
     fn test_aggregation_longest() {
         let short = mock_response("hi", 2);
         let long = mock_response("hello world this is longer", 10);
-        let results: Vec<(String, Result<ChatResponse>)> = vec![
-            ("m1".into(), Ok(short)),
-            ("m2".into(), Ok(long)),
-        ];
+        let results: Vec<(String, Result<ChatResponse>)> =
+            vec![("m1".into(), Ok(short)), ("m2".into(), Ok(long))];
 
         let config = FanOutConfig {
             strategy: AggregationStrategy::Longest,
             ..Default::default()
         };
 
-        let router = Arc::new(tokio::runtime::Builder::new_current_thread()
-            .enable_all().build().unwrap()
-            .block_on(ProviderRouter::new(crate::providers::ProviderRouterConfig::default()))
-            .unwrap());
+        let router = Arc::new(
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+                .block_on(ProviderRouter::new(
+                    crate::providers::ProviderRouterConfig::default(),
+                ))
+                .unwrap(),
+        );
 
         let fan = FanOut::new(router, config);
         let agg = fan.aggregate(&results);

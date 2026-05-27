@@ -14,7 +14,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 
 use clawz_core::error::{ClawzError, Result};
 
@@ -231,9 +231,15 @@ mod tests {
     #[tokio::test]
     async fn test_history_records_changes() {
         let bb = Blackboard::new();
-        bb.post("a1", "counter", serde_json::json!(1)).await.unwrap();
-        bb.post("a1", "counter", serde_json::json!(2)).await.unwrap();
-        bb.post("a2", "counter", serde_json::json!(3)).await.unwrap();
+        bb.post("a1", "counter", serde_json::json!(1))
+            .await
+            .unwrap();
+        bb.post("a1", "counter", serde_json::json!(2))
+            .await
+            .unwrap();
+        bb.post("a2", "counter", serde_json::json!(3))
+            .await
+            .unwrap();
 
         let hist = bb.history("counter", 10).await;
         assert_eq!(hist.len(), 3);

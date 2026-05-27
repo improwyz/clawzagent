@@ -86,11 +86,15 @@ impl SaaSConnector for SendGridConnector {
     }
 
     async fn auth_url(&self, _redirect: &str) -> Result<String> {
-        Err(ClawzError::Auth("SendGrid uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "SendGrid uses API key authentication".into(),
+        ))
     }
 
     async fn exchange_code(&self, _code: &str) -> Result<Credentials> {
-        Err(ClawzError::Auth("SendGrid uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "SendGrid uses API key authentication".into(),
+        ))
     }
 
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
@@ -101,9 +105,16 @@ impl SaaSConnector for SendGridConnector {
             "lists" => "/marketing/lists".to_string(),
             "segments" => "/marketing/segments/2.0".to_string(),
             "senders" => "/marketing/senders".to_string(),
-            _ => return Err(ClawzError::Provider(format!("Unknown SendGrid object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown SendGrid object: {obj}"
+                )));
+            }
         };
-        let resp = self.get(&path).send().await
+        let resp = self
+            .get(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("SendGrid list failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         // SendGrid uses inconsistent top-level keys for collections.
@@ -115,9 +126,10 @@ impl SaaSConnector for SendGridConnector {
             "senders" => "result",
             _ => "result",
         };
-        Ok(json[key].as_array().cloned().unwrap_or_else(|| {
-            json.as_array().cloned().unwrap_or_default()
-        }))
+        Ok(json[key]
+            .as_array()
+            .cloned()
+            .unwrap_or_else(|| json.as_array().cloned().unwrap_or_default()))
     }
 
     async fn create_object(&self, obj: &str, data: Value) -> Result<Value> {
@@ -126,9 +138,17 @@ impl SaaSConnector for SendGridConnector {
             "templates" => "/templates",
             "lists" => "/marketing/lists",
             "contacts" => "/marketing/contacts",
-            _ => return Err(ClawzError::Provider(format!("Unknown SendGrid object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown SendGrid object: {obj}"
+                )));
+            }
         };
-        let resp = self.post(path).json(&data).send().await
+        let resp = self
+            .post(path)
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("SendGrid create failed: {e}")))?;
         // SendGrid returns 202 Accepted for successful mail send requests.
         if resp.status().as_u16() == 202 {
@@ -142,9 +162,17 @@ impl SaaSConnector for SendGridConnector {
         let path = match obj {
             "templates" => format!("/templates/{}", id),
             "lists" => format!("/marketing/lists/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown SendGrid object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown SendGrid object: {obj}"
+                )));
+            }
         };
-        let resp = self.patch(&path).json(&data).send().await
+        let resp = self
+            .patch(&path)
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("SendGrid update failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }
@@ -153,9 +181,16 @@ impl SaaSConnector for SendGridConnector {
         let path = match obj {
             "templates" => format!("/templates/{}", id),
             "lists" => format!("/marketing/lists/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown SendGrid object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown SendGrid object: {obj}"
+                )));
+            }
         };
-        let resp = self.delete(&path).send().await
+        let resp = self
+            .delete(&path)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("SendGrid delete failed: {e}")))?;
         if resp.status().is_success() {
             Ok(())
@@ -172,9 +207,17 @@ impl SaaSConnector for SendGridConnector {
             "send_email" => "/mail/send",
             "validate_email" => "/validations/email",
             "send_batch" => "/mail/batch",
-            _ => return Err(ClawzError::Provider(format!("Unknown SendGrid action: {action}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown SendGrid action: {action}"
+                )));
+            }
         };
-        let resp = self.post(path).json(&params).send().await
+        let resp = self
+            .post(path)
+            .json(&params)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("SendGrid action failed: {e}")))?;
         if resp.status().as_u16() == 202 {
             Ok(serde_json::json!({ "status": "accepted" }))

@@ -6,18 +6,16 @@
 //! - `POST /webhooks/google-voice/{channel_id}`
 
 use axum::{
+    Router,
     body::Bytes,
     extract::{Path, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, header},
     response::{IntoResponse, Response},
     routing::post,
-    Router,
 };
 use base64::Engine;
-use clawz_services::dto::{
-    ChannelSendRequest, ChannelWebhookRequest, RunTurnRequest,
-};
-use serde_json::{json, Value};
+use clawz_services::dto::{ChannelSendRequest, ChannelWebhookRequest, RunTurnRequest};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 use crate::telephony::{twiml_empty, twiml_say_and_gather, verify_twilio_signature};
@@ -37,7 +35,12 @@ async fn twilio_sms(
     body: Bytes,
 ) -> Result<Response, GatewayError> {
     let record = load_channel(&state, &channel_id).await?;
-    verify_twilio(&record, &headers, &body, &format_twilio_url(&state, &channel_id, "sms"))?;
+    verify_twilio(
+        &record,
+        &headers,
+        &body,
+        &format_twilio_url(&state, &channel_id, "sms"),
+    )?;
 
     let replies = dispatch_inbound(&state, &record, &body, &headers, "twilio").await?;
 
@@ -75,9 +78,7 @@ async fn twilio_voice(
         dispatch_inbound(&state, &record, &body, &headers, "twilio").await?
     } else {
         vec![(
-            form.get("From")
-                .cloned()
-                .unwrap_or_default(),
+            form.get("From").cloned().unwrap_or_default(),
             "Hello. How can I help you today?".into(),
         )]
     };
@@ -98,12 +99,7 @@ async fn twilio_voice(
         }
     }
 
-    Ok((
-        StatusCode::OK,
-        [(header::CONTENT_TYPE, "text/xml")],
-        xml,
-    )
-        .into_response())
+    Ok((StatusCode::OK, [(header::CONTENT_TYPE, "text/xml")], xml).into_response())
 }
 
 async fn google_voice(
@@ -126,9 +122,7 @@ async fn google_voice(
             .or_else(|| headers.get("X-Clawz-Signature"))
             .and_then(|v| v.to_str().ok());
         clawz_worker::channels::native::google_voice::verify_google_voice_signature(
-            secret,
-            &body,
-            sig,
+            secret, &body, sig,
         )
         .map_err(|e| GatewayError::Unauthorized(e.to_string()))?;
     }
@@ -197,9 +191,8 @@ async fn dispatch_inbound(
         .await
         .map_err(|e| GatewayError::Internal(e.to_string()))?;
 
-    let agent_id = agent_id_from_config(&record.config).ok_or_else(|| {
-        GatewayError::Unprocessable("channel config missing agent_id".into())
-    })?;
+    let agent_id = agent_id_from_config(&record.config)
+        .ok_or_else(|| GatewayError::Unprocessable("channel config missing agent_id".into()))?;
 
     let mut replies = Vec::new();
     for msg in parsed.messages {
@@ -232,9 +225,10 @@ async fn send_reply(
     to: &str,
     content: &str,
 ) -> Result<(), GatewayError> {
-    let platform = state.platform.as_ref().ok_or_else(|| {
-        GatewayError::Internal("worker platform not configured".into())
-    })?;
+    let platform = state
+        .platform
+        .as_ref()
+        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
 
     let metadata = json!({ "to": to });
     platform
@@ -270,7 +264,9 @@ fn verify_twilio(
 
     let params = parse_form(body);
     if !verify_twilio_signature(token, url, &params, signature) {
-        return Err(GatewayError::Unauthorized("invalid Twilio signature".into()));
+        return Err(GatewayError::Unauthorized(
+            "invalid Twilio signature".into(),
+        ));
     }
     Ok(())
 }
@@ -279,10 +275,7 @@ fn parse_form(body: &[u8]) -> BTreeMap<String, String> {
     let mut map = BTreeMap::new();
     for pair in String::from_utf8_lossy(body).split('&') {
         if let Some((k, v)) = pair.split_once('=') {
-            map.insert(
-                percent_decode(k),
-                percent_decode(v),
-            );
+            map.insert(percent_decode(k), percent_decode(v));
         }
     }
     map
@@ -295,10 +288,9 @@ fn percent_decode(s: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let Ok(byte) = u8::from_str_radix(
-                std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""),
-                16,
-            ) {
+            if let Ok(byte) =
+                u8::from_str_radix(std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or(""), 16)
+            {
                 out.push(byte as char);
                 i += 3;
                 continue;
@@ -311,8 +303,7 @@ fn percent_decode(s: &str) -> String {
 }
 
 fn format_twilio_url(_state: &AppState, channel_id: &str, kind: &str) -> String {
-    let base =
-        std::env::var("CLAWZ_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:3000".into());
+    let base = std::env::var("CLAWZ_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:3000".into());
     let base = base.trim_end_matches('/');
     format!("{base}/webhooks/twilio/{kind}/{channel_id}")
 }

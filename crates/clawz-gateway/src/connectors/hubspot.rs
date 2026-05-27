@@ -44,7 +44,11 @@ impl HubSpotConnector {
             redirect_uri,
             "https://app.hubspot.com/oauth/authorize",
             "https://api.hubapi.com/oauth/v1/token",
-            vec!["oauth".into(), "crm.objects.contacts.read".into(), "crm.objects.contacts.write".into()],
+            vec![
+                "oauth".into(),
+                "crm.objects.contacts.read".into(),
+                "crm.objects.contacts.write".into(),
+            ],
         );
         Self {
             oauth,
@@ -169,7 +173,13 @@ impl SaaSConnector for HubSpotConnector {
         let client = self.client()?;
         let path = match action {
             "engagement" => "/engagements/v1/engagements".to_string(),
-            "workflow" => format!("/automation/v4/workflows/{}/enrollments", params.get("workflowId").and_then(|v| v.as_str()).unwrap_or("")),
+            "workflow" => format!(
+                "/automation/v4/workflows/{}/enrollments",
+                params
+                    .get("workflowId")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+            ),
             _ => format!("/crm/v3/objects/{}", action),
         };
         let resp = client

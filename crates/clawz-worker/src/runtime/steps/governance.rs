@@ -102,18 +102,14 @@ impl PipelineStep for ApplyGovernanceStep {
         );
 
         if !result.violations.is_empty() {
-            log::warn!(
-                "[governance] violations: {:?}",
-                result.violations
-            );
+            log::warn!("[governance] violations: {:?}", result.violations);
         }
 
         // Store result in both typed context field and metadata for audit.
         ctx.governance_result = Some(result.clone());
         ctx.insert_meta(
             META_GOVERNANCE_RESULT,
-            serde_json::to_value(&result)
-                .map_err(|e| ClawzError::Serialization(e.to_string()))?,
+            serde_json::to_value(&result).map_err(|e| ClawzError::Serialization(e.to_string()))?,
         );
 
         if !result.allowed {
@@ -131,8 +127,7 @@ impl PipelineStep for ApplyGovernanceStep {
             ctx.messages.retain(|m| m.role != Role::Assistant);
 
             // Append safe decline so the caller still receives a valid Message.
-            ctx.messages
-                .push(Message::assistant(SAFE_DECLINE_MESSAGE));
+            ctx.messages.push(Message::assistant(SAFE_DECLINE_MESSAGE));
 
             return Ok(StepOutcome::Halt);
         }
@@ -255,6 +250,11 @@ mod tests {
         // Last message should be the safe decline.
         let last = ctx.messages.last().unwrap();
         assert_eq!(last.role, Role::Assistant);
-        assert!(last.content.as_text().unwrap().contains("policy restrictions"));
+        assert!(
+            last.content
+                .as_text()
+                .unwrap()
+                .contains("policy restrictions")
+        );
     }
 }

@@ -1,11 +1,14 @@
 //! clawz-core — shared primitives for the ClawZ agent platform.
 //!
-//! This crate sits at the bottom of the 3-crate architecture:
-//!   * `clawz-core`   — types, traits, config, errors, metrics (this crate)
+//! Shared foundation for the ClawZ workspace. Primary binaries:
 //!   * `clawz-worker` — runtime engine: agent scheduler, provider routing,
 //!     tool orchestration, pipeline execution, mesh networking
 //!   * `clawz-gateway` — external API surface: REST/gRPC, webhooks, channel
 //!     adapters, auth, rate-limiting
+//!   * `clawz-tauri` — optional desktop shell
+//!
+//! Supporting crates: `clawz-platform`, `clawz-runtime`, `clawz-embedded`,
+//! `clawz-services`.
 //!
 //! Any code that needs to be visible to **both** worker and gateway lives here.
 //! That includes:
@@ -24,12 +27,12 @@ pub mod config;
 pub mod db;
 pub mod deployment;
 pub mod error;
+pub mod licensing;
 pub mod metrics;
 pub mod prism;
+pub mod runtime_backend;
 pub mod traits;
 pub mod types;
-pub mod runtime_backend;
-pub mod licensing;
 
 // Re-export PlatformTier from clawz-platform for internal use
 pub use clawz_platform::PlatformTier;

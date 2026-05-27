@@ -92,9 +92,7 @@ impl KvClient {
                     // Percent-encode each byte of the UTF-8 representation.
                     c.to_string()
                         .bytes()
-                        .flat_map(|b| {
-                            format!("%{:02X}", b).chars().collect::<Vec<_>>()
-                        })
+                        .flat_map(|b| format!("%{:02X}", b).chars().collect::<Vec<_>>())
                         .collect()
                 }
             })
@@ -119,7 +117,10 @@ impl KvClient {
 
     /// Parse the standard Cloudflare API envelope.
     fn unwrap_cf_response(json: Value) -> Result<Value, ClawzError> {
-        let success = json.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+        let success = json
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         if !success {
             let errors = json
                 .get("errors")

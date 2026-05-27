@@ -9,8 +9,8 @@
 
 use std::time::SystemTime;
 
-use bollard::container::{InspectContainerOptions, StatsOptions};
 use bollard::Docker;
+use bollard::container::{InspectContainerOptions, StatsOptions};
 use chrono::{DateTime, TimeZone, Utc};
 use clawz_core::error::ClawzError;
 use futures_util::StreamExt;
@@ -97,48 +97,47 @@ impl ContainerMetrics {
             extract_resource_metrics(&stats);
 
         // ── 2. Health status, started_at, and queue-depth label via inspect ─
-        let (health_status, last_heartbeat_secs_ago, queue_depth) =
-            match docker
-                .inspect_container(container_id, None::<InspectContainerOptions>)
-                .await
-            {
-                Ok(info) => {
-                    let health_status = info
-                        .state
-                        .as_ref()
-                        .and_then(|s| s.health.as_ref())
-                        .and_then(|h| h.status)
-                        .map(map_health_status)
-                        .unwrap_or_else(|| {
-                            // No healthcheck — fall back to Running flag.
-                            let running = info
-                                .state
-                                .as_ref()
-                                .and_then(|s| s.running)
-                                .unwrap_or(false);
-                            if running { "healthy".into() } else { "unhealthy".into() }
-                        });
+        let (health_status, last_heartbeat_secs_ago, queue_depth) = match docker
+            .inspect_container(container_id, None::<InspectContainerOptions>)
+            .await
+        {
+            Ok(info) => {
+                let health_status = info
+                    .state
+                    .as_ref()
+                    .and_then(|s| s.health.as_ref())
+                    .and_then(|h| h.status)
+                    .map(map_health_status)
+                    .unwrap_or_else(|| {
+                        // No healthcheck — fall back to Running flag.
+                        let running = info.state.as_ref().and_then(|s| s.running).unwrap_or(false);
+                        if running {
+                            "healthy".into()
+                        } else {
+                            "unhealthy".into()
+                        }
+                    });
 
-                    let last_heartbeat_secs_ago = info
-                        .state
-                        .as_ref()
-                        .and_then(|s| s.started_at.as_ref())
-                        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-                        .map(|dt| seconds_since(dt.with_timezone(&Utc)))
-                        .unwrap_or(0);
+                let last_heartbeat_secs_ago = info
+                    .state
+                    .as_ref()
+                    .and_then(|s| s.started_at.as_ref())
+                    .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                    .map(|dt| seconds_since(dt.with_timezone(&Utc)))
+                    .unwrap_or(0);
 
-                    let queue_depth = info
-                        .config
-                        .as_ref()
-                        .and_then(|c| c.labels.as_ref())
-                        .and_then(|l| l.get(QUEUE_DEPTH_LABEL))
-                        .and_then(|s| s.parse::<usize>().ok())
-                        .unwrap_or(0);
+                let queue_depth = info
+                    .config
+                    .as_ref()
+                    .and_then(|c| c.labels.as_ref())
+                    .and_then(|l| l.get(QUEUE_DEPTH_LABEL))
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(0);
 
-                    (health_status, last_heartbeat_secs_ago, queue_depth)
-                }
-                Err(_) => ("unknown".into(), 0u64, 0usize),
-            };
+                (health_status, last_heartbeat_secs_ago, queue_depth)
+            }
+            Err(_) => ("unknown".into(), 0u64, 0usize),
+        };
 
         Ok(Self {
             container_id: container_id.to_string(),

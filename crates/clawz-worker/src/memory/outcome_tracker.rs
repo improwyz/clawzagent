@@ -58,8 +58,7 @@ impl TaskOutcome {
 }
 
 /// Snapshot of the tracker's live state.
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct OutcomeState {
     pub task_count: usize,
     pub success_count: usize,
@@ -74,7 +73,6 @@ pub struct OutcomeState {
     /// Consecutive failure run length at the moment of snapshot.
     pub consecutive_failures: usize,
 }
-
 
 /// Records task outcomes, observes consecutive-failure spikes, and
 /// produces [`PerfDimension`] metrics for the self-improvement loop.
@@ -250,11 +248,7 @@ impl OutcomeTracker {
 
 #[inline]
 fn clamp01(v: f32) -> f32 {
-    if v.is_nan() {
-        0.0
-    } else {
-        v.clamp(0.0, 1.0)
-    }
+    if v.is_nan() { 0.0 } else { v.clamp(0.0, 1.0) }
 }
 
 #[cfg(test)]
@@ -301,7 +295,10 @@ mod tests {
         tracker.record("t2", TaskOutcome::Cancelled).await;
         let fired = tracker.record("t3", TaskOutcome::Timeout).await;
 
-        assert!(fired, "second timeout (across a cancelled) must trip the alert");
+        assert!(
+            fired,
+            "second timeout (across a cancelled) must trip the alert"
+        );
         let state = tracker.state().await;
         assert_eq!(state.timeout_count, 2);
         assert_eq!(state.failure_count, 2);
@@ -334,10 +331,19 @@ mod tests {
         let reliability = metrics[&PerfDimension::Reliability];
         let speed = metrics[&PerfDimension::Speed];
 
-        assert!((accuracy - 0.7).abs() < 1e-4, "expected ~0.70 accuracy, got {accuracy}");
-        assert!((reliability - 0.7).abs() < 1e-4, "expected ~0.70 reliability, got {reliability}");
+        assert!(
+            (accuracy - 0.7).abs() < 1e-4,
+            "expected ~0.70 accuracy, got {accuracy}"
+        );
+        assert!(
+            (reliability - 0.7).abs() < 1e-4,
+            "expected ~0.70 reliability, got {reliability}"
+        );
         // 2_000ms avg against 10_000ms baseline -> 0.8 Speed.
-        assert!((speed - 0.8).abs() < 1e-4, "expected ~0.80 speed, got {speed}");
+        assert!(
+            (speed - 0.8).abs() < 1e-4,
+            "expected ~0.80 speed, got {speed}"
+        );
     }
 
     /// Empty tracker: all three metrics default to a perfect 1.0 so the

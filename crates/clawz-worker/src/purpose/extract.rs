@@ -35,9 +35,8 @@ impl Extractor {
         let lower = input.to_lowercase();
 
         // Pattern: <word> [under|below|<|less than] <number> [optional unit]
-        let re_under = Regex::new(
-            r"([a-z_]+)\s*(?:under|below|less than|<)\s*\$?(\d+(?:\.\d+)?)"
-        ).unwrap();
+        let re_under =
+            Regex::new(r"([a-z_]+)\s*(?:under|below|less than|<)\s*\$?(\d+(?:\.\d+)?)").unwrap();
         for cap in re_under.captures_iter(&lower) {
             if let (Some(name), Some(num)) = (cap.get(1), cap.get(2)) {
                 if let Ok(v) = num.as_str().parse::<f64>() {
@@ -47,9 +46,8 @@ impl Extractor {
         }
 
         // Pattern: <word> [over|above|>|more than] <number>
-        let re_over = Regex::new(
-            r"([a-z_]+)\s*(?:over|above|more than|>)\s*\$?(\d+(?:\.\d+)?)"
-        ).unwrap();
+        let re_over =
+            Regex::new(r"([a-z_]+)\s*(?:over|above|more than|>)\s*\$?(\d+(?:\.\d+)?)").unwrap();
         for cap in re_over.captures_iter(&lower) {
             if let (Some(name), Some(num)) = (cap.get(1), cap.get(2)) {
                 if let Ok(v) = num.as_str().parse::<f64>() {
@@ -59,9 +57,7 @@ impl Extractor {
         }
 
         // Pattern: <word> of <number> or <word> = <number>
-        let re_exact = Regex::new(
-            r"([a-z_]+)\s*(?:of|is|=)\s*\$?(\d+(?:\.\d+)?)"
-        ).unwrap();
+        let re_exact = Regex::new(r"([a-z_]+)\s*(?:of|is|=)\s*\$?(\d+(?:\.\d+)?)").unwrap();
         for cap in re_exact.captures_iter(&lower) {
             if let (Some(name), Some(num)) = (cap.get(1), cap.get(2)) {
                 if let Ok(v) = num.as_str().parse::<f64>() {
@@ -177,12 +173,18 @@ mod tests {
     #[test]
     fn extract_target_strips_deploy() {
         let ex = Extractor::new();
-        assert_eq!(ex.extract_target("Deploy the service to prod."), "the service to prod");
+        assert_eq!(
+            ex.extract_target("Deploy the service to prod."),
+            "the service to prod"
+        );
     }
 
     #[test]
     fn extract_target_defaults_to_full_when_no_verb() {
         let ex = Extractor::new();
-        assert_eq!(ex.extract_target("the service to prod"), "the service to prod");
+        assert_eq!(
+            ex.extract_target("the service to prod"),
+            "the service to prod"
+        );
     }
 }

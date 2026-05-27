@@ -23,33 +23,33 @@
 
 pub mod auth;
 pub mod bootstrap;
-pub mod db_bootstrap;
-pub mod password;
-pub mod postgres_store;
-pub mod postgres_platform_store;
-pub mod prism_check;
 pub mod cloudflare;
 pub mod connectors;
+pub mod db_bootstrap;
 pub mod deploy;
 pub mod mcp;
+pub mod password;
+pub mod postgres_platform_store;
+pub mod postgres_store;
+pub mod prism_check;
 pub mod routes;
 pub mod scheduling;
 pub mod secrets;
 pub mod server;
 pub mod shutdown;
-pub mod tui;
 pub mod telephony;
+pub mod tui;
 pub mod voice_pipeline;
 pub mod ws;
 
+use axum::{http::StatusCode, response::IntoResponse};
+use chrono::{DateTime, Utc};
 use clawz_core::traits::AgentScheduler;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
-use serde::{Deserialize, Serialize};
+use tokio::sync::{RwLock, broadcast};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-use axum::{http::StatusCode, response::IntoResponse};
 
 // ─── Domain record types ──────────────────────────────────────────────────────
 
@@ -783,16 +783,10 @@ impl IntoResponse for GatewayError {
                 "unprocessable_entity",
                 msg.clone(),
             ),
-            GatewayError::Unauthorized(msg) => (
-                StatusCode::UNAUTHORIZED,
-                "unauthorized",
-                msg.clone(),
-            ),
-            GatewayError::Conflict(msg) => (
-                StatusCode::CONFLICT,
-                "conflict",
-                msg.clone(),
-            ),
+            GatewayError::Unauthorized(msg) => {
+                (StatusCode::UNAUTHORIZED, "unauthorized", msg.clone())
+            }
+            GatewayError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone()),
             GatewayError::Internal(msg) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "internal_error",
@@ -804,7 +798,11 @@ impl IntoResponse for GatewayError {
                 "not implemented".to_string(),
             ),
         };
-        (status, Json(json!({"error": error_code, "message": message}))).into_response()
+        (
+            status,
+            Json(json!({"error": error_code, "message": message})),
+        )
+            .into_response()
     }
 }
 

@@ -61,7 +61,11 @@ impl ShopifyConnector {
                 "write_customers".into(),
             ],
         );
-        Self { oauth, credentials: None, shop }
+        Self {
+            oauth,
+            credentials: None,
+            shop,
+        }
     }
 
     /// Create with an access token (for private apps).
@@ -131,11 +135,20 @@ impl SaaSConnector for ShopifyConnector {
             "products" => format!("{}/products.json?limit={}", self.base_url(), limit),
             "orders" => format!("{}/orders.json?limit={}&status=any", self.base_url(), limit),
             "customers" => format!("{}/customers.json?limit={}", self.base_url(), limit),
-            "collections" => format!("{}/custom_collections.json?limit={}", self.base_url(), limit),
+            "collections" => format!(
+                "{}/custom_collections.json?limit={}",
+                self.base_url(),
+                limit
+            ),
             "variants" => format!("{}/variants.json?limit={}", self.base_url(), limit),
-            _ => return Err(ClawzError::Provider(format!("Unknown Shopify object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Shopify object: {obj}"
+                )));
+            }
         };
-        let resp = self.client()
+        let resp = self
+            .client()
             .get(&path)
             .header("X-Shopify-Access-Token", &token)
             .send()
@@ -152,10 +165,15 @@ impl SaaSConnector for ShopifyConnector {
             "products" => (format!("{}/products.json", self.base_url()), "product"),
             "orders" => (format!("{}/orders.json", self.base_url()), "order"),
             "customers" => (format!("{}/customers.json", self.base_url()), "customer"),
-            _ => return Err(ClawzError::Provider(format!("Unknown Shopify object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Shopify object: {obj}"
+                )));
+            }
         };
         let body = serde_json::json!({ key: data });
-        let resp = self.client()
+        let resp = self
+            .client()
             .post(&path)
             .header("X-Shopify-Access-Token", &token)
             .json(&body)
@@ -169,13 +187,24 @@ impl SaaSConnector for ShopifyConnector {
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let token = self.token()?;
         let (path, key) = match obj {
-            "products" => (format!("{}/products/{}.json", self.base_url(), id), "product"),
+            "products" => (
+                format!("{}/products/{}.json", self.base_url(), id),
+                "product",
+            ),
             "orders" => (format!("{}/orders/{}.json", self.base_url(), id), "order"),
-            "customers" => (format!("{}/customers/{}.json", self.base_url(), id), "customer"),
-            _ => return Err(ClawzError::Provider(format!("Unknown Shopify object: {obj}"))),
+            "customers" => (
+                format!("{}/customers/{}.json", self.base_url(), id),
+                "customer",
+            ),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Shopify object: {obj}"
+                )));
+            }
         };
         let body = serde_json::json!({ key: data });
-        let resp = self.client()
+        let resp = self
+            .client()
             .put(&path)
             .header("X-Shopify-Access-Token", &token)
             .json(&body)
@@ -193,7 +222,8 @@ impl SaaSConnector for ShopifyConnector {
             "customers" => format!("{}/customers/{}.json", self.base_url(), id),
             _ => return Err(ClawzError::Provider(format!("Cannot delete Shopify {obj}"))),
         };
-        let resp = self.client()
+        let resp = self
+            .client()
             .delete(&path)
             .header("X-Shopify-Access-Token", &token)
             .send()
@@ -214,29 +244,44 @@ impl SaaSConnector for ShopifyConnector {
         match action {
             "fulfill_order" => {
                 let order_id = params["order_id"].as_str().unwrap_or("");
-                let resp = self.client()
-                    .post(format!("{}/orders/{}/fulfillments.json", self.base_url(), order_id))
+                let resp = self
+                    .client()
+                    .post(format!(
+                        "{}/orders/{}/fulfillments.json",
+                        self.base_url(),
+                        order_id
+                    ))
                     .header("X-Shopify-Access-Token", &token)
                     .json(&serde_json::json!({ "fulfillment": params }))
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Shopify fulfill order failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Shopify fulfill order failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "cancel_order" => {
                 let order_id = params["order_id"].as_str().unwrap_or("");
-                let resp = self.client()
-                    .post(format!("{}/orders/{}/cancel.json", self.base_url(), order_id))
+                let resp = self
+                    .client()
+                    .post(format!(
+                        "{}/orders/{}/cancel.json",
+                        self.base_url(),
+                        order_id
+                    ))
                     .header("X-Shopify-Access-Token", &token)
                     .json(&params)
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Shopify cancel order failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Shopify cancel order failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
             "search_products" => {
                 let query = params["query"].as_str().unwrap_or("");
-                let resp = self.client()
+                let resp = self
+                    .client()
                     .get(format!("{}/products.json?title={}", self.base_url(), query))
                     .header("X-Shopify-Access-Token", &token)
                     .send()
@@ -244,7 +289,9 @@ impl SaaSConnector for ShopifyConnector {
                     .map_err(|e| ClawzError::Provider(format!("Shopify search failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Shopify action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Shopify action: {action}"
+            ))),
         }
     }
 }

@@ -81,7 +81,6 @@ impl WireContent {
     }
 }
 
-
 /// A single part of a multimodal message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -217,7 +216,9 @@ pub fn to_wire_message(msg: &Message) -> WireMessage {
             let wire_parts: Vec<WireContentPart> = parts
                 .iter()
                 .filter_map(|p| match p {
-                    ContentPart::Text { text } => Some(WireContentPart::Text { text: text.clone() }),
+                    ContentPart::Text { text } => {
+                        Some(WireContentPart::Text { text: text.clone() })
+                    }
                     ContentPart::ImageUrl { url, detail } => Some(WireContentPart::ImageUrl {
                         image_url: WireImageUrl {
                             url: url.clone(),
@@ -274,11 +275,14 @@ pub async fn http_error(response: reqwest::Response) -> ClawzError {
         let retry_secs = serde_json::from_str::<Value>(&body)
             .ok()
             .and_then(|v| {
-                v["error"]["retry_after"].as_u64()
+                v["error"]["retry_after"]
+                    .as_u64()
                     .or_else(|| v["retry_after"].as_u64())
             })
             .unwrap_or(60);
-        ClawzError::RateLimited { retry_after_secs: retry_secs }
+        ClawzError::RateLimited {
+            retry_after_secs: retry_secs,
+        }
     } else if status.as_u16() == 401 || status.as_u16() == 403 {
         ClawzError::Auth(format!("HTTP {}: {}", status, body))
     } else {

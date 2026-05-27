@@ -44,10 +44,18 @@ impl MemoryCache {
         self.map.insert(key, value);
     }
 
-    pub fn hits(&self) -> u64 { self.hit_count.load(Ordering::Relaxed) }
-    pub fn misses(&self) -> u64 { self.miss_count.load(Ordering::Relaxed) }
-    pub fn len(&self) -> usize { self.map.len() }
-    pub fn is_empty(&self) -> bool { self.map.is_empty() }
+    pub fn hits(&self) -> u64 {
+        self.hit_count.load(Ordering::Relaxed)
+    }
+    pub fn misses(&self) -> u64 {
+        self.miss_count.load(Ordering::Relaxed)
+    }
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
 }
 
 #[cfg(test)]

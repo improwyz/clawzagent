@@ -4,14 +4,14 @@
 //! private side-threads (Hybrid C), and orchestration binding.
 
 use axum::{
+    Json, Router,
     extract::{Extension, Path, Query, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::Utc;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 use clawz_services::dto::{EvaluateGovernanceRequest, OrchestrateRequest};
@@ -31,24 +31,19 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}", get(get_room))
         .route("/{id}/participants", post(invite_participant))
         .route("/{id}/messages", get(list_messages).post(send_message))
-        .route(
-            "/{id}/messages/{message_id}/promote",
-            post(promote_message),
-        )
+        .route("/{id}/messages/{message_id}/promote", post(promote_message))
         .route("/{id}/side-threads", post(create_side_thread))
         .route("/{id}/orchestrate", post(orchestrate_room))
 }
 
 fn caller_id(auth: Option<Extension<AuthContext>>) -> Result<String, GatewayError> {
-    auth.map(|Extension(ctx)| ctx.user_id.clone()).ok_or_else(|| {
-        GatewayError::Unauthorized("authentication required".to_string())
-    })
+    auth.map(|Extension(ctx)| ctx.user_id.clone())
+        .ok_or_else(|| GatewayError::Unauthorized("authentication required".to_string()))
 }
 
 fn caller_tenant(auth: Option<Extension<AuthContext>>) -> Result<String, GatewayError> {
-    auth.map(|Extension(ctx)| ctx.tenant_id.clone()).ok_or_else(|| {
-        GatewayError::Unauthorized("authentication required".to_string())
-    })
+    auth.map(|Extension(ctx)| ctx.tenant_id.clone())
+        .ok_or_else(|| GatewayError::Unauthorized("authentication required".to_string()))
 }
 
 fn require_tenant_room(room: &RoomRecord, tenant_id: &str) -> Result<(), GatewayError> {
@@ -86,10 +81,7 @@ fn next_seq(room: &RoomRecord) -> u64 {
 
 const VALID_ROOM_TYPES: &[&str] = &["multi_agent", "agent_team", "shared_agent", "direct"];
 
-fn resolve_room_type(
-    explicit: Option<String>,
-    participants: &[RoomParticipantRecord],
-) -> String {
+fn resolve_room_type(explicit: Option<String>, participants: &[RoomParticipantRecord]) -> String {
     if let Some(ref rt) = explicit {
         if VALID_ROOM_TYPES.contains(&rt.as_str()) {
             return rt.clone();
@@ -205,9 +197,9 @@ async fn publish_message_append(state: &AppState, room_id: &str, msg: &RoomMessa
 }
 
 fn agent_is_room_participant(room: &RoomRecord, agent_id: &str) -> bool {
-    room.participants.iter().any(|p| {
-        p.participant_type == "agent" && p.participant_id == agent_id
-    })
+    room.participants
+        .iter()
+        .any(|p| p.participant_type == "agent" && p.participant_id == agent_id)
 }
 
 pub(crate) async fn append_room_message(
@@ -274,8 +266,7 @@ pub(crate) async fn append_room_message(
 fn message_visible_to(msg: &RoomMessageRecord, user_id: &str, room: &RoomRecord) -> bool {
     match msg.visibility.as_str() {
         "room" => true,
-        "private" => msg.sender_id == user_id
-            || msg.mentions.iter().any(|m| m == user_id),
+        "private" => msg.sender_id == user_id || msg.mentions.iter().any(|m| m == user_id),
         "side_thread" => {
             let Some(thread_id) = msg.thread_id.as_ref() else {
                 return false;
@@ -284,8 +275,7 @@ fn message_visible_to(msg: &RoomMessageRecord, user_id: &str, room: &RoomRecord)
                 .iter()
                 .find(|t| &t.id == thread_id)
                 .map(|t| {
-                    t.participant_ids.contains(&user_id.to_string())
-                        || t.created_by == user_id
+                    t.participant_ids.contains(&user_id.to_string()) || t.created_by == user_id
                 })
                 .unwrap_or(false)
         }
@@ -580,9 +570,9 @@ async fn send_message(
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
     let user_id = caller_id(auth.clone())?;
     let tenant_id = caller_tenant(auth)?;
-    let content = body.content.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'content' is required".to_string())
-    })?;
+    let content = body
+        .content
+        .ok_or_else(|| GatewayError::Unprocessable("field 'content' is required".to_string()))?;
     let visibility = body.visibility.unwrap_or_else(|| "room".to_string());
 
     if visibility == "side_thread" && body.thread_id.is_none() {
@@ -607,9 +597,7 @@ async fn send_message(
                 .iter()
                 .find(|t| &t.id == thread_id)
                 .ok_or_else(|| GatewayError::not_found("SideThread", thread_id))?;
-            if !thread.participant_ids.contains(&user_id)
-                && thread.created_by != user_id
-            {
+            if !thread.participant_ids.contains(&user_id) && thread.created_by != user_id {
                 return Err(GatewayError::Unauthorized(
                     "not a member of this side-thread".to_string(),
                 ));
@@ -662,7 +650,11 @@ async fn send_message(
     )
     .await?;
 
-    let status = if turn_queued { "turn_queued" } else { "accepted" };
+    let status = if turn_queued {
+        "turn_queued"
+    } else {
+        "accepted"
+    };
 
     Ok((
         StatusCode::ACCEPTED,
@@ -723,10 +715,7 @@ async fn create_side_thread(
             .map_err(|e| GatewayError::Internal(e.to_string()))?;
     }
 
-    Ok((
-        StatusCode::CREATED,
-        Json(json!({ "side_thread": thread })),
-    ))
+    Ok((StatusCode::CREATED, Json(json!({ "side_thread": thread }))))
 }
 
 /// `POST /rooms/{id}/orchestrate` — bind orchestration mode/config to the room.
@@ -768,13 +757,17 @@ async fn orchestrate_room(
     let snapshot = room.clone();
     drop(rooms);
 
-    state.room_runs.write().await.insert(id.clone(), run_id.clone());
+    state
+        .room_runs
+        .write()
+        .await
+        .insert(id.clone(), run_id.clone());
 
     if let Some(ref pool) = state.db {
         if let Ok(room_uuid) = Uuid::parse_str(&id) {
             let run_uuid = Uuid::parse_str(&run_id).unwrap_or_else(|_| Uuid::new_v4());
-            let leader_uuid = room_leader_agent_id(&snapshot)
-                .and_then(|s| Uuid::parse_str(&s).ok());
+            let leader_uuid =
+                room_leader_agent_id(&snapshot).and_then(|s| Uuid::parse_str(&s).ok());
             let now = Utc::now();
             let graph_snapshot = body
                 .config
@@ -798,17 +791,14 @@ async fn orchestrate_room(
 
     if let Some(ref platform) = state.platform {
         let leader = room_leader_agent_id(&snapshot).unwrap_or_else(|| "default".to_string());
-        let member_ids: Vec<String> = body
-            .agent_ids
-            .clone()
-            .unwrap_or_else(|| {
-                snapshot
-                    .participants
-                    .iter()
-                    .filter(|p| p.participant_type == "agent" && p.participant_id != leader)
-                    .map(|p| p.participant_id.clone())
-                    .collect()
-            });
+        let member_ids: Vec<String> = body.agent_ids.clone().unwrap_or_else(|| {
+            snapshot
+                .participants
+                .iter()
+                .filter(|p| p.participant_type == "agent" && p.participant_id != leader)
+                .map(|p| p.participant_id.clone())
+                .collect()
+        });
         let task = body
             .config
             .as_ref()

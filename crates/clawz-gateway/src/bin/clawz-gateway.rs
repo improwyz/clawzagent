@@ -7,18 +7,18 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use clawz_core::deployment::DeploymentMode;
-use clawz_gateway::bootstrap::{build_agent_scheduler, build_platform_with_approval, maybe_init_database};
+use clawz_gateway::bootstrap::{
+    build_agent_scheduler, build_platform_with_approval, maybe_init_database,
+};
 use clawz_gateway::postgres_platform_store::PostgresPlatformStore;
 use clawz_gateway::postgres_store;
-use clawz_gateway::{server::GatewayServer, AppState};
+use clawz_gateway::{AppState, server::GatewayServer};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()),
-        )
+        .with_env_filter(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
         .init();
 
     let listen_addr: SocketAddr = std::env::var("CLAWZ_LISTEN_ADDR")
@@ -37,17 +37,15 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let identity_store = std::env::var("CLAWZ_IDENTITY_STORE").ok().map(|_path| {
-        Arc::new(
-            clawz_worker::runtime::identity::AgentIdentityStore::new_in_memory(),
-        )
+        Arc::new(clawz_worker::runtime::identity::AgentIdentityStore::new_in_memory())
     });
 
     let db = maybe_init_database().await?;
     let (platform, approval_workflow) = build_platform_with_approval().await?;
     let platform = Arc::new(platform);
-    let platform_store = db
-        .as_ref()
-        .map(|pool| PostgresPlatformStore::new(pool.clone()) as Arc<dyn clawz_services::PlatformStore>);
+    let platform_store = db.as_ref().map(|pool| {
+        PostgresPlatformStore::new(pool.clone()) as Arc<dyn clawz_services::PlatformStore>
+    });
     let agent_scheduler = match build_agent_scheduler() {
         Ok(s) => {
             tracing::info!("fleet scheduler ready ({:?})", DeploymentMode::from_env());
@@ -70,7 +68,10 @@ async fn main() -> anyhow::Result<()> {
     if let Some(ref pool) = db {
         if let Ok(agents) = postgres_store::load_agents(pool).await {
             *state.agents.write().await = agents;
-            tracing::info!("hydrated {} agents from database", state.agents.read().await.len());
+            tracing::info!(
+                "hydrated {} agents from database",
+                state.agents.read().await.len()
+            );
         }
         if let Ok(conversations) = postgres_store::load_conversations(pool).await {
             *state.conversations.write().await = conversations;

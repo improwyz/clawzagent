@@ -140,9 +140,15 @@ impl MeshRouter {
         // wants reliability, metrics want cheap paths, bulk wants throughput.
         traffic_policies.insert("rpc".to_string(), RoutingPolicy::LatencyOptimized);
         traffic_policies.insert("streaming".to_string(), RoutingPolicy::ThroughputOptimized);
-        traffic_policies.insert("governance".to_string(), RoutingPolicy::ReliabilityOptimized);
+        traffic_policies.insert(
+            "governance".to_string(),
+            RoutingPolicy::ReliabilityOptimized,
+        );
         traffic_policies.insert("metrics".to_string(), RoutingPolicy::CostOptimized);
-        traffic_policies.insert("bulk_transfer".to_string(), RoutingPolicy::ThroughputOptimized);
+        traffic_policies.insert(
+            "bulk_transfer".to_string(),
+            RoutingPolicy::ThroughputOptimized,
+        );
 
         Self {
             default_policy,
@@ -218,11 +224,7 @@ impl MeshRouter {
     /// Select the best path for the given peer and traffic type.
     ///
     /// Returns `None` if no healthy paths are registered for that peer.
-    pub async fn select_path(
-        &self,
-        peer_id: Uuid,
-        traffic_type: TrafficType,
-    ) -> Option<MeshPath> {
+    pub async fn select_path(&self, peer_id: Uuid, traffic_type: TrafficType) -> Option<MeshPath> {
         let cache_key = (peer_id, traffic_type_str(traffic_type).to_string());
 
         // Check cache first to avoid recomputing scores on hot paths.
@@ -251,11 +253,7 @@ impl MeshRouter {
     }
 
     /// Return all healthy paths for a peer, sorted by score for the given policy.
-    pub async fn ranked_paths(
-        &self,
-        peer_id: Uuid,
-        traffic_type: TrafficType,
-    ) -> Vec<MeshPath> {
+    pub async fn ranked_paths(&self, peer_id: Uuid, traffic_type: TrafficType) -> Vec<MeshPath> {
         let policy = self.policy_for(traffic_type).await;
         let stats = self.path_stats.read().await;
         let peer_stats = match stats.get(&peer_id) {
@@ -398,7 +396,10 @@ mod tests {
         router.upsert_path(peer, "grpc", 10.0, 100.0, 0.99).await;
         router.upsert_path(peer, "quic", 5.0, 10_000.0, 0.99).await;
 
-        let path = router.select_path(peer, TrafficType::BulkTransfer).await.unwrap();
+        let path = router
+            .select_path(peer, TrafficType::BulkTransfer)
+            .await
+            .unwrap();
         assert_eq!(path.transport, "quic"); // highest bandwidth
     }
 
@@ -456,7 +457,10 @@ mod tests {
         router.upsert_path(peer, "grpc", 50.0, 1000.0, 1.0).await;
         router.upsert_path(peer, "quic", 5.0, 1000.0, 0.7).await;
 
-        let path = router.select_path(peer, TrafficType::Governance).await.unwrap();
+        let path = router
+            .select_path(peer, TrafficType::Governance)
+            .await
+            .unwrap();
         assert_eq!(path.transport, "grpc"); // reliability wins
     }
 }

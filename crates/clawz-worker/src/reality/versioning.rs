@@ -106,11 +106,9 @@ impl ContextStore for InMemoryContextStore {
         let map = self.bundles.read().map_err(|_| {
             ClawzError::Internal("InMemoryContextStore bundle lock poisoned".into())
         })?;
-        let entry = map.get(tenant_id).ok_or_else(|| {
-            ClawzError::NotFound {
-                entity: "tenant".into(),
-                id: tenant_id.into(),
-            }
+        let entry = map.get(tenant_id).ok_or_else(|| ClawzError::NotFound {
+            entity: "tenant".into(),
+            id: tenant_id.into(),
         })?;
 
         let oldest = entry.first().map(|(v, _)| *v).unwrap_or(1);
@@ -137,9 +135,10 @@ impl ContextStore for InMemoryContextStore {
         }
 
         // Otherwise apply deltas from snapshot.version → target version.
-        let delta_map = self.deltas.read().map_err(|_| {
-            ClawzError::Internal("InMemoryContextStore delta lock poisoned".into())
-        })?;
+        let delta_map = self
+            .deltas
+            .read()
+            .map_err(|_| ClawzError::Internal("InMemoryContextStore delta lock poisoned".into()))?;
         let deltas = delta_map.get(tenant_id).cloned().unwrap_or_default();
 
         let mut reconstructed = snapshot;
@@ -184,7 +183,10 @@ mod tests {
     #[test]
     fn tenant_isolation() {
         let store = InMemoryContextStore::new();
-        let bundle_a = ContextBundle::builder().tenant_id("tenant_a").version(1).build();
+        let bundle_a = ContextBundle::builder()
+            .tenant_id("tenant_a")
+            .version(1)
+            .build();
         store.save(&bundle_a).unwrap();
 
         let latest_b = store.latest("tenant_b").unwrap();

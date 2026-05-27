@@ -12,7 +12,7 @@ use clawz_core::traits::MemoryBackend;
 use clawz_core::types::message::Message;
 use clawz_services::dto::{RunTurnRequest, RunTurnResponse};
 use regex::Regex;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use tokio::sync::RwLock;
 
 use crate::runtime::agent::AgentRuntime;
@@ -84,9 +84,7 @@ impl TurnCoordinator {
             self.acquire_room_lock(&room_id).await;
         }
 
-        let result = self
-            .run_turn_unlocked(entry_agent_id, req, provider)
-            .await;
+        let result = self.run_turn_unlocked(entry_agent_id, req, provider).await;
 
         if !lock_held {
             self.release_room_lock(&room_id).await;
@@ -177,10 +175,7 @@ impl TurnCoordinator {
     }
 
     /// Reconstruct a [`Team`] from a gateway room snapshot (async member registration).
-    pub async fn build_team_from_snapshot(
-        room_id: &str,
-        snapshot: Option<&Value>,
-    ) -> Result<Team> {
+    pub async fn build_team_from_snapshot(room_id: &str, snapshot: Option<&Value>) -> Result<Team> {
         team_from_snapshot(room_id, snapshot).await
     }
 
@@ -297,8 +292,7 @@ fn resolve_route(
             }
         }
         if let Some(pattern) = hint.strip_prefix("pattern:") {
-            if let Some(id) = match_participant_pattern(team, pattern, req.room_snapshot.as_ref())
-            {
+            if let Some(id) = match_participant_pattern(team, pattern, req.room_snapshot.as_ref()) {
                 return Ok((id, format!("routing_hint:pattern:{pattern}")));
             }
         }
@@ -341,7 +335,11 @@ fn participant_exists(team: &Team, id_or_name: &str, snapshot: Option<&Value>) -
         .unwrap_or(false)
 }
 
-fn match_participant_pattern(_team: &Team, pattern: &str, snapshot: Option<&Value>) -> Option<String> {
+fn match_participant_pattern(
+    _team: &Team,
+    pattern: &str,
+    snapshot: Option<&Value>,
+) -> Option<String> {
     let snapshot = snapshot?;
     let participants = snapshot.get("participants")?.as_array()?;
     for p in participants {
@@ -384,17 +382,14 @@ fn room_scoped_user_message(req: &RunTurnRequest, room_id: &str) -> Message {
         .as_deref()
         .map(|s| format!(" sender={s}"))
         .unwrap_or_default();
-    let prefixed = format!("[room:{room_id} visibility={visibility}{sender}]\n{}", req.message);
+    let prefixed = format!(
+        "[room:{room_id} visibility={visibility}{sender}]\n{}",
+        req.message
+    );
     Message::user(prefixed)
 }
 
-fn delegation_event(
-    event_type: &str,
-    from: &str,
-    to: &str,
-    reason: &str,
-    room_id: &str,
-) -> Value {
+fn delegation_event(event_type: &str, from: &str, to: &str, reason: &str, room_id: &str) -> Value {
     json!({
         "type": event_type,
         "from_agent_id": from,

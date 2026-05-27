@@ -101,12 +101,17 @@ impl SharedRateLimiter {
     /// Wrap a `RateLimiter` in an async `Arc<Mutex<…>>` so multiple Tokio
     /// tasks can share the same token bucket.
     pub fn new(capacity: f64, rate_per_sec: f64) -> Self {
-        Self(Arc::new(Mutex::new(RateLimiter::new(capacity, rate_per_sec))))
+        Self(Arc::new(Mutex::new(RateLimiter::new(
+            capacity,
+            rate_per_sec,
+        ))))
     }
 
     /// Convenience constructor matching `RateLimiter::per_minute`.
     pub fn per_minute(limit_per_minute: u32) -> Self {
-        Self(Arc::new(Mutex::new(RateLimiter::per_minute(limit_per_minute))))
+        Self(Arc::new(Mutex::new(RateLimiter::per_minute(
+            limit_per_minute,
+        ))))
     }
 
     /// Wait until a token is available, then return.
@@ -262,9 +267,7 @@ pub fn markdown_to_plain(text: &str) -> String {
 /// These headers are the de-facto standard used by Discord, GitHub, and many
 /// other APIs; parsing them lets the worker proactively throttle instead of
 /// waiting for a 429.
-pub fn parse_ratelimit_headers(
-    headers: &reqwest::header::HeaderMap,
-) -> Option<(u64, u64)> {
+pub fn parse_ratelimit_headers(headers: &reqwest::header::HeaderMap) -> Option<(u64, u64)> {
     let remaining = headers
         .get("X-RateLimit-Remaining")
         .and_then(|v| v.to_str().ok())

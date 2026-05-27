@@ -65,7 +65,9 @@ impl DeployProvider for NorthflankAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::NativeBinary,
         ]
     }
@@ -102,7 +104,7 @@ impl DeployProvider for NorthflankAdapter {
             DeployMode::Wasm => {
                 return Err(ClawzError::Validation(
                     "Northflank does not support Wasm mode".into(),
-                ))
+                ));
             }
         };
 

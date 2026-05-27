@@ -53,7 +53,11 @@ impl MailchimpConnector {
             "https://login.mailchimp.com/oauth2/token",
             vec![],
         );
-        Self { oauth, credentials: None, data_center: None }
+        Self {
+            oauth,
+            credentials: None,
+            data_center: None,
+        }
     }
 
     /// Create with an API key (format: key-dcXX).
@@ -147,7 +151,11 @@ impl SaaSConnector for MailchimpConnector {
                 let list_id = filters.search.as_deref().unwrap_or("");
                 format!("/lists/{}/members", list_id)
             }
-            _ => return Err(ClawzError::Provider(format!("Unknown Mailchimp object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Mailchimp object: {obj}"
+                )));
+            }
         };
         let resp = client
             .get(format!("{}{}", self.base_url(), path))
@@ -169,7 +177,11 @@ impl SaaSConnector for MailchimpConnector {
                 let list_id = data["list_id"].as_str().unwrap_or("");
                 format!("/lists/{}/members", list_id)
             }
-            _ => return Err(ClawzError::Provider(format!("Unknown Mailchimp object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Mailchimp object: {obj}"
+                )));
+            }
         };
         let resp = client
             .post(format!("{}{}", self.base_url(), path))
@@ -190,7 +202,11 @@ impl SaaSConnector for MailchimpConnector {
                 let list_id = data["list_id"].as_str().unwrap_or("");
                 format!("/lists/{}/members/{}", list_id, id)
             }
-            _ => return Err(ClawzError::Provider(format!("Unknown Mailchimp object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Mailchimp object: {obj}"
+                )));
+            }
         };
         let resp = client
             .patch(format!("{}{}", self.base_url(), path))
@@ -207,7 +223,11 @@ impl SaaSConnector for MailchimpConnector {
         let path = match obj {
             "campaigns" => format!("/campaigns/{}", id),
             "lists" => format!("/lists/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Mailchimp object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Mailchimp object: {obj}"
+                )));
+            }
         };
         let resp = client
             .delete(format!("{}{}", self.base_url(), path))
@@ -240,7 +260,11 @@ impl SaaSConnector for MailchimpConnector {
                 let list_id = params["list_id"].as_str().unwrap_or("");
                 format!("/lists/{}/members", list_id)
             }
-            _ => return Err(ClawzError::Provider(format!("Unknown Mailchimp action: {action}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Mailchimp action: {action}"
+                )));
+            }
         };
         let resp = client
             .post(format!("{}{}", self.base_url(), path))

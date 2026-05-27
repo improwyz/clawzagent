@@ -76,7 +76,11 @@ impl GitLabConnector {
             format!("{}/oauth/token", base),
             vec!["api".into(), "read_user".into(), "read_repository".into()],
         );
-        Self { oauth, credentials: None, base_url: base }
+        Self {
+            oauth,
+            credentials: None,
+            base_url: base,
+        }
     }
 
     /// Create with a personal access token.
@@ -156,27 +160,56 @@ impl SaaSConnector for GitLabConnector {
         // Cap page size at 100 because GitLab’s REST API has a hard ceiling.
         let per_page = filters.limit.unwrap_or(100).min(100);
         let path = match obj {
-            "projects" => format!("{}/projects?per_page={}&membership=true", self.api_url(), per_page),
+            "projects" => format!(
+                "{}/projects?per_page={}&membership=true",
+                self.api_url(),
+                per_page
+            ),
             "issues" => {
                 let project = filters.search.as_deref().unwrap_or("");
-                format!("{}/projects/{}/issues?per_page={}", self.api_url(), project, per_page)
+                format!(
+                    "{}/projects/{}/issues?per_page={}",
+                    self.api_url(),
+                    project,
+                    per_page
+                )
             }
             "merge_requests" => {
                 let project = filters.search.as_deref().unwrap_or("");
-                format!("{}/projects/{}/merge_requests?per_page={}", self.api_url(), project, per_page)
+                format!(
+                    "{}/projects/{}/merge_requests?per_page={}",
+                    self.api_url(),
+                    project,
+                    per_page
+                )
             }
             "pipelines" => {
                 let project = filters.search.as_deref().unwrap_or("");
-                format!("{}/projects/{}/pipelines?per_page={}", self.api_url(), project, per_page)
+                format!(
+                    "{}/projects/{}/pipelines?per_page={}",
+                    self.api_url(),
+                    project,
+                    per_page
+                )
             }
-            "groups" => format!("{}/groups?per_page={}&min_access_level=10", self.api_url(), per_page),
-            _ => return Err(ClawzError::Provider(format!("Unknown GitLab object: {obj}"))),
+            "groups" => format!(
+                "{}/groups?per_page={}&min_access_level=10",
+                self.api_url(),
+                per_page
+            ),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown GitLab object: {obj}"
+                )));
+            }
         };
         let mut req = client.get(&path);
         for (k, v) in &headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        let resp = req.send().await
+        let resp = req
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("GitLab list failed: {e}")))?;
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         Ok(json.as_array().cloned().unwrap_or_default())
@@ -190,13 +223,20 @@ impl SaaSConnector for GitLabConnector {
             "issues" => format!("{}/projects/{}/issues", self.api_url(), project),
             "merge_requests" => format!("{}/projects/{}/merge_requests", self.api_url(), project),
             "projects" => format!("{}/projects", self.api_url()),
-            _ => return Err(ClawzError::Provider(format!("Unknown GitLab object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown GitLab object: {obj}"
+                )));
+            }
         };
         let mut req = client.post(&path);
         for (k, v) in &headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        let resp = req.json(&data).send().await
+        let resp = req
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("GitLab create failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }
@@ -207,15 +247,27 @@ impl SaaSConnector for GitLabConnector {
         let project = data["project_id"].as_str().unwrap_or("");
         let path = match obj {
             "issues" => format!("{}/projects/{}/issues/{}", self.api_url(), project, id),
-            "merge_requests" => format!("{}/projects/{}/merge_requests/{}", self.api_url(), project, id),
+            "merge_requests" => format!(
+                "{}/projects/{}/merge_requests/{}",
+                self.api_url(),
+                project,
+                id
+            ),
             "projects" => format!("{}/projects/{}", self.api_url(), id),
-            _ => return Err(ClawzError::Provider(format!("Unknown GitLab object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown GitLab object: {obj}"
+                )));
+            }
         };
         let mut req = client.put(&path);
         for (k, v) in &headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        let resp = req.json(&data).send().await
+        let resp = req
+            .json(&data)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("GitLab update failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }
@@ -225,13 +277,19 @@ impl SaaSConnector for GitLabConnector {
         let headers = self.auth_headers()?;
         let path = match obj {
             "projects" => format!("{}/projects/{}", self.api_url(), id),
-            _ => return Err(ClawzError::Provider(format!("Unknown GitLab object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown GitLab object: {obj}"
+                )));
+            }
         };
         let mut req = client.delete(&path);
         for (k, v) in &headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        let resp = req.send().await
+        let resp = req
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("GitLab delete failed: {e}")))?;
         if resp.status().is_success() {
             Ok(())
@@ -251,16 +309,28 @@ impl SaaSConnector for GitLabConnector {
             "trigger_pipeline" => format!("{}/projects/{}/pipeline", self.api_url(), project),
             "merge_mr" => {
                 let mr_iid = params["mr_iid"].as_str().unwrap_or("");
-                format!("{}/projects/{}/merge_requests/{}/merge", self.api_url(), project, mr_iid)
+                format!(
+                    "{}/projects/{}/merge_requests/{}/merge",
+                    self.api_url(),
+                    project,
+                    mr_iid
+                )
             }
             "create_tag" => format!("{}/projects/{}/repository/tags", self.api_url(), project),
-            _ => return Err(ClawzError::Provider(format!("Unknown GitLab action: {action}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown GitLab action: {action}"
+                )));
+            }
         };
         let mut req = client.post(&path);
         for (k, v) in &headers {
             req = req.header(k.as_str(), v.as_str());
         }
-        let resp = req.json(&params).send().await
+        let resp = req
+            .json(&params)
+            .send()
+            .await
             .map_err(|e| ClawzError::Provider(format!("GitLab action failed: {e}")))?;
         crate::connectors::common::parse_json(resp).await
     }

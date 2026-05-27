@@ -37,9 +37,11 @@ use clawz_core::error::{ClawzError, Result};
 // Dependency: ChannelPlugin trait lives in the shared core crate
 use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 // Dependency: canonical message and attachment types defined in core
-use clawz_core::types::channel::{Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage};
+use clawz_core::types::channel::{
+    Attachment, ChannelCapabilities, IncomingMessage, OutgoingMessage,
+};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // Dependency: helper utilities from the parent plugin module (worker-internal)
 use crate::channels::plugin::{cred_str, map_http_error, markdown_to_discord};
@@ -105,24 +107,40 @@ impl DiscordChannel {
             .to_string();
 
         let mut im = IncomingMessage::new(ctx.config.id, sender_id, sender_name, content);
-        im.metadata.insert("discord_msg_id".to_string(), Value::String(id));
+        im.metadata
+            .insert("discord_msg_id".to_string(), Value::String(id));
 
         // Thread: Discord threads have an embedded `thread` object with an `id` field.
-        if let Some(thread) = msg.get("thread").and_then(|v| v.get("id")).and_then(|v| v.as_str()) {
+        if let Some(thread) = msg
+            .get("thread")
+            .and_then(|v| v.get("id"))
+            .and_then(|v| v.as_str())
+        {
             im.thread_id = Some(thread.to_string());
         }
 
         // Attachments: map Discord attachment objects to core Attachment structs.
         if let Some(atts) = msg.get("attachments").and_then(|v| v.as_array()) {
             for att in atts {
-                let att_id = att.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                let filename = att.get("filename").and_then(|v| v.as_str()).unwrap_or("file").to_string();
+                let att_id = att
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let filename = att
+                    .get("filename")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("file")
+                    .to_string();
                 let content_type = att
                     .get("content_type")
                     .and_then(|v| v.as_str())
                     .unwrap_or("application/octet-stream")
                     .to_string();
-                let url = att.get("url").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let url = att
+                    .get("url")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 let size = att.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
                 im.attachments.push(Attachment {
                     id: att_id,
@@ -168,13 +186,17 @@ impl DiscordChannel {
             .map_err(|e| ClawzError::Auth(format!("invalid signature hex: {e}")))?;
 
         if pk_bytes.len() != 32 || sig_bytes.len() != 64 {
-            return Err(ClawzError::Auth("Discord Ed25519: wrong key/sig length".to_string()));
+            return Err(ClawzError::Auth(
+                "Discord Ed25519: wrong key/sig length".to_string(),
+            ));
         }
 
         let mut message = timestamp.as_bytes().to_vec();
         message.extend_from_slice(_payload);
 
-        log::warn!("Discord Ed25519 signature verification skipped (ed25519-dalek not in deps). Add it to Cargo.toml for production.");
+        log::warn!(
+            "Discord Ed25519 signature verification skipped (ed25519-dalek not in deps). Add it to Cargo.toml for production."
+        );
         let _ = (pk_bytes, sig_bytes, message);
 
         Ok(())
@@ -274,7 +296,8 @@ impl ChannelPlugin for DiscordChannel {
             }
 
             // Capture the oldest ID on this page to use as `before` for the next request.
-            let oldest_id = msgs.last()
+            let oldest_id = msgs
+                .last()
                 .and_then(|m| m.get("id"))
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
@@ -325,11 +348,7 @@ impl ChannelPlugin for DiscordChannel {
                 .attachments
                 .iter()
                 .filter(|a| a.content_type.starts_with("image/"))
-                .filter_map(|a| {
-                    a.url.as_ref().map(|url| {
-                        json!({ "image": { "url": url } })
-                    })
-                })
+                .filter_map(|a| a.url.as_ref().map(|url| json!({ "image": { "url": url } })))
                 .collect();
             if !embeds.is_empty() {
                 body["embeds"] = Value::Array(embeds);

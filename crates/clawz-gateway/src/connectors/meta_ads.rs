@@ -55,7 +55,11 @@ impl MetaAdsConnector {
             "https://graph.facebook.com/v19.0/oauth/access_token",
             vec!["ads_read".into(), "ads_management".into()],
         );
-        Self { oauth, credentials: None, ad_account_id }
+        Self {
+            oauth,
+            credentials: None,
+            ad_account_id,
+        }
     }
 
     fn token(&self) -> Result<String> {
@@ -66,7 +70,8 @@ impl MetaAdsConnector {
     }
 
     fn account_id(&self) -> Result<String> {
-        self.ad_account_id.clone()
+        self.ad_account_id
+            .clone()
             .ok_or_else(|| ClawzError::Provider("ad_account_id required".into()))
     }
 
@@ -105,14 +110,35 @@ impl SaaSConnector for MetaAdsConnector {
         // Meta’s maximum page size for most edges is 200.
         let limit = filters.limit.unwrap_or(50).min(200);
         let path = match obj {
-            "campaigns" => format!("/act_{}/campaigns?fields=id,name,status,objective&limit={}", account_id, limit),
-            "adsets" => format!("/act_{}/adsets?fields=id,name,status,campaign_id&limit={}", account_id, limit),
-            "ads" => format!("/act_{}/ads?fields=id,name,status,adset_id&limit={}", account_id, limit),
-            "insights" => format!("/act_{}/insights?fields=impressions,clicks,spend,reach&limit={}", account_id, limit),
-            _ => return Err(ClawzError::Provider(format!("Unknown Meta Ads object: {obj}"))),
+            "campaigns" => format!(
+                "/act_{}/campaigns?fields=id,name,status,objective&limit={}",
+                account_id, limit
+            ),
+            "adsets" => format!(
+                "/act_{}/adsets?fields=id,name,status,campaign_id&limit={}",
+                account_id, limit
+            ),
+            "ads" => format!(
+                "/act_{}/ads?fields=id,name,status,adset_id&limit={}",
+                account_id, limit
+            ),
+            "insights" => format!(
+                "/act_{}/insights?fields=impressions,clicks,spend,reach&limit={}",
+                account_id, limit
+            ),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Meta Ads object: {obj}"
+                )));
+            }
         };
         let resp = reqwest::Client::new()
-            .get(format!("{}{}&access_token={}", Self::base_url(), path, token))
+            .get(format!(
+                "{}{}&access_token={}",
+                Self::base_url(),
+                path,
+                token
+            ))
             .send()
             .await
             .map_err(|e| ClawzError::Provider(format!("Meta Ads list failed: {e}")))?;
@@ -127,7 +153,11 @@ impl SaaSConnector for MetaAdsConnector {
             "campaigns" => format!("/act_{}/campaigns", account_id),
             "adsets" => format!("/act_{}/adsets", account_id),
             "ads" => format!("/act_{}/ads", account_id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Meta Ads object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Meta Ads object: {obj}"
+                )));
+            }
         };
         let resp = reqwest::Client::new()
             .post(format!("{}{}", Self::base_url(), path))
@@ -175,9 +205,17 @@ impl SaaSConnector for MetaAdsConnector {
         match action {
             "get_insights" => {
                 let id = params["id"].as_str().unwrap_or(&account_id);
-                let fields = params["fields"].as_str().unwrap_or("impressions,clicks,spend,reach,cpm,cpc");
+                let fields = params["fields"]
+                    .as_str()
+                    .unwrap_or("impressions,clicks,spend,reach,cpm,cpc");
                 let resp = reqwest::Client::new()
-                    .get(format!("{}/{}/insights?fields={}&access_token={}", Self::base_url(), id, fields, token))
+                    .get(format!(
+                        "{}/{}/insights?fields={}&access_token={}",
+                        Self::base_url(),
+                        id,
+                        fields,
+                        token
+                    ))
                     .send()
                     .await
                     .map_err(|e| ClawzError::Provider(format!("Meta Ads insights failed: {e}")))?;
@@ -185,17 +223,25 @@ impl SaaSConnector for MetaAdsConnector {
             }
             "pause_campaign" | "activate_campaign" => {
                 let id = params["id"].as_str().unwrap_or("");
-                let status = if action == "pause_campaign" { "PAUSED" } else { "ACTIVE" };
+                let status = if action == "pause_campaign" {
+                    "PAUSED"
+                } else {
+                    "ACTIVE"
+                };
                 let resp = reqwest::Client::new()
                     .post(format!("{}/{}", Self::base_url(), id))
                     .query(&[("access_token", &token)])
                     .json(&serde_json::json!({ "status": status }))
                     .send()
                     .await
-                    .map_err(|e| ClawzError::Provider(format!("Meta Ads update status failed: {e}")))?;
+                    .map_err(|e| {
+                        ClawzError::Provider(format!("Meta Ads update status failed: {e}"))
+                    })?;
                 crate::connectors::common::parse_json(resp).await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Meta Ads action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Meta Ads action: {action}"
+            ))),
         }
     }
 }

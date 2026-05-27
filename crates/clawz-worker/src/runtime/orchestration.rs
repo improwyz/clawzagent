@@ -104,9 +104,7 @@ pub type StepHandler = Arc<
 ///
 /// Receives the step's own output so it knows what to undo.
 pub type CompensateHandler = Arc<
-    dyn Fn(
-            StepOutput,
-        ) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>>
+    dyn Fn(StepOutput) -> Pin<Box<dyn std::future::Future<Output = Result<()>> + Send>>
         + Send
         + Sync,
 >;
@@ -129,11 +127,7 @@ pub struct WorkflowStepDef {
 
 impl WorkflowStepDef {
     /// Create a step without a compensation handler.
-    pub fn new(
-        name: impl Into<String>,
-        dependencies: Vec<String>,
-        handler: StepHandler,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, dependencies: Vec<String>, handler: StepHandler) -> Self {
         Self {
             name: name.into(),
             dependencies,
@@ -329,11 +323,7 @@ impl Workflow {
                     completed.write().await.push(step_name.clone());
                 }
                 Err(e) => {
-                    log::error!(
-                        "[workflow:{}] step '{}' failed: {e}",
-                        self.name,
-                        step_name
-                    );
+                    log::error!("[workflow:{}] step '{}' failed: {e}", self.name, step_name);
 
                     // Saga rollback in reverse completed order.
                     // We clone the completed list so we can iterate while
@@ -443,12 +433,7 @@ impl WorkflowBuilder {
     }
 
     /// Add a step with its dependencies and handler.
-    pub fn step<F, Fut>(
-        mut self,
-        name: impl Into<String>,
-        deps: Vec<&str>,
-        handler: F,
-    ) -> Self
+    pub fn step<F, Fut>(mut self, name: impl Into<String>, deps: Vec<&str>, handler: F) -> Self
     where
         F: Fn(StepOutput) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = Result<StepOutput>> + Send + 'static,
@@ -508,9 +493,7 @@ mod tests {
         let compensated = Arc::new(AtomicBool::new(false));
         let compensated_clone = compensated.clone();
 
-        let handler1: StepHandler = Arc::new(|_| {
-            Box::pin(async { Ok(HashMap::new()) })
-        });
+        let handler1: StepHandler = Arc::new(|_| Box::pin(async { Ok(HashMap::new()) }));
 
         let comp: CompensateHandler = Arc::new(move |_| {
             let flag = compensated_clone.clone();
@@ -520,14 +503,10 @@ mod tests {
             })
         });
 
-        let step1 = WorkflowStepDef::new("step1", vec![], handler1)
-            .with_compensate(comp);
+        let step1 = WorkflowStepDef::new("step1", vec![], handler1).with_compensate(comp);
 
-        let handler2: StepHandler = Arc::new(|_| {
-            Box::pin(async {
-                Err(ClawzError::Internal("intentional".into()))
-            })
-        });
+        let handler2: StepHandler =
+            Arc::new(|_| Box::pin(async { Err(ClawzError::Internal("intentional".into())) }));
         let step2 = WorkflowStepDef::new("step2", vec!["step1".to_string()], handler2);
 
         let mut wf = Workflow::new("saga_test");
@@ -555,20 +534,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_topological_cycle_detected() {
-        let h: StepHandler =
-            Arc::new(|_| Box::pin(async { Ok(HashMap::new()) }));
+        let h: StepHandler = Arc::new(|_| Box::pin(async { Ok(HashMap::new()) }));
 
         let mut wf = Workflow::new("cycle");
-        wf.add_step(WorkflowStepDef::new(
-            "a",
-            vec!["b".to_string()],
-            h.clone(),
-        ));
-        wf.add_step(WorkflowStepDef::new(
-            "b",
-            vec!["a".to_string()],
-            h,
-        ));
+        wf.add_step(WorkflowStepDef::new("a", vec!["b".to_string()], h.clone()));
+        wf.add_step(WorkflowStepDef::new("b", vec!["a".to_string()], h));
 
         assert!(wf.execute().await.is_err());
     }

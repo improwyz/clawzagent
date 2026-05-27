@@ -49,7 +49,10 @@ impl LinearConnector {
             "https://api.linear.app/oauth/token",
             vec!["read".into(), "write".into(), "issues:create".into()],
         );
-        Self { oauth, credentials: None }
+        Self {
+            oauth,
+            credentials: None,
+        }
     }
 
     /// Create with an API key (useful for internal integrations or CI bots).
@@ -90,7 +93,10 @@ impl LinearConnector {
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         // Linear returns errors in a top-level "errors" array even for HTTP 200.
         if let Some(errors) = json.get("errors") {
-            return Err(ClawzError::Provider(format!("Linear GraphQL errors: {}", errors)));
+            return Err(ClawzError::Provider(format!(
+                "Linear GraphQL errors: {}",
+                errors
+            )));
         }
         Ok(json["data"].clone())
     }
@@ -126,26 +132,53 @@ impl SaaSConnector for LinearConnector {
         match obj {
             "issues" => {
                 let query = r#"query($first: Int) { issues(first: $first) { nodes { id title state { name } priority } } }"#;
-                let data = self.graphql(query, serde_json::json!({ "first": first })).await?;
-                Ok(data["issues"]["nodes"].as_array().cloned().unwrap_or_default())
+                let data = self
+                    .graphql(query, serde_json::json!({ "first": first }))
+                    .await?;
+                Ok(data["issues"]["nodes"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default())
             }
             "projects" => {
-                let query = r#"query($first: Int) { projects(first: $first) { nodes { id name state } } }"#;
-                let data = self.graphql(query, serde_json::json!({ "first": first })).await?;
-                Ok(data["projects"]["nodes"].as_array().cloned().unwrap_or_default())
+                let query =
+                    r#"query($first: Int) { projects(first: $first) { nodes { id name state } } }"#;
+                let data = self
+                    .graphql(query, serde_json::json!({ "first": first }))
+                    .await?;
+                Ok(data["projects"]["nodes"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default())
             }
             "cycles" => {
                 let team_id = filters.search.as_deref().unwrap_or("");
                 let query = r#"query($teamId: String!, $first: Int) { team(id: $teamId) { cycles(first: $first) { nodes { id name startsAt endsAt } } } }"#;
-                let data = self.graphql(query, serde_json::json!({ "teamId": team_id, "first": first })).await?;
-                Ok(data["team"]["cycles"]["nodes"].as_array().cloned().unwrap_or_default())
+                let data = self
+                    .graphql(
+                        query,
+                        serde_json::json!({ "teamId": team_id, "first": first }),
+                    )
+                    .await?;
+                Ok(data["team"]["cycles"]["nodes"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default())
             }
             "teams" => {
-                let query = r#"query($first: Int) { teams(first: $first) { nodes { id name key } } }"#;
-                let data = self.graphql(query, serde_json::json!({ "first": first })).await?;
-                Ok(data["teams"]["nodes"].as_array().cloned().unwrap_or_default())
+                let query =
+                    r#"query($first: Int) { teams(first: $first) { nodes { id name key } } }"#;
+                let data = self
+                    .graphql(query, serde_json::json!({ "first": first }))
+                    .await?;
+                Ok(data["teams"]["nodes"]
+                    .as_array()
+                    .cloned()
+                    .unwrap_or_default())
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Linear object: {obj}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Linear object: {obj}"
+            ))),
         }
     }
 
@@ -153,15 +186,21 @@ impl SaaSConnector for LinearConnector {
         match obj {
             "issues" => {
                 let query = r#"mutation($input: IssueCreateInput!) { issueCreate(input: $input) { issue { id title } } }"#;
-                let result = self.graphql(query, serde_json::json!({ "input": data })).await?;
+                let result = self
+                    .graphql(query, serde_json::json!({ "input": data }))
+                    .await?;
                 Ok(result["issueCreate"]["issue"].clone())
             }
             "projects" => {
                 let query = r#"mutation($input: ProjectCreateInput!) { projectCreate(input: $input) { project { id name } } }"#;
-                let result = self.graphql(query, serde_json::json!({ "input": data })).await?;
+                let result = self
+                    .graphql(query, serde_json::json!({ "input": data }))
+                    .await?;
                 Ok(result["projectCreate"]["project"].clone())
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Linear object: {obj}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Linear object: {obj}"
+            ))),
         }
     }
 
@@ -169,25 +208,42 @@ impl SaaSConnector for LinearConnector {
         match obj {
             "issues" => {
                 let query = r#"mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { issue { id title state { name } } } }"#;
-                let result = self.graphql(query, serde_json::json!({ "id": id, "input": data })).await?;
+                let result = self
+                    .graphql(query, serde_json::json!({ "id": id, "input": data }))
+                    .await?;
                 Ok(result["issueUpdate"]["issue"].clone())
             }
             "projects" => {
                 let query = r#"mutation($id: String!, $input: ProjectUpdateInput!) { projectUpdate(id: $id, input: $input) { project { id name } } }"#;
-                let result = self.graphql(query, serde_json::json!({ "id": id, "input": data })).await?;
+                let result = self
+                    .graphql(query, serde_json::json!({ "id": id, "input": data }))
+                    .await?;
                 Ok(result["projectUpdate"]["project"].clone())
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Linear object: {obj}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Linear object: {obj}"
+            ))),
         }
     }
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let (mutation, _key) = match obj {
-            "issues" => (r#"mutation($id: String!) { issueDelete(id: $id) { success } }"#, "issueDelete"),
-            "projects" => (r#"mutation($id: String!) { projectDelete(id: $id) { success } }"#, "projectDelete"),
-            _ => return Err(ClawzError::Provider(format!("Unknown Linear object: {obj}"))),
+            "issues" => (
+                r#"mutation($id: String!) { issueDelete(id: $id) { success } }"#,
+                "issueDelete",
+            ),
+            "projects" => (
+                r#"mutation($id: String!) { projectDelete(id: $id) { success } }"#,
+                "projectDelete",
+            ),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Linear object: {obj}"
+                )));
+            }
         };
-        self.graphql(mutation, serde_json::json!({ "id": id })).await?;
+        self.graphql(mutation, serde_json::json!({ "id": id }))
+            .await?;
         Ok(())
     }
 
@@ -200,10 +256,14 @@ impl SaaSConnector for LinearConnector {
             }
             "search_issues" => {
                 let term = params["term"].as_str().unwrap_or("");
-                let query = r#"query($term: String!) { searchIssues(term: $term) { nodes { id title } } }"#;
-                self.graphql(query, serde_json::json!({ "term": term })).await
+                let query =
+                    r#"query($term: String!) { searchIssues(term: $term) { nodes { id title } } }"#;
+                self.graphql(query, serde_json::json!({ "term": term }))
+                    .await
             }
-            _ => Err(ClawzError::Provider(format!("Unknown Linear action: {action}"))),
+            _ => Err(ClawzError::Provider(format!(
+                "Unknown Linear action: {action}"
+            ))),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde_json::Value;
 use std::process::Stdio;
@@ -81,9 +81,12 @@ impl Tool for GitTool {
         "Git operations: status, diff, log, commit, branch, checkout, push, pull. Formats output for LLM consumption."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Execute }
-    fn risk(&self) -> RiskLevel { RiskLevel::High }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Execute
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::High
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "git".into(),
@@ -134,11 +137,7 @@ impl Tool for GitTool {
         }
     }
 
-    async fn execute(
-        &self,
-        _ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, _ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let operation = args["operation"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("operation required".into()))?;
@@ -183,13 +182,10 @@ impl Tool for GitTool {
             }
 
             "log" => {
-                let max_commits_str = format!("--max-count={}", args["max_commits"].as_u64().unwrap_or(20));
+                let max_commits_str =
+                    format!("--max-count={}", args["max_commits"].as_u64().unwrap_or(20));
                 let format_arg = "--pretty=format:%H|%an|%ae|%ai|%s";
-                let mut git_args = vec![
-                    "log",
-                    max_commits_str.as_str(),
-                    format_arg,
-                ];
+                let mut git_args = vec!["log", max_commits_str.as_str(), format_arg];
                 let extra_refs: Vec<&str> = extra_args.iter().map(|s| s.as_str()).collect();
                 git_args.extend(extra_refs);
                 let out = Self::run_git(&git_args, repo_path).await?;
@@ -373,7 +369,10 @@ impl Tool for GitTool {
             }
 
             other => {
-                return Err(ClawzError::Validation(format!("unknown operation: {}", other)));
+                return Err(ClawzError::Validation(format!(
+                    "unknown operation: {}",
+                    other
+                )));
             }
         };
 
@@ -449,8 +448,16 @@ mod tests {
         let schema = GitTool::new().schema();
         assert_eq!(schema.name, "git");
         let ops = &schema.parameters["properties"]["operation"]["enum"];
-        assert!(ops.as_array().unwrap().contains(&serde_json::json!("status")));
-        assert!(ops.as_array().unwrap().contains(&serde_json::json!("commit")));
+        assert!(
+            ops.as_array()
+                .unwrap()
+                .contains(&serde_json::json!("status"))
+        );
+        assert!(
+            ops.as_array()
+                .unwrap()
+                .contains(&serde_json::json!("commit"))
+        );
     }
 
     #[tokio::test]

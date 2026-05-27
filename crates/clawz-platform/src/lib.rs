@@ -7,7 +7,9 @@ pub use detect::{detect_platform_auto, detect_platform_fallback};
 /// Platform tier — determines which features and backends are available.
 /// Detected at compile time via Cargo feature flags, or at runtime via
 /// `detect_platform_auto()`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 #[repr(u8)]
 pub enum PlatformTier {
     /// ESP32-S3, Arduino, or other bare-metal with no OS.

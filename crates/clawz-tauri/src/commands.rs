@@ -2,11 +2,9 @@
 
 use clawz_core::types::{AgentConfig, Message};
 use clawz_platform::detect_platform_fallback;
-use clawz_worker::{
-    runtime::{agent::AgentRuntime, RuntimeDependencies},
-};
-use std::sync::{Arc, Mutex};
+use clawz_worker::runtime::{agent::AgentRuntime, RuntimeDependencies};
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
 
 /// Global app state accessed from Tauri command handlers.
 /// Set once at startup in `main.rs` before the app loop begins.
@@ -19,7 +17,9 @@ pub fn set_app_state(state: AppState) {
 
 /// Fetch a clone of the current runtime, if initialised.
 fn get_runtime() -> Option<Arc<AgentRuntime>> {
-    APP_STATE.get().and_then(|s| s.runtime.lock().unwrap().clone())
+    APP_STATE
+        .get()
+        .and_then(|s| s.runtime.lock().unwrap().clone())
 }
 
 /// Application state shared across all Tauri commands.
@@ -46,9 +46,7 @@ impl AppState {
     }
 
     /// Construct an [`AgentRuntime`] for the given platform tier.
-    async fn build_runtime(
-        tier: clawz_core::PlatformTier,
-    ) -> Option<Arc<AgentRuntime>> {
+    async fn build_runtime(tier: clawz_core::PlatformTier) -> Option<Arc<AgentRuntime>> {
         let config = AgentConfig::new("clawz-default", "claude-sonnet-4-5")
             .with_system_prompt(Self::system_prompt_for_tier(tier));
 
@@ -57,17 +55,19 @@ impl AppState {
         let deps = RuntimeDependencies::new(
             Arc::new(router),
             Arc::new(clawz_worker::memory::store::InMemoryBackend::new()),
-            Arc::new(clawz_worker::governance::engine::ClawzGovernanceEngine::new(
-                clawz_worker::governance::engine::GovernanceEngineConfig::default(),
-            )),
+            Arc::new(
+                clawz_worker::governance::engine::ClawzGovernanceEngine::new(
+                    clawz_worker::governance::engine::GovernanceEngineConfig::default(),
+                ),
+            ),
             Arc::new(clawz_worker::providers::CostTracker::new()),
         )
-            .with_mbti_drift_detector(Arc::new(
-                clawz_worker::runtime::mbti_drift_detector::MBTIDriftDetector::new(3, 0.75),
-            ))
-            .with_identity_store(Arc::new(
-                clawz_worker::runtime::identity::AgentIdentityStore::new_in_memory(),
-            ));
+        .with_mbti_drift_detector(Arc::new(
+            clawz_worker::runtime::mbti_drift_detector::MBTIDriftDetector::new(3, 0.75),
+        ))
+        .with_identity_store(Arc::new(
+            clawz_worker::runtime::identity::AgentIdentityStore::new_in_memory(),
+        ));
 
         Some(Arc::new(AgentRuntime::new(config, deps)))
     }
@@ -143,9 +143,7 @@ impl AppState {
             clawz_core::PlatformTier::T1 => {
                 "You are ClawZ on a single-board computer. Be concise.".to_string()
             }
-            clawz_core::PlatformTier::T2 => {
-                "You are ClawZ in a container.".to_string()
-            }
+            clawz_core::PlatformTier::T2 => "You are ClawZ in a container.".to_string(),
             clawz_core::PlatformTier::T3 => {
                 "You are ClawZ, a helpful AI assistant in a desktop app.".to_string()
             }
@@ -183,14 +181,11 @@ pub struct PlatformInfo {
 // ── Command handlers ─────────────────────────────────────────────────────────
 
 #[tauri::command]
-pub async fn agent_chat(
-    req: ChatRequest,
-) -> Result<ChatResponse, String> {
+pub async fn agent_chat(req: ChatRequest) -> Result<ChatResponse, String> {
     let agent_id = req.agent_id.unwrap_or_else(|| "default".to_string());
 
-    let runtime = get_runtime().ok_or_else(|| {
-        "agent runtime not yet initialised — check health endpoint".to_string()
-    })?;
+    let runtime = get_runtime()
+        .ok_or_else(|| "agent runtime not yet initialised — check health endpoint".to_string())?;
 
     let message = Message::user(req.message);
 
@@ -206,10 +201,12 @@ pub async fn agent_chat(
         .and_then(|m| m.content.as_text().map(String::from))
         .unwrap_or_else(|| "ClawZ is processing your request.".to_string());
 
-    let tier = APP_STATE.get()
+    let tier = APP_STATE
+        .get()
         .map(|s| format!("{:?}", s.platform_tier))
         .unwrap_or_else(|| "unknown".to_string());
-    let version = APP_STATE.get()
+    let version = APP_STATE
+        .get()
         .map(|s| s.version.clone())
         .unwrap_or_else(|| "0.0.0".to_string());
 
@@ -223,35 +220,44 @@ pub async fn agent_chat(
 
 #[tauri::command]
 pub fn get_platform_tier() -> PlatformInfo {
-    APP_STATE.get().map(|s| {
-        let tier = s.platform_tier;
-        PlatformInfo {
-            tier: format!("{:?}", tier),
-            tier_name: tier.name().to_string(),
-            binary_budget_bytes: tier.binary_budget(),
-            ram_budget_bytes: tier.ram_budget(),
-            supports_containers: tier.supports_containers(),
-        }
-    }).unwrap_or_else(|| PlatformInfo {
-        tier: "unknown".to_string(),
-        tier_name: "unknown".to_string(),
-        binary_budget_bytes: 0,
-        ram_budget_bytes: 0,
-        supports_containers: false,
-    })
+    APP_STATE
+        .get()
+        .map(|s| {
+            let tier = s.platform_tier;
+            PlatformInfo {
+                tier: format!("{:?}", tier),
+                tier_name: tier.name().to_string(),
+                binary_budget_bytes: tier.binary_budget(),
+                ram_budget_bytes: tier.ram_budget(),
+                supports_containers: tier.supports_containers(),
+            }
+        })
+        .unwrap_or_else(|| PlatformInfo {
+            tier: "unknown".to_string(),
+            tier_name: "unknown".to_string(),
+            binary_budget_bytes: 0,
+            ram_budget_bytes: 0,
+            supports_containers: false,
+        })
 }
 
 #[tauri::command]
 pub fn health_check() -> Result<String, String> {
-    let rt_status = APP_STATE.get()
-        .and_then(|s| { let guard = s.runtime.lock().unwrap(); guard.clone() })
+    let rt_status = APP_STATE
+        .get()
+        .and_then(|s| {
+            let guard = s.runtime.lock().unwrap();
+            guard.clone()
+        })
         .map(|_| "runtime ready")
         .unwrap_or("runtime not yet initialised");
 
-    let tier = APP_STATE.get()
+    let tier = APP_STATE
+        .get()
         .map(|s| format!("{:?}", s.platform_tier))
         .unwrap_or_else(|| "unknown".to_string());
-    let version = APP_STATE.get()
+    let version = APP_STATE
+        .get()
         .map(|s| s.version.clone())
         .unwrap_or_else(|| "0.0.0".to_string());
 

@@ -4,12 +4,12 @@
 //! keyword overlap against tool descriptions, enabling dynamic tool
 //! composition without hard-coded tool lists.
 
+use crate::tools::builtin;
+use crate::tools::tool_trait::Tool;
+use clawz_core::error::ClawzError;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use serde_json::Value;
-use clawz_core::error::ClawzError;
-use crate::tools::tool_trait::Tool;
-use crate::tools::builtin;
 
 /// A tool's capability descriptor for semantic matching.
 #[derive(Debug, Clone)]
@@ -68,17 +68,32 @@ impl ToolCapabilityRegistry {
     /// web_search, web_fetch, pdf_read, image_gen, knowledge_base, escalate).
     pub fn register_builtins(&self) -> Result<(), ClawzError> {
         let builtins: Vec<(&str, Arc<dyn Tool>)> = vec![
-            ("calculator", Arc::new(builtin::calculator::CalculatorTool::new()) as Arc<dyn Tool>),
-            ("browser",    Arc::new(builtin::browser::BrowserTool::new())),
-            ("file_ops",   Arc::new(builtin::file_ops::FileOpsTool::new())),
-            ("git",        Arc::new(builtin::git::GitTool::new())),
-            ("shell",      Arc::new(builtin::shell::ShellTool::new())),
-            ("web_search", Arc::new(builtin::web_search::WebSearchTool::new())),
-            ("web_fetch",  Arc::new(builtin::web_fetch::WebFetchTool::new())),
-            ("pdf_read",   Arc::new(builtin::pdf_read::PdfReadTool::new())),
-            ("image_gen",  Arc::new(builtin::image_gen::ImageGenTool::new())),
-            ("knowledge_base", Arc::new(builtin::knowledge_base::KnowledgeBaseTool::new())),
-            ("escalate",   Arc::new(builtin::escalate::EscalateTool::new())),
+            (
+                "calculator",
+                Arc::new(builtin::calculator::CalculatorTool::new()) as Arc<dyn Tool>,
+            ),
+            ("browser", Arc::new(builtin::browser::BrowserTool::new())),
+            ("file_ops", Arc::new(builtin::file_ops::FileOpsTool::new())),
+            ("git", Arc::new(builtin::git::GitTool::new())),
+            ("shell", Arc::new(builtin::shell::ShellTool::new())),
+            (
+                "web_search",
+                Arc::new(builtin::web_search::WebSearchTool::new()),
+            ),
+            (
+                "web_fetch",
+                Arc::new(builtin::web_fetch::WebFetchTool::new()),
+            ),
+            ("pdf_read", Arc::new(builtin::pdf_read::PdfReadTool::new())),
+            (
+                "image_gen",
+                Arc::new(builtin::image_gen::ImageGenTool::new()),
+            ),
+            (
+                "knowledge_base",
+                Arc::new(builtin::knowledge_base::KnowledgeBaseTool::new()),
+            ),
+            ("escalate", Arc::new(builtin::escalate::EscalateTool::new())),
         ];
 
         for (name, tool) in builtins {
@@ -103,7 +118,9 @@ impl ToolCapabilityRegistry {
 
         for (name, tool) in tools.iter() {
             let cap = self.build_capability(name, tool);
-            let score = cap.keywords.iter()
+            let score = cap
+                .keywords
+                .iter()
                 .filter(|kw| query_keywords.contains(kw))
                 .count() as i64;
             if score > 0 {
@@ -142,9 +159,8 @@ impl ToolCapabilityRegistry {
     /// Tokenize description into lowercase keywords, filtering stopwords.
     fn extract_keywords(description: &str) -> Vec<String> {
         const STOPWORDS: &[&str] = &[
-            "the", "a", "an", "is", "are", "to", "for", "of", "and",
-            "or", "in", "on", "with", "as", "by", "from", "that",
-            "this", "it", "be", "have", "has", "was", "were", "will",
+            "the", "a", "an", "is", "are", "to", "for", "of", "and", "or", "in", "on", "with",
+            "as", "by", "from", "that", "this", "it", "be", "have", "has", "was", "were", "will",
         ];
 
         description
@@ -174,11 +190,23 @@ mod tests {
         let reg = make_registry();
         let names = reg.list_all();
         assert!(!names.is_empty(), "builtins should be registered");
-        for expected in ["calculator", "browser", "file_ops", "git", "shell",
-                         "web_search", "web_fetch", "pdf_read", "image_gen",
-                         "knowledge_base", "escalate"] {
-            assert!(names.iter().any(|n| n.as_str() == expected),
-                    "expected '{expected}' in builtin list");
+        for expected in [
+            "calculator",
+            "browser",
+            "file_ops",
+            "git",
+            "shell",
+            "web_search",
+            "web_fetch",
+            "pdf_read",
+            "image_gen",
+            "knowledge_base",
+            "escalate",
+        ] {
+            assert!(
+                names.iter().any(|n| n.as_str() == expected),
+                "expected '{expected}' in builtin list"
+            );
         }
     }
 
@@ -187,8 +215,10 @@ mod tests {
         let reg = make_registry();
         let results = reg.find_matching("math arithmetic calculate");
         assert!(!results.is_empty(), "should find calculator for math query");
-        assert!(results.iter().any(|c| c.name == "calculator"),
-                "calculator should be top match for math query");
+        assert!(
+            results.iter().any(|c| c.name == "calculator"),
+            "calculator should be top match for math query"
+        );
     }
 
     #[test]
@@ -196,8 +226,12 @@ mod tests {
         let reg = make_registry();
         let results = reg.find_matching("web browse internet");
         assert!(!results.is_empty(), "should find browser for web query");
-        assert!(results.iter().any(|c| c.name == "browser" || c.name == "web_search" || c.name == "web_fetch"),
-                "browser/web tool should match web query");
+        assert!(
+            results
+                .iter()
+                .any(|c| c.name == "browser" || c.name == "web_search" || c.name == "web_fetch"),
+            "browser/web tool should match web query"
+        );
     }
 
     #[test]
@@ -218,6 +252,9 @@ mod tests {
     fn find_matching_returns_empty_for_stopword_only_query() {
         let reg = make_registry();
         let results = reg.find_matching("the a an");
-        assert!(results.is_empty(), "stopword-only query should return empty");
+        assert!(
+            results.is_empty(),
+            "stopword-only query should return empty"
+        );
     }
 }

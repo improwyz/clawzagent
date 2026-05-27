@@ -47,12 +47,12 @@ use tokio::sync::RwLock;
 
 // Dependency: crate::transport::config — mode and per-transport settings.
 use crate::transport::{
+    TransportType,
     config::{TransportConfig, TransportMode},
     grpc::GrpcTransport,
     in_process::InProcessTransport,
     quic::QuicTransport,
     wss::WssTransport,
-    TransportType,
 };
 
 // ── Health tracking ───────────────────────────────────────────────────────────
@@ -93,8 +93,7 @@ impl TransportStats {
         if self.total_requests == 0 {
             self.latency_ms_ema = ms;
         } else {
-            self.latency_ms_ema =
-                Self::ALPHA * ms + (1.0 - Self::ALPHA) * self.latency_ms_ema;
+            self.latency_ms_ema = Self::ALPHA * ms + (1.0 - Self::ALPHA) * self.latency_ms_ema;
         }
         self.consecutive_errors = 0;
         self.total_requests += 1;
@@ -123,8 +122,7 @@ impl TransportStats {
         // Fail-fast: 3+ consecutive errors, or >50% error rate with ≥10 requests.
         // These thresholds balance quick detection of broken transports against
         // false positives from transient network blips.
-        self.consecutive_errors >= 3
-            || (self.total_requests >= 10 && self.error_rate() > 0.5)
+        self.consecutive_errors >= 3 || (self.total_requests >= 10 && self.error_rate() > 0.5)
     }
 }
 
@@ -181,7 +179,7 @@ impl TransportSelector {
             IpAddr::V4(peer_v4) => {
                 let octets = peer_v4.octets();
                 // RFC-1918 ranges: 10.x.x.x, 172.16-31.x.x, 192.168.x.x
-                
+
                 octets[0] == 10
                     || (octets[0] == 172 && (16..=31).contains(&octets[1]))
                     || (octets[0] == 192 && octets[1] == 168)

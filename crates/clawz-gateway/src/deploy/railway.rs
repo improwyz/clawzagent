@@ -64,7 +64,9 @@ impl DeployProvider for RailwayAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::NativeBinary,
         ]
     }
@@ -106,7 +108,7 @@ impl DeployProvider for RailwayAdapter {
             _ => {
                 return Err(ClawzError::Validation(
                     "Railway does not support Wasm mode".into(),
-                ))
+                ));
             }
         };
 
@@ -179,9 +181,10 @@ impl DeployProvider for RailwayAdapter {
                 .await
                 .map_err(|e| ClawzError::Provider(format!("Railway list projects error: {e}")))?;
 
-            let list_body: serde_json::Value = list_resp.json().await.map_err(|e| {
-                ClawzError::Provider(format!("Railway list parse error: {e}"))
-            })?;
+            let list_body: serde_json::Value = list_resp
+                .json()
+                .await
+                .map_err(|e| ClawzError::Provider(format!("Railway list parse error: {e}")))?;
 
             list_body["data"]["projects"]["edges"]
                 .as_array()

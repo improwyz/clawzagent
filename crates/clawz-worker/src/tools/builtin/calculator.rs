@@ -1,7 +1,7 @@
 use crate::tools::tool_trait::{Tool, ToolContext};
-use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
+use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
 use serde_json::Value;
 use std::fmt;
@@ -46,9 +46,12 @@ impl Tool for CalculatorTool {
          and constants (pi, e, tau)."
     }
 
-
-    fn primitive(&self) -> ActionPrimitive { ActionPrimitive::Analyze }
-    fn risk(&self) -> RiskLevel { RiskLevel::Low }
+    fn primitive(&self) -> ActionPrimitive {
+        ActionPrimitive::Analyze
+    }
+    fn risk(&self) -> RiskLevel {
+        RiskLevel::Low
+    }
     fn schema(&self) -> ToolSchema {
         ToolSchema {
             name: "calculator".into(),
@@ -66,11 +69,7 @@ impl Tool for CalculatorTool {
         }
     }
 
-    async fn execute(
-        &self,
-        _ctx: &ToolContext,
-        args: Value,
-    ) -> Result<ToolResult, ClawzError> {
+    async fn execute(&self, _ctx: &ToolContext, args: Value) -> Result<ToolResult, ClawzError> {
         let expr = args["expression"]
             .as_str()
             .ok_or_else(|| ClawzError::Validation("expression required".into()))?;
@@ -213,15 +212,42 @@ fn tokenize(input: &str) -> Result<Vec<Token>, CalcError> {
                 }
                 tokens.push(Token::Ident(name));
             }
-            '+' => { tokens.push(Token::Plus); chars.next(); }
-            '-' => { tokens.push(Token::Minus); chars.next(); }
-            '*' => { tokens.push(Token::Star); chars.next(); }
-            '/' => { tokens.push(Token::Slash); chars.next(); }
-            '%' => { tokens.push(Token::Percent); chars.next(); }
-            '^' => { tokens.push(Token::Caret); chars.next(); }
-            '(' => { tokens.push(Token::LParen); chars.next(); }
-            ')' => { tokens.push(Token::RParen); chars.next(); }
-            ',' => { tokens.push(Token::Comma); chars.next(); }
+            '+' => {
+                tokens.push(Token::Plus);
+                chars.next();
+            }
+            '-' => {
+                tokens.push(Token::Minus);
+                chars.next();
+            }
+            '*' => {
+                tokens.push(Token::Star);
+                chars.next();
+            }
+            '/' => {
+                tokens.push(Token::Slash);
+                chars.next();
+            }
+            '%' => {
+                tokens.push(Token::Percent);
+                chars.next();
+            }
+            '^' => {
+                tokens.push(Token::Caret);
+                chars.next();
+            }
+            '(' => {
+                tokens.push(Token::LParen);
+                chars.next();
+            }
+            ')' => {
+                tokens.push(Token::RParen);
+                chars.next();
+            }
+            ',' => {
+                tokens.push(Token::Comma);
+                chars.next();
+            }
             other => {
                 return Err(CalcError::lex(format!("unexpected character: '{}'", other)));
             }
@@ -420,7 +446,11 @@ fn call_function(name: &str, args: &[f64]) -> Result<f64, CalcError> {
         if args.len() == 1 {
             Ok(args[0])
         } else {
-            Err(CalcError::eval(format!("{}() takes 1 argument, got {}", name, args.len())))
+            Err(CalcError::eval(format!(
+                "{}() takes 1 argument, got {}",
+                name,
+                args.len()
+            )))
         }
     };
 

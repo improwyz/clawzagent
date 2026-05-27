@@ -64,23 +64,26 @@ impl DeploymentStore for MemoryDeploymentStore {
     }
 
     fn get(&self, id: &str) -> Result<Option<DeploymentInfo>> {
-        let map = self.deployments.lock().map_err(|e| {
-            ClawzError::Internal(format!("deployment store lock poisoned: {e}"))
-        })?;
+        let map = self
+            .deployments
+            .lock()
+            .map_err(|e| ClawzError::Internal(format!("deployment store lock poisoned: {e}")))?;
         Ok(map.get(id).cloned())
     }
 
     fn list(&self) -> Result<Vec<DeploymentInfo>> {
-        let map = self.deployments.lock().map_err(|e| {
-            ClawzError::Internal(format!("deployment store lock poisoned: {e}"))
-        })?;
+        let map = self
+            .deployments
+            .lock()
+            .map_err(|e| ClawzError::Internal(format!("deployment store lock poisoned: {e}")))?;
         Ok(map.values().cloned().collect())
     }
 
     fn update_status(&self, id: &str, status: DeploymentStatus) -> Result<()> {
-        let mut map = self.deployments.lock().map_err(|e| {
-            ClawzError::Internal(format!("deployment store lock poisoned: {e}"))
-        })?;
+        let mut map = self
+            .deployments
+            .lock()
+            .map_err(|e| ClawzError::Internal(format!("deployment store lock poisoned: {e}")))?;
         if let Some(info) = map.get_mut(id) {
             info.status = status;
             Ok(())
@@ -93,9 +96,10 @@ impl DeploymentStore for MemoryDeploymentStore {
     }
 
     fn remove(&self, id: &str) -> Result<()> {
-        let mut map = self.deployments.lock().map_err(|e| {
-            ClawzError::Internal(format!("deployment store lock poisoned: {e}"))
-        })?;
+        let mut map = self
+            .deployments
+            .lock()
+            .map_err(|e| ClawzError::Internal(format!("deployment store lock poisoned: {e}")))?;
         map.remove(id);
         Ok(())
     }
@@ -198,9 +202,7 @@ pub fn deployment_db_uuid(deployment_id: &str) -> uuid::Uuid {
     }
     use sha2::{Digest, Sha256};
     let hash = Sha256::digest(deployment_id.as_bytes());
-    let bytes: [u8; 16] = hash[..16]
-        .try_into()
-        .expect("sha256 produces 32 bytes");
+    let bytes: [u8; 16] = hash[..16].try_into().expect("sha256 produces 32 bytes");
     uuid::Uuid::from_bytes(bytes)
 }
 
@@ -227,7 +229,9 @@ pub fn resolve_api_token(
 ///
 /// Each key-value pair yields two entries: `["-e", "KEY=VALUE"]`.  The resulting
 /// vector can be passed directly to a `docker run` invocation.
-pub fn env_vars_to_docker_flags(env_vars: &std::collections::HashMap<String, String>) -> Vec<String> {
+pub fn env_vars_to_docker_flags(
+    env_vars: &std::collections::HashMap<String, String>,
+) -> Vec<String> {
     env_vars
         .iter()
         .flat_map(|(k, v)| vec!["-e".to_string(), format!("{}={}", k, v)])
@@ -265,7 +269,9 @@ mod tests {
             status: DeploymentStatus::Pending,
         };
         store.save(info).unwrap();
-        store.update_status("dep-2", DeploymentStatus::Running).unwrap();
+        store
+            .update_status("dep-2", DeploymentStatus::Running)
+            .unwrap();
         let fetched = store.get("dep-2").unwrap().unwrap();
         assert_eq!(fetched.status, DeploymentStatus::Running);
     }

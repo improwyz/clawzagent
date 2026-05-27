@@ -59,11 +59,15 @@ impl SaaSConnector for PipedriveConnector {
     }
 
     async fn auth_url(&self, _redirect: &str) -> Result<String> {
-        Err(ClawzError::Auth("Pipedrive uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "Pipedrive uses API key authentication".into(),
+        ))
     }
 
     async fn exchange_code(&self, _code: &str) -> Result<Credentials> {
-        Err(ClawzError::Auth("Pipedrive uses API key authentication".into()))
+        Err(ClawzError::Auth(
+            "Pipedrive uses API key authentication".into(),
+        ))
     }
 
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
@@ -74,11 +78,16 @@ impl SaaSConnector for PipedriveConnector {
             "activities" => "/activities",
             "pipelines" => "/pipelines",
             "stages" => "/stages",
-            _ => return Err(ClawzError::Provider(format!("Unknown Pipedrive object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Pipedrive object: {obj}"
+                )));
+            }
         };
         // Pipedrive allows up to 500 items per page.
         let limit = filters.limit.unwrap_or(100).min(500);
-        let resp = self.client
+        let resp = self
+            .client
             .get(format!("{}{}", self.base_url(), path))
             .query(&[("api_token", &self.api_key), ("limit", &limit.to_string())])
             .send()
@@ -94,9 +103,14 @@ impl SaaSConnector for PipedriveConnector {
             "persons" => "/persons",
             "organizations" => "/organizations",
             "activities" => "/activities",
-            _ => return Err(ClawzError::Provider(format!("Unknown Pipedrive object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Pipedrive object: {obj}"
+                )));
+            }
         };
-        let resp = self.client
+        let resp = self
+            .client
             .post(format!("{}{}", self.base_url(), path))
             .query(&[("api_token", &self.api_key)])
             .json(&data)
@@ -113,9 +127,14 @@ impl SaaSConnector for PipedriveConnector {
             "persons" => format!("/persons/{}", id),
             "organizations" => format!("/organizations/{}", id),
             "activities" => format!("/activities/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Pipedrive object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Pipedrive object: {obj}"
+                )));
+            }
         };
-        let resp = self.client
+        let resp = self
+            .client
             .put(format!("{}{}", self.base_url(), path))
             .query(&[("api_token", &self.api_key)])
             .json(&data)
@@ -132,9 +151,14 @@ impl SaaSConnector for PipedriveConnector {
             "persons" => format!("/persons/{}", id),
             "organizations" => format!("/organizations/{}", id),
             "activities" => format!("/activities/{}", id),
-            _ => return Err(ClawzError::Provider(format!("Unknown Pipedrive object: {obj}"))),
+            _ => {
+                return Err(ClawzError::Provider(format!(
+                    "Unknown Pipedrive object: {obj}"
+                )));
+            }
         };
-        let resp = self.client
+        let resp = self
+            .client
             .delete(format!("{}{}", self.base_url(), path))
             .query(&[("api_token", &self.api_key)])
             .send()
@@ -162,7 +186,8 @@ impl SaaSConnector for PipedriveConnector {
             }
             _ => format!("/{}?api_token={}", action, self.api_key),
         };
-        let resp = self.client
+        let resp = self
+            .client
             .post(format!("{}{}", self.base_url(), path))
             .json(&params)
             .send()

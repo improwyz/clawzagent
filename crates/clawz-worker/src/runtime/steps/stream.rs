@@ -74,9 +74,10 @@ impl StreamResponseStep {
                 tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
             }
 
-            sender.send(chunk).await.map_err(|e| {
-                ClawzError::Channel(format!("stream channel closed: {e}"))
-            })?;
+            sender
+                .send(chunk)
+                .await
+                .map_err(|e| ClawzError::Channel(format!("stream channel closed: {e}")))?;
         }
 
         // Send empty final chunk if text was empty.
@@ -119,10 +120,7 @@ impl PipelineStep for StreamResponseStep {
 
         if self.sender.is_some() {
             self.stream_text(&response_text).await?;
-            log::debug!(
-                "[stream_response] streamed {} chars",
-                response_text.len()
-            );
+            log::debug!("[stream_response] streamed {} chars", response_text.len());
         }
 
         ctx.insert_meta(META_STREAM_COMPLETE, serde_json::Value::Bool(true));

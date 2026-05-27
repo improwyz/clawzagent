@@ -26,7 +26,7 @@ use clawz_core::{
 };
 
 // Dependency: provider router and cost tracker from the worker crate.
-use crate::providers::{router::ProviderRouter, cost::CostTracker};
+use crate::providers::{cost::CostTracker, router::ProviderRouter};
 // Dependency: metadata key produced by the context retrieval step.
 use crate::runtime::steps::context::META_SYSTEM_PROMPT;
 
@@ -128,29 +128,30 @@ impl PipelineStep for SelectProviderStep {
             request.messages.len()
         );
 
-        let response = self.router.route(request).await.map_err(|e| {
-            ClawzError::Provider(format!("provider routing failed: {e}"))
-        })?;
+        let response = self
+            .router
+            .route(request)
+            .await
+            .map_err(|e| ClawzError::Provider(format!("provider routing failed: {e}")))?;
 
         // Track cost.
         // CostTracker uses per-model price tables; the result feeds into
         // both ctx.cost_accumulated (for budget guards) and the database
         // via CostRepo for billing/observability.
-        let cost = self
-            .cost_tracker
-            .calculate_cost(
-                &response.model,
-                response.usage.prompt_tokens as u64,
-                response.usage.completion_tokens as u64,
-            );
-        self.cost_tracker
-            .record_cost(&response.model, cost)
-            .await;
+        let cost = self.cost_tracker.calculate_cost(
+            &response.model,
+            response.usage.prompt_tokens as u64,
+            response.usage.completion_tokens as u64,
+        );
+        self.cost_tracker.record_cost(&response.model, cost).await;
         ctx.add_cost(cost);
 
         // Store response and model in metadata so downstream steps
         // (governance, streaming) can inspect them without re-invoking the provider.
-        ctx.insert_meta(META_MODEL_USED, serde_json::Value::String(response.model.clone()));
+        ctx.insert_meta(
+            META_MODEL_USED,
+            serde_json::Value::String(response.model.clone()),
+        );
         ctx.insert_meta(
             META_CHAT_RESPONSE,
             serde_json::to_value(&response)

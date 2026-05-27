@@ -21,8 +21,8 @@ use async_trait::async_trait;
 use clawz_core::error::{ClawzError, Result};
 use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 use clawz_core::types::channel::{ChannelCapabilities, IncomingMessage, OutgoingMessage};
-use http::HeaderMap;
 use hmac::{Hmac, Mac};
+use http::HeaderMap;
 use serde_json::Value;
 use sha2::Sha256;
 
@@ -49,8 +49,8 @@ impl GoogleVoiceChannel {
             .strip_prefix("sha256=")
             .ok_or_else(|| ClawzError::Auth("invalid signature format".into()))?;
 
-        let mut mac =
-            HmacSha256::new_from_slice(secret.as_bytes()).map_err(|e| ClawzError::Auth(e.to_string()))?;
+        let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+            .map_err(|e| ClawzError::Auth(e.to_string()))?;
         mac.update(payload);
         let computed = hex::encode(mac.finalize().into_bytes());
 
@@ -80,10 +80,8 @@ impl GoogleVoiceChannel {
                 .unwrap_or("unknown");
             let text = format!("Google Voice call from {from} ({status})");
             let mut im = IncomingMessage::new(channel_id, from.clone(), from, text);
-            im.metadata.insert(
-                "google_voice_kind".into(),
-                Value::String("call".into()),
-            );
+            im.metadata
+                .insert("google_voice_kind".into(), Value::String("call".into()));
             return vec![im];
         }
 
@@ -105,12 +103,11 @@ impl GoogleVoiceChannel {
         }
 
         let mut im = IncomingMessage::new(channel_id, from.clone(), from, text);
-        im.metadata.insert(
-            "google_voice_kind".into(),
-            Value::String("sms".into()),
-        );
+        im.metadata
+            .insert("google_voice_kind".into(), Value::String("sms".into()));
         if let Some(id) = body.get("message_id").or_else(|| body.get("id")) {
-            im.metadata.insert("google_voice_message_id".into(), id.clone());
+            im.metadata
+                .insert("google_voice_message_id".into(), id.clone());
         }
         vec![im]
     }
@@ -162,15 +159,15 @@ impl ChannelPlugin for GoogleVoiceChannel {
 
         Err(ClawzError::Channel(
             "Google Voice has no public send API; configure Twilio credentials on this channel \
-             for outbound SMS, or reply via the bridge".into(),
+             for outbound SMS, or reply via the bridge"
+                .into(),
         ))
     }
 
     async fn webhook(&self, payload: &[u8], _headers: &HeaderMap) -> Result<Vec<IncomingMessage>> {
         // HMAC verification uses credentials and runs in the gateway before this is called.
-        let body: Value = serde_json::from_slice(payload).map_err(|e| {
-            ClawzError::Serialization(format!("Google Voice bridge JSON: {e}"))
-        })?;
+        let body: Value = serde_json::from_slice(payload)
+            .map_err(|e| ClawzError::Serialization(format!("Google Voice bridge JSON: {e}")))?;
 
         Ok(Self::parse_bridge_json(uuid::Uuid::new_v4(), &body))
     }
@@ -205,12 +202,8 @@ mod tests {
         let payload = br#"{"event":"sms.received","from":"+15551234567","body":"Hello"}"#;
 
         assert!(verify_google_voice_signature(secret, payload, None).is_err());
-        assert!(
-            verify_google_voice_signature(secret, payload, Some("sha256=deadbeef")).is_err()
-        );
-        assert!(
-            verify_google_voice_signature(secret, payload, Some("not-sha256=abc")).is_err()
-        );
+        assert!(verify_google_voice_signature(secret, payload, Some("sha256=deadbeef")).is_err());
+        assert!(verify_google_voice_signature(secret, payload, Some("not-sha256=abc")).is_err());
     }
 
     #[test]
@@ -229,7 +222,10 @@ mod tests {
         assert_eq!(msgs[0].sender_id, "+15551234567");
         assert_eq!(msgs[0].content, "Hello there");
         assert_eq!(
-            msgs[0].metadata.get("google_voice_kind").and_then(|v| v.as_str()),
+            msgs[0]
+                .metadata
+                .get("google_voice_kind")
+                .and_then(|v| v.as_str()),
             Some("sms")
         );
         assert_eq!(
@@ -252,7 +248,10 @@ mod tests {
         });
         let call_msgs = GoogleVoiceChannel::parse_bridge_json(channel_id, &call);
         assert_eq!(call_msgs.len(), 1);
-        assert_eq!(call_msgs[0].content, "Google Voice call from +15559876543 (ringing)");
+        assert_eq!(
+            call_msgs[0].content,
+            "Google Voice call from +15559876543 (ringing)"
+        );
         assert_eq!(
             call_msgs[0]
                 .metadata

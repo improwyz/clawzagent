@@ -21,11 +21,7 @@
 use std::sync::Arc;
 
 // Dependency: core crate — shared configuration and trait definitions
-use clawz_core::{
-    deployment::DeploymentMode,
-    error::Result,
-    traits::AgentScheduler,
-};
+use clawz_core::{deployment::DeploymentMode, error::Result, traits::AgentScheduler};
 
 // Dependency: sibling modules — concrete scheduler implementations
 use super::{BollardScheduler, StandaloneScheduler};
@@ -50,9 +46,7 @@ use super::{BollardScheduler, StandaloneScheduler};
 pub fn create_scheduler(mode: DeploymentMode) -> Result<Arc<dyn AgentScheduler>> {
     match mode {
         // Standalone mode: no Docker required; agents run as in-process tasks.
-        DeploymentMode::Standalone => {
-            Ok(Arc::new(StandaloneScheduler::new(4)))
-        }
+        DeploymentMode::Standalone => Ok(Arc::new(StandaloneScheduler::new(4))),
         // Containerised modes: use Docker via Bollard.
         // Both Micro and Elastic map to the same backend; elasticity is handled
         // at a higher level ( orchestrator / autoscaler ) rather than here.

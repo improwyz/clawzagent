@@ -14,10 +14,10 @@ use core::time::Duration;
 mod no_std_impl {
     use super::*;
     use clawz_runtime::RuntimeBackend;
-    use embassy_executor::Executor;
-    use embassy_time::Timer;
     use core::mem::MaybeUninit;
     use core::ptr;
+    use embassy_executor::Executor;
+    use embassy_time::Timer;
 
     static EXECUTOR: StaticCell<Executor<64>> = StaticCell::new();
 
@@ -136,7 +136,10 @@ mod std_impl {
         }
 
         fn try_read_fd(&self, _fd: i32, _buf: &mut [u8]) -> Result<usize, io::Error> {
-            Err(io::Error::new(io::ErrorKind::Unsupported, "not supported in std build"))
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "not supported in std build",
+            ))
         }
     }
 }

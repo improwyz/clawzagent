@@ -15,8 +15,8 @@ use clawz_core::{error::ClawzError, types::message::*};
 use futures_core::Stream;
 use reqwest::Client;
 
-use super::{AdapterConfig, ProviderAdapter};
 use super::openai::OpenAiAdapter;
+use super::{AdapterConfig, ProviderAdapter};
 
 /// Adapter for Azure OpenAI Service.
 pub struct AzureAdapter;
@@ -58,7 +58,9 @@ impl ProviderAdapter for AzureAdapter {
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, ClawzError>> + Send>>, ClawzError>
     {
         let azure_config = build_azure_config(config, request);
-        OpenAiAdapter.chat_stream(client, &azure_config, request).await
+        OpenAiAdapter
+            .chat_stream(client, &azure_config, request)
+            .await
     }
 
     fn context_window(&self, model: &str) -> u32 {
@@ -73,7 +75,8 @@ impl ProviderAdapter for AzureAdapter {
 
     fn estimate_cost_usd(&self, model: &str, input_tokens: u64, output_tokens: u64) -> f64 {
         // Azure pricing is similar to OpenAI with ~10% premium
-        let base = super::openai::OpenAiAdapter.estimate_cost_usd(model, input_tokens, output_tokens);
+        let base =
+            super::openai::OpenAiAdapter.estimate_cost_usd(model, input_tokens, output_tokens);
         base * 1.1
     }
 }

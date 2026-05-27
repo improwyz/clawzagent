@@ -40,10 +40,7 @@ pub struct AzureFunctionsAdapter {
 
 impl AzureFunctionsAdapter {
     /// Create a new adapter targeting a specific subscription and resource group.
-    pub fn new(
-        subscription_id: impl Into<String>,
-        resource_group: impl Into<String>,
-    ) -> Self {
+    pub fn new(subscription_id: impl Into<String>, resource_group: impl Into<String>) -> Self {
         Self {
             client: reqwest::Client::new(),
             subscription_id: subscription_id.into(),
@@ -118,19 +115,17 @@ impl AzureFunctionsAdapter {
                 "Azure credentials required in config.credentials (tenant_id in extra, api_key=client_id, api_secret=secret)".into(),
             )
         })?;
-        let tenant_id = creds
-            .extra
-            .get("tenant_id")
-            .cloned()
-            .ok_or_else(|| ClawzError::Auth("Azure tenant_id required in extra fields".into()))?;
+        let tenant_id =
+            creds.extra.get("tenant_id").cloned().ok_or_else(|| {
+                ClawzError::Auth("Azure tenant_id required in extra fields".into())
+            })?;
         let client_id = creds
             .api_key
             .clone()
             .ok_or_else(|| ClawzError::Auth("Azure client_id required (api_key field)".into()))?;
-        let client_secret = creds
-            .api_secret
-            .clone()
-            .ok_or_else(|| ClawzError::Auth("Azure client_secret required (api_secret field)".into()))?;
+        let client_secret = creds.api_secret.clone().ok_or_else(|| {
+            ClawzError::Auth("Azure client_secret required (api_secret field)".into())
+        })?;
         Ok((tenant_id, client_id, client_secret))
     }
 }
@@ -147,7 +142,9 @@ impl DeployProvider for AzureFunctionsAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::NativeBinary,
         ]
     }
@@ -166,7 +163,9 @@ impl DeployProvider for AzureFunctionsAdapter {
         let client_secret = creds
             .api_secret
             .as_ref()
-            .ok_or_else(|| ClawzError::Auth("Azure client_secret required (api_secret field)".into()))?
+            .ok_or_else(|| {
+                ClawzError::Auth("Azure client_secret required (api_secret field)".into())
+            })?
             .clone();
 
         // Attempt to get a bearer token — success proves credentials are valid.
@@ -182,7 +181,7 @@ impl DeployProvider for AzureFunctionsAdapter {
             DeployMode::Wasm => {
                 return Err(ClawzError::Validation(
                     "Azure Functions does not support Wasm mode directly".into(),
-                ))
+                ));
             }
         };
 
@@ -215,9 +214,7 @@ impl DeployProvider for AzureFunctionsAdapter {
             }
         });
 
-        let put_url = format!(
-            "https://management.azure.com{resource_path}?api-version=2022-03-01"
-        );
+        let put_url = format!("https://management.azure.com{resource_path}?api-version=2022-03-01");
         let resp = self
             .client
             .put(&put_url)
@@ -335,6 +332,10 @@ mod tests {
     #[test]
     fn test_management_url() {
         let adapter = AzureFunctionsAdapter::new("sub-123", "my-rg");
-        assert!(adapter.management_url("/foo").starts_with("https://management.azure.com"));
+        assert!(
+            adapter
+                .management_url("/foo")
+                .starts_with("https://management.azure.com")
+        );
     }
 }

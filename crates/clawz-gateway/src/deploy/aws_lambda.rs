@@ -43,14 +43,12 @@ impl AwsLambdaAdapter {
 
     fn resolve_credentials(config: &DeployConfig) -> Result<(String, String)> {
         if let Some(ref creds) = config.credentials {
-            let access_key = creds
-                .api_key
-                .clone()
-                .ok_or_else(|| ClawzError::Auth("AWS access key required (api_key field)".into()))?;
-            let secret_key = creds
-                .api_secret
-                .clone()
-                .ok_or_else(|| ClawzError::Auth("AWS secret key required (api_secret field)".into()))?;
+            let access_key = creds.api_key.clone().ok_or_else(|| {
+                ClawzError::Auth("AWS access key required (api_key field)".into())
+            })?;
+            let secret_key = creds.api_secret.clone().ok_or_else(|| {
+                ClawzError::Auth("AWS secret key required (api_secret field)".into())
+            })?;
             return Ok((access_key, secret_key));
         }
         let access_key = std::env::var("AWS_ACCESS_KEY_ID").map_err(|_| {
@@ -78,15 +76,7 @@ impl AwsLambdaAdapter {
         let host = self.api_host(region);
         let url = format!("https://{host}/2015-03-31{path}");
         let signed = sign_headers(
-            access_key,
-            secret_key,
-            region,
-            "lambda",
-            method,
-            &host,
-            path,
-            "",
-            payload,
+            access_key, secret_key, region, "lambda", method, &host, path, "", payload,
         );
 
         let mut req = match method {
@@ -96,7 +86,7 @@ impl AwsLambdaAdapter {
             other => {
                 return Err(ClawzError::Internal(format!(
                     "unsupported HTTP method for Lambda: {other}"
-                )))
+                )));
             }
         };
         req = req.header("Content-Type", "application/json");
@@ -125,7 +115,9 @@ impl DeployProvider for AwsLambdaAdapter {
 
     fn supported_modes(&self) -> Vec<DeployMode> {
         vec![
-            DeployMode::Docker { image: String::new() },
+            DeployMode::Docker {
+                image: String::new(),
+            },
             DeployMode::NativeBinary,
         ]
     }
@@ -203,11 +195,10 @@ impl DeployProvider for AwsLambdaAdapter {
                     "MemorySize": 512,
                 })
             }
-            DeployMode::Wasm => {
-                return Err(ClawzError::Validation(
-                    "AWS Lambda does not support Wasm mode directly; use Docker with a Wasm runtime".into(),
-                ))
-            }
+            DeployMode::Wasm => return Err(ClawzError::Validation(
+                "AWS Lambda does not support Wasm mode directly; use Docker with a Wasm runtime"
+                    .into(),
+            )),
         };
 
         let payload = serde_json::to_vec(&body)
@@ -262,7 +253,14 @@ impl DeployProvider for AwsLambdaAdapter {
         let path = format!("/functions/{function_name}");
 
         let resp = self
-            .signed_request(region.as_str(), "DELETE", &path, b"", &access_key, &secret_key)
+            .signed_request(
+                region.as_str(),
+                "DELETE",
+                &path,
+                b"",
+                &access_key,
+                &secret_key,
+            )
             .await?;
 
         let status = resp.status();

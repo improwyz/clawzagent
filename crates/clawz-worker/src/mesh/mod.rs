@@ -35,8 +35,8 @@ pub mod manager;
 pub mod router;
 
 pub use config::{MeshConfig, NetworkIdentity};
-pub use manager::{MeshManager, MeshPeer, PeerState};
+pub use discovery::{DiscoveryMethod, PeerDiscovery};
+pub use fleet::{AgentLocation, FleetMesh, LeaderElectionResult};
 pub use heartbeat::{HeartbeatProtocol, HeartbeatState, PathHealthStatus};
+pub use manager::{MeshManager, MeshPeer, PeerState};
 pub use router::{MeshRouter, RouteEntry};
-pub use fleet::{FleetMesh, AgentLocation, LeaderElectionResult};
-pub use discovery::{PeerDiscovery, DiscoveryMethod};

@@ -37,7 +37,7 @@ use clawz_core::traits::{ChannelContext, ChannelMetadata, ChannelPlugin};
 // Dependency: canonical message types defined in core
 use clawz_core::types::channel::{ChannelCapabilities, IncomingMessage, OutgoingMessage};
 use http::HeaderMap;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 // Dependency: helper utilities from the parent plugin module (worker-internal)
 use crate::channels::plugin::{cred_str, map_http_error};
@@ -165,7 +165,11 @@ impl ChannelPlugin for DialpadChannel {
             .unwrap_or_default();
 
         for item in &items {
-            let sms_id = item.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let sms_id = item
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let text = item
                 .get("text")
                 .and_then(|v| v.as_str())
@@ -178,12 +182,7 @@ impl ChannelPlugin for DialpadChannel {
                 .unwrap_or("unknown")
                 .to_string();
 
-            let mut im = IncomingMessage::new(
-                ctx.config.id,
-                from.clone(),
-                from,
-                text,
-            );
+            let mut im = IncomingMessage::new(ctx.config.id, from.clone(), from, text);
             // Preserve the upstream Dialpad message ID for idempotency / threading later.
             im.metadata
                 .insert("dialpad_sms_id".into(), Value::String(sms_id));
@@ -256,17 +255,18 @@ impl ChannelPlugin for DialpadChannel {
         let body: Value = serde_json::from_slice(payload)
             .map_err(|e| ClawzError::Serialization(format!("Dialpad webhook: {e}")))?;
 
-        let event_type = body
-            .get("event")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let event_type = body.get("event").and_then(|v| v.as_str()).unwrap_or("");
 
         // Guard: ignore non-SMS webhook events (calls, voicemails, etc.)
         if event_type != "sms" && event_type != "message" {
             return Ok(Vec::new());
         }
 
-        let sms_id = body.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let sms_id = body
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let text = body
             .get("text")
             .and_then(|v| v.as_str())
@@ -278,17 +278,14 @@ impl ChannelPlugin for DialpadChannel {
             .unwrap_or("unknown")
             .to_string();
 
-        let mut im = IncomingMessage::new(
-            uuid::Uuid::new_v4(),
-            from.clone(),
-            from,
-            text,
-        );
+        let mut im = IncomingMessage::new(uuid::Uuid::new_v4(), from.clone(), from, text);
         im.metadata
             .insert("dialpad_sms_id".into(), Value::String(sms_id));
         // Tag the original event type so downstream logic can distinguish sms vs message.
-        im.metadata
-            .insert("dialpad_event".into(), Value::String(event_type.to_string()));
+        im.metadata.insert(
+            "dialpad_event".into(),
+            Value::String(event_type.to_string()),
+        );
 
         Ok(vec![im])
     }

@@ -209,12 +209,7 @@ impl EmbeddingProvider for LocalEmbedding {
             model: &self.model,
             prompt: text,
         };
-        let response = self
-            .client
-            .post(&url)
-            .json(&body)
-            .send()
-            .await?;
+        let response = self.client.post(&url).json(&body).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();

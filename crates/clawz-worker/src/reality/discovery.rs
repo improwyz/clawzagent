@@ -69,7 +69,9 @@ impl RealityModel {
             apis: Vec::new(),
             limits: Vec::new(),
         };
-        let mut permissions = PermissionMatrix { entries: Vec::new() };
+        let mut permissions = PermissionMatrix {
+            entries: Vec::new(),
+        };
         let mut org = OrgStructure {
             teams: Vec::new(),
             escalation_paths: Vec::new(),
@@ -281,19 +283,22 @@ mod tests {
         };
         assert!(metrics.is_live());
 
-        let model = RealityModel::new()
-            .with_source(DiscoverySource::ContainerMetrics(metrics));
+        let model = RealityModel::new().with_source(DiscoverySource::ContainerMetrics(metrics));
         let bundle = model.build("tenant-live");
 
         assert_eq!(bundle.current_state.system_status, "healthy");
-        assert!(bundle
-            .current_state
-            .resource_consumption
-            .contains("cpu=42.5%"));
-        assert!(bundle
-            .current_state
-            .resource_consumption
-            .contains("queue_depth=3"));
+        assert!(
+            bundle
+                .current_state
+                .resource_consumption
+                .contains("cpu=42.5%")
+        );
+        assert!(
+            bundle
+                .current_state
+                .resource_consumption
+                .contains("queue_depth=3")
+        );
         assert_eq!(bundle.system_inventory.limits.len(), 1);
         assert_eq!(bundle.system_inventory.limits[0].max_value, 1000);
         assert_eq!(bundle.system_inventory.limits[0].used, 600);
@@ -304,8 +309,7 @@ mod tests {
     #[test]
     fn container_metrics_unavailable_does_not_elevate_reliability() {
         let metrics = super::ContainerMetrics::unavailable("dead-container");
-        let model = RealityModel::new()
-            .with_source(DiscoverySource::ContainerMetrics(metrics));
+        let model = RealityModel::new().with_source(DiscoverySource::ContainerMetrics(metrics));
         let bundle = model.build("tenant-dead");
         // Unavailable snapshot is not "live" — reliability stays Medium and
         // the source counts as failed (confidence 0).

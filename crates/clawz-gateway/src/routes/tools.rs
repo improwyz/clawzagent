@@ -13,15 +13,15 @@
 //!   this will delegate to the actual tool runtime (e.g. MCP server, WASM plugin).
 
 use axum::{
+    Json, Router,
     extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
 };
 use chrono::Utc;
 use clawz_services::dto::ExecuteToolRequest;
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use uuid::Uuid;
 
 // Dependency: AppState, GatewayError, ToolRecord defined in crate root.
@@ -95,9 +95,9 @@ async fn create_tool(
     State(state): State<AppState>,
     Json(body): Json<CreateToolBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
-    let name = body.name.ok_or_else(|| {
-        GatewayError::Unprocessable("field 'name' is required".to_string())
-    })?;
+    let name = body
+        .name
+        .ok_or_else(|| GatewayError::Unprocessable("field 'name' is required".to_string()))?;
     let description = body.description.unwrap_or_default();
     let tool_type = body.tool_type.unwrap_or_else(|| "function".to_string());
 
@@ -146,11 +146,21 @@ async fn update_tool(
         .find(|t| t.id == id)
         .ok_or_else(|| GatewayError::not_found("Tool", &id))?;
 
-    if let Some(name) = body.name { record.name = name; }
-    if let Some(desc) = body.description { record.description = desc; }
-    if let Some(tt) = body.tool_type { record.tool_type = tt; }
-    if let Some(cfg) = body.config { record.config = cfg; }
-    if let Some(enabled) = body.enabled { record.enabled = enabled; }
+    if let Some(name) = body.name {
+        record.name = name;
+    }
+    if let Some(desc) = body.description {
+        record.description = desc;
+    }
+    if let Some(tt) = body.tool_type {
+        record.tool_type = tt;
+    }
+    if let Some(cfg) = body.config {
+        record.config = cfg;
+    }
+    if let Some(enabled) = body.enabled {
+        record.enabled = enabled;
+    }
     record.updated_at = Utc::now();
     let snapshot = record.clone();
     drop(tools);
@@ -194,7 +204,10 @@ async fn execute_tool(
         .ok_or_else(|| GatewayError::not_found("Tool", &id))?;
 
     if !record.enabled {
-        return Err(GatewayError::Unprocessable(format!("Tool '{}' is disabled", record.name)));
+        return Err(GatewayError::Unprocessable(format!(
+            "Tool '{}' is disabled",
+            record.name
+        )));
     }
 
     let args = body.args.unwrap_or(json!({}));
