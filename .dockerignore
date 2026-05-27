@@ -1,0 +1,6 @@
+target/
+.git/
+.github/
+web/node_modules/
+**/*.md
+!crates/**/README.md

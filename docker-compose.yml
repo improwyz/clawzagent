@@ -43,7 +43,7 @@ services:
       - CLAWZ_STUB_PROVIDER=1
       - CLAWZ_WORKER_TOKEN=dev-compose-worker-token
       - DATABASE_URL=postgresql://postgres:password@db:5432/clawz
-      - CLAWZ_LISTEN_ADDR=0.0.0.0:50051
+      - CLAWZ_CONTROL_ADDR=0.0.0.0:50051
     depends_on:
       db:
         condition: service_healthy
