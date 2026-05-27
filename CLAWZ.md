@@ -20,6 +20,8 @@
 
 Designed with compliance and security as first-class concerns, ClawZ embeds the **PRISM-G** governance framework directly into the execution path of every agent action. Whether you are running a single autonomous agent or coordinating hundreds in a distributed fleet, ClawZ provides the runtime, observability, and guardrails required for production AI operations.
 
+The codebase is a **Cargo workspace of eight crates** under `crates/`, plus an optional React dashboard in `web/`. See **[README.md](README.md)** for the full install guide, environment variables, and feature documentation.
+
 ---
 
 ## Features
@@ -34,11 +36,16 @@ Designed with compliance and security as first-class concerns, ClawZ embeds the 
 | **Tools Ecosystem** | Extensible tool registry with built-in capabilities: file I/O, HTTP, bash execution (sandboxed), Docker automation, browser automation (CDP), and MCP servers. |
 | **Observability** | Prometheus metrics export, OpenTelemetry tracing, structured logging, and circuit-breaker health dashboards. |
 | **Multi-Tenant Security** | API-key-based tenant isolation, RBAC, budget sub-leasing, and SHA-256 audit hash chains for tamper detection. |
-| **Cloud Deployment** | 15 cloud adapters including AWS, Azure, GCP, Cloudflare Workers, Vercel, Fly.io, and more. |
+| **Cloud Deployment** | 18 cloud deploy adapters (Fly.io, Railway, AWS Lambda, Azure Functions, GCP Cloud Run, Kubernetes, Cloudflare, Vercel, and more). |
+| **Desktop App** | Tauri 2 shell (`clawz-tauri`) for local agent control. |
+| **Embedded (T0)** | `no_std` Embassy backend for ESP32-class devices via `clawz-embedded`. |
+| **Platform Tiers** | T0 (bare metal) through T3 (server/desktop) with compile-time feature flags. |
 
 ---
 
 ## Architecture
+
+### Runtime (gateway + worker + core)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -47,25 +54,24 @@ Designed with compliance and security as first-class concerns, ClawZ embeds the 
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐  │
 │  │   Gateway   │  │    Worker    │  │      Core        │  │
 │  │  (HTTP API) │  │ (Execution)  │  │ (Types/Traits)   │  │
-│  │  Axum + TLS │  │ Pipeline +   │  │ Async traits,    │  │
-│  │ WebSocket   │  │ Governance + │  │ config, errors,  │  │
-│  │ MCP Server  │  │ Mesh + RAG   │  │ circuit breakers │  │
 │  └──────┬──────┘  └──────┬───────┘  └──────────────────┘  │
-│         │                │                                  │
+│         │    clawz-services (DTOs, execution client)       │
 │         └────────────────┘                                  │
-│                     Mesh Transport                           │
-│         (gRPC / QUIC / WebSocket / IPC)                     │
 └─────────────────────────────────────────────────────────────┘
-                    │
-        ┌───────────┼───────────┐
-        ▼           ▼           ▼
-   ┌─────────┐ ┌─────────┐ ┌─────────┐
-   │Standalone│ │  Micro  │ │ Elastic │
-   │  SQLite  │ │ Postgres│ │  Mesh   │
-   │ 1 binary │ │ Docker  │ │  mDNS   │
-   │localhost │ │Bollard  │ │  API    │
-   └─────────┘ └─────────┘ └─────────┘
 ```
+
+### Workspace crates (8 members)
+
+| Crate | Role |
+|-------|------|
+| **clawz-core** | Shared types, traits, config, DB, PRISM-G |
+| **clawz-platform** | Platform tier `T0`–`T3` detection |
+| **clawz-runtime** | Tokio `RuntimeBackend` implementations |
+| **clawz-embedded** | Embassy `no_std` for ESP32 |
+| **clawz-services** | DTOs, `ExecutionClient`, `EventBus` |
+| **clawz-worker** | Pipeline, governance, mesh, tools |
+| **clawz-gateway** | REST/WS API, deploy, connectors |
+| **clawz-tauri** | Desktop/mobile shell |
 
 ### Deployment Modes
 
@@ -159,8 +165,8 @@ export CLAWZ__PROVIDERS__OPENAI__RATE_LIMIT_RPM=120
 
 Ideal for development, prototyping, and single-node edge deployments.
 
-- All subsystems run in a single process.
-- No container runtime required.
+- Gateway and worker run as separate binaries (or containers via Docker Compose).
+- No full mesh or multi-region orchestration required.
 - Uses SQLite or a local Postgres instance.
 - No mesh networking overhead.
 
@@ -230,15 +236,11 @@ cargo fmt --all -- --check
 ### Per-Crate Commands
 
 ```bash
-# Fast typecheck
-cargo check -p clawz-core
-cargo check -p clawz-worker
-cargo check -p clawz-gateway
+cargo check -p clawz-core -p clawz-platform -p clawz-runtime
+cargo check -p clawz-embedded -p clawz-services
+cargo check -p clawz-worker -p clawz-gateway -p clawz-tauri
 
-# Run gateway locally
 cargo run -p clawz-gateway
-
-# Run worker node
 cargo run -p clawz-worker
 ```
 
@@ -255,87 +257,21 @@ cargo +1.87 check --workspace
 
 ## Project Structure
 
-The project is organized as a Cargo workspace with three primary crates:
+Eight workspace members under `crates/`, plus optional `web/` dashboard. Full tree: **[README.md#project-structure](README.md#project-structure)**. Deep subsystem docs: **[AGENTS.md](AGENTS.md)**.
 
 ```
 clawz/
-├── Cargo.toml                  # Workspace manifest
-├── clawz-core/
-│   └── src/
-│       ├── lib.rs              # Public exports
-│       ├── traits.rs           # 12 async trait definitions
-│       ├── config.rs           # AppConfig + sub-configs
-│       ├── error.rs            # ClawzError enum
-│       ├── types/
-│       │   ├── agent.rs        # Agent state machine
-│       │   ├── cost.rs         # Budget & cost tracking
-│       │   ├── governance.rs   # PRISM-G types
-│       │   ├── message.rs      # Conversation threading
-│       │   ├── tool.rs         # Tool definitions
-│       │   ├── channel.rs      # Communication channels
-│       │   ├── deploy.rs       # Deployment modes
-│       │   └── mesh.rs         # Node discovery & health
-│       ├── db.rs               # 8 repository implementations
-│       ├── metrics.rs          # Prometheus instrumentation
-│       └── circuit_breaker.rs  # Lock-free fault tolerance
-├── clawz-worker/
-│   └── src/
-│       ├── runtime/
-│       │   ├── agent.rs        # Single-agent execution
-│       │   ├── pipeline.rs     # 5-step reversible pipeline
-│       │   ├── team.rs         # Multi-agent coordination
-│       │   ├── subagent.rs     # Spawn child agents
-│       │   └── fan_out.rs      # Parallel execution
-│       ├── governance/
-│       │   ├── engine.rs # Governance engine (policy+trust+guardrails+approval)
-│       │   ├── guardrails.rs # Governance-dimension runtime guardrails (Vol 9)
-│       │   ├── policy.rs       # Hot-reloadable policies
-│       │   ├── trust.rs        # 5-tier trust scoring
-│       │   ├── approval.rs     # Approval workflows
-│       │   ├── council.rs      # Multi-approver councils
-│       │   ├── audit.rs        # SHA-256 hash chain
-│       │   └── compliance.rs   # SOC2 / GDPR / EU-AI-Act reports
-│       ├── mesh/
-│       │   ├── fleet.rs        # Leader election
-│       │   ├── heartbeat.rs    # EWMA RTT & health
-│       │   ├── router.rs       # Inter-node routing
-│       │   ├── discovery.rs    # Service discovery backends
-│       │   └── firewall.rs     # Network policies
-│       ├── transport/          # gRPC, QUIC, WebSocket, IPC
-│       ├── memory/
-│       │   ├── store.rs        # Conversation storage
-│       │   ├── rag.rs          # pgvector similarity search
-│       │   ├── embedding.rs    # Text embedding providers
-│       │   ├── conversation.rs # Context window management
-│       │   └── blackboard.rs   # Shared team state
-│       ├── providers/
-│       │   ├── registry.rs     # Provider lookup
-│       │   ├── router.rs       # Retry + circuit breaker routing
-│       │   ├── cost_budget.rs  # Budget enforcement
-│       │   └── adapters/       # OpenAI, Anthropic, Ollama
-│       ├── tools/
-│       │   ├── registry.rs     # Tool registration & validation
-│       │   ├── browser.rs      # CDP web automation
-│       │   ├── docker.rs       # Container lifecycle
-│       │   ├── mcp.rs          # Model Context Protocol
-│       │   └── builtin/        # File, HTTP, bash (sandboxed)
-│       ├── channels/           # WebSocket, gRPC, Slack, etc.
-│       ├── hardware/           # GPU detection & model loading
-│       ├── orchestration/      # Docker / standalone schedulers
-│       └── observability/      # OpenTelemetry context propagation
-└── clawz-gateway/
-    └── src/
-        ├── server.rs           # Axum HTTP server + TLS
-        ├── shutdown.rs         # Graceful cancellation cascade
-        ├── auth/               # Bearer token API key validation
-        ├── routes/             # REST endpoints
-        ├── ws/                 # WebSocket agent interaction
-        ├── mcp/                # Model Context Protocol server
-        ├── deploy/             # 15 cloud deployment adapters
-        ├── scheduling/         # Admission control & tenant routing
-        ├── tui/                # Terminal UI for debugging
-        ├── cloudflare/         # Edge deployment integration
-        └── connectors/         # 31 SaaS integrations
+├── Cargo.toml
+├── crates/
+│   ├── clawz-platform/
+│   ├── clawz-runtime/
+│   ├── clawz-embedded/
+│   ├── clawz-core/
+│   ├── clawz-services/
+│   ├── clawz-worker/
+│   ├── clawz-gateway/
+│   └── clawz-tauri/
+└── web/
 ```
 
 ---
@@ -364,7 +300,9 @@ export CLAWZ_CONFIG="/etc/clawz/production.toml"
 
 | Layer | Technology |
 |-------|------------|
-| **Language** | Rust 2024 Edition (MSRV 1.87+) |
+| **Language** | Rust (2021/2024 editions; MSRV **1.87+** for gateway, worker, services) |
+| **Desktop** | [Tauri 2](https://v2.tauri.app) (`clawz-tauri`) |
+| **Web UI** | React + Vite (`web/`) |
 | **Async Runtime** | [tokio](https://tokio.rs) |
 | **Web Framework** | [axum](https://docs.rs/axum) |
 | **Serialization** | [serde](https://serde.rs) |

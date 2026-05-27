@@ -4,11 +4,20 @@ Welcome to ClawZ! We're building a Rust-native orchestration platform for autono
 
 ## Project Overview
 
-ClawZ is a Rust 2024 workspace with three core crates:
+ClawZ is a **Cargo workspace of eight crates** under `crates/`, plus an optional React dashboard in `web/`:
 
-- **clawz-core**: Type definitions, traits, configuration, and errors shared across the platform
-- **clawz-worker**: Container orchestration, governance engines, mesh networking, and agent runtime
-- **clawz-gateway**: HTTP API, scheduling, admission control, and request routing
+| Crate | Role |
+|-------|------|
+| **clawz-core** | Shared types, traits, `AppConfig`, `ClawzError`, DB repos, metrics, PRISM-G types |
+| **clawz-platform** | Platform tier (`T0`–`T3`) detection and resource budgets |
+| **clawz-runtime** | Pluggable `RuntimeBackend` (Tokio multi-thread and single-thread) |
+| **clawz-embedded** | `no_std` Embassy backend for ESP32 / bare-metal agents |
+| **clawz-services** | Gateway↔worker DTOs, `ExecutionClient`, `EventBus`, store traits |
+| **clawz-worker** | Agent pipeline, governance, mesh, memory/RAG, providers, tools |
+| **clawz-gateway** | REST/WebSocket API, auth, rooms, telephony, deploy, connectors |
+| **clawz-tauri** | Tauri 2 desktop shell with local SQLite and tray UI |
+
+**Runtime services:** production stacks run **gateway** + **worker** binaries (see [README.md](README.md) architecture). Shared libraries (`core`, `platform`, `runtime`, `services`, etc.) compile into those binaries.
 
 Licensed under **Elastic License 2.0 (ELv2)**. All contributors agree to the Contributor License Agreement.
 
@@ -83,13 +92,27 @@ cargo test --workspace
 
 ```
 clawz/
+├── Cargo.toml               # Workspace manifest (8 members)
+├── README.md
+├── AGENTS.md                # Architecture reference for agents/developers
 ├── crates/
-│   ├── clawz-core/          # Traits, types, config, errors
-│   ├── clawz-worker/        # Runtime, governance, mesh, scheduling
-│   └── clawz-gateway/       # HTTP API, admission control, routing
-├── CONTRIBUTING.md
-├── Cargo.toml
-└── Cargo.lock
+│   ├── clawz-platform/      # T0–T3 tier detection
+│   ├── clawz-runtime/       # Tokio RuntimeBackend
+│   ├── clawz-embedded/      # Embassy no_std (ESP32)
+│   ├── clawz-core/          # Traits, types, config, errors, DB
+│   ├── clawz-services/      # DTOs, ExecutionClient, EventBus
+│   ├── clawz-worker/        # Runtime, governance, mesh, tools
+│   ├── clawz-gateway/       # HTTP API, deploy, connectors
+│   └── clawz-tauri/         # Desktop shell
+├── web/                     # React dashboard (optional)
+└── scripts/                 # install.sh, install.ps1
+```
+
+```bash
+# Typecheck all workspace members
+cargo check -p clawz-core -p clawz-platform -p clawz-runtime
+cargo check -p clawz-embedded -p clawz-services
+cargo check -p clawz-worker -p clawz-gateway -p clawz-tauri
 ```
 
 ## How to Contribute
@@ -157,7 +180,7 @@ impl Provider for DockerProvider {
 ## Testing
 
 - **Unit tests**: Colocated in modules with `#[cfg(test)]`
-- **Integration tests**: In `gateway/tests/` for end-to-end scenarios
+- **Integration tests**: In `crates/clawz-gateway/tests/` for end-to-end scenarios
 - **Async tests**: Use `#[tokio::test]`
 - **Mocking**: Mock at trait boundaries, not concrete types
 
@@ -181,21 +204,22 @@ mod tests {
 
 To add a new provider, tool, channel, or plugin:
 
-1. **Define the trait** in `clawz-core/src/traits.rs` (or appropriate module)
-2. **Implement for your capability** in the relevant worker/gateway module
-3. **Register in the registry**: Update the provider/tool/channel factory
-4. **Add tests**: Unit + integration for the happy path
-5. **Document**: Add a brief example in code comments
+1. **Define the trait** in `crates/clawz-core/src/traits.rs` (or appropriate module)
+2. **Add shared DTOs** in `crates/clawz-services/src/dto.rs` when gateway and worker both need the type
+3. **Implement** in `crates/clawz-worker/` and/or `crates/clawz-gateway/` as appropriate
+4. **Register in the registry**: Update the provider/tool/channel factory
+5. **Add tests**: Unit + integration for the happy path
+6. **Document**: Add a brief example in code comments
 
 Example: New Provider
 
 ```rust
-// clawz-core/src/traits.rs
+// crates/clawz-core/src/traits.rs
 pub trait Provider: Send + Sync {
     async fn execute(&self, request: Request) -> Result<Response, ClawzError>;
 }
 
-// clawz-worker/src/providers/custom.rs
+// crates/clawz-worker/src/providers/custom.rs
 pub struct CustomProvider { /* ... */ }
 impl Provider for CustomProvider { /* ... */ }
 
