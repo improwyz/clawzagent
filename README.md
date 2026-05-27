@@ -42,29 +42,29 @@ Designed with compliance and security as first-class concerns, ClawZ embeds the 
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    ClawZ Platform                            │
+│                    ClawZ Platform                           │
 ├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │   Gateway   │  │    Worker    │  │      Core        │  │
-│  │  (HTTP API) │  │ (Execution)  │  │ (Types/Traits)   │  │
-│  │  Axum + TLS │  │ Pipeline +   │  │ Async traits,    │  │
-│  │ WebSocket   │  │ Governance + │  │ config, errors,  │  │
-│  │ MCP Server  │  │ Mesh + RAG   │  │ circuit breakers │  │
-│  └──────┬──────┘  └──────┬───────┘  └──────────────────┘  │
+│  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐    │
+│  │   Gateway   │  │    Worker    │  │      Core        │    │
+│  │  (HTTP API) │  │ (Execution)  │  │ (Types/Traits)   │    │
+│  │  Axum + TLS │  │ Pipeline +   │  │ Async traits,    │    │
+│  │ WebSocket   │  │ Governance + │  │ config, errors,  │    │
+│  │ MCP Server  │  │ Mesh + RAG   │  │ circuit breakers │    │
+│  └──────┬──────┘  └──────┬───────┘  └──────────────────┘    │
 │         │                │                                  │
 │         └────────────────┘                                  │
-│                     Mesh Transport                           │
+│                     Mesh Transport                          │
 │         (gRPC / QUIC / WebSocket / IPC)                     │
 └─────────────────────────────────────────────────────────────┘
                     │
         ┌───────────┼───────────┐
         ▼           ▼           ▼
-   ┌─────────┐ ┌─────────┐ ┌─────────┐
+   ┌──────────┐ ┌─────────┐ ┌─────────┐
    │Standalone│ │  Micro  │ │ Elastic │
    │  SQLite  │ │ Postgres│ │  Mesh   │
    │ 1 binary │ │ Docker  │ │  mDNS   │
    │localhost │ │Bollard  │ │  API    │
-   └─────────┘ └─────────┘ └─────────┘
+   └──────────┘ └─────────┘ └─────────┘
 ```
 
 ### Deployment Modes
