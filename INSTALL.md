@@ -44,13 +44,17 @@ improwyz/clawz/
 
 The installer clones (or uses) the repo, creates `.env` from [.env.example](.env.example), pulls **prebuilt platform images** from GHCR (or builds locally on failure), starts **gateway + worker + Postgres (pgvector)** in **fleet/micro** mode, and waits for health checks.
 
-**Private images:** authenticate before install:
+**Private images:** authenticate before install with a GitHub **PAT** (not your GitHub password). See [docs/private-registry.md](docs/private-registry.md).
 
 ```bash
-docker login ghcr.io
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 ```
 
-See [docs/private-registry.md](docs/private-registry.md).
+**No registry access?** Build locally instead:
+
+```bash
+./install.sh --build
+```
 
 ### Linux / macOS
 

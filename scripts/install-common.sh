@@ -9,9 +9,18 @@ GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:3000}"
 COMPOSE="${COMPOSE:-docker compose}"
 CLAWZ_REGISTRY="${CLAWZ_REGISTRY:-ghcr.io/improwyz}"
 CLAWZ_IMAGE_TAG="${CLAWZ_IMAGE_TAG:-latest}"
-# Default: fleet stack + prebuilt pull. Use COMPOSE_FILE_BUILD for local image build.
-export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml:docker-compose.prebuilt.yml}"
-COMPOSE_FILE_BUILD="docker-compose.yml:docker-compose.build.yml"
+COMPOSE_BASE="docker-compose.yml"
+COMPOSE_PREBUILT="docker-compose.prebuilt.yml"
+COMPOSE_BUILD="docker-compose.build.yml"
+
+compose_args() {
+  local mode="${1:-base}"
+  case "$mode" in
+    prebuilt) printf '%s' "-f ${COMPOSE_BASE} -f ${COMPOSE_PREBUILT}" ;;
+    build) printf '%s' "-f ${COMPOSE_BASE} -f ${COMPOSE_BUILD}" ;;
+    base|*) printf '%s' "-f ${COMPOSE_BASE}" ;;
+  esac
+}
 
 _SCRIPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
 # shellcheck source=install-deps.sh
@@ -141,28 +150,35 @@ install_with_docker() {
   export CLAWZ_IMAGE_TAG="${CLAWZ_IMAGE_TAG:-latest}"
   export CLAWZ_AGENT_IMAGE="${CLAWZ_AGENT_IMAGE:-${CLAWZ_REGISTRY}/clawz-agent:${CLAWZ_IMAGE_TAG}}"
 
+  local compose_mode="base"
   if [[ "$use_build" == "1" ]]; then
-    export COMPOSE_FILE="$COMPOSE_FILE_BUILD"
     log "Building gateway and worker from source..."
-    $COMPOSE build gateway worker
+    # shellcheck disable=SC2086
+    $COMPOSE $(compose_args base) build gateway worker
+    compose_mode="base"
   else
-    export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml:docker-compose.prebuilt.yml}"
     log "Pulling platform images from ${CLAWZ_REGISTRY} (tag ${CLAWZ_IMAGE_TAG})..."
-    if ! $COMPOSE pull gateway worker 2>/dev/null; then
+    # shellcheck disable=SC2086
+    if ! $COMPOSE $(compose_args prebuilt) pull gateway worker 2>/dev/null; then
       registry_login_hint
-      warn "Pull failed — falling back to local build (use --build to skip this attempt)"
-      export COMPOSE_FILE="$COMPOSE_FILE_BUILD"
+      warn "Pull failed — falling back to local build (or run: ./install.sh --build)"
       CLAWZ_INSTALL_BUILD=1
-      $COMPOSE build gateway worker
+      compose_mode="base"
+      # shellcheck disable=SC2086
+      $COMPOSE $(compose_args base) build gateway worker
+    else
+      compose_mode="prebuilt"
     fi
   fi
 
   log "Starting Postgres..."
-  $COMPOSE up -d db
+  # shellcheck disable=SC2086
+  $COMPOSE $(compose_args "$compose_mode") up -d db
   log "Starting worker and gateway (CLAWZ_MODE=micro, fleet orchestration)..."
-  $COMPOSE up -d worker gateway
+  # shellcheck disable=SC2086
+  $COMPOSE $(compose_args "$compose_mode") up -d worker gateway
   wait_for_gateway
-  if [[ "$use_build" == "1" ]]; then
+  if [[ "$use_build" == "1" || "${CLAWZ_INSTALL_BUILD:-0}" == "1" ]]; then
     print_success "Docker Compose (built from source)"
   else
     print_success "Docker Compose (prebuilt images)"

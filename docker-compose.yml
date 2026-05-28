@@ -4,6 +4,9 @@
 
 services:
   gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
     ports:
       - "3000:3000"
     env_file:
@@ -30,6 +33,9 @@ services:
       - clawz-net
 
   worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
     ports:
       - "50051:50051"
     env_file:

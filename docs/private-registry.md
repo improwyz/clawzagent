@@ -13,11 +13,32 @@ Platform images are published to **GitHub Container Registry (GHCR)** and should
 
 ## Authenticate before install
 
+GitHub **does not** accept your account password for `docker login`. Use a **Personal Access Token (PAT)** or the GitHub CLI.
+
+**PAT (recommended):**
+
+1. GitHub → **Settings** → **Developer settings** → **Personal access tokens**
+2. Create a token with **`read:packages`** (classic) or **Packages: Read** (fine-grained)
+3. Log in:
+
 ```bash
-echo "$GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USER --password-stdin
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 ```
 
-Token scopes: `read:packages` (pull), `write:packages` (CI publish).
+Use your GitHub **username** (not email). Paste the **token** as the password.
+
+**GitHub CLI:**
+
+```bash
+gh auth login
+gh auth token | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
+If pull still fails (no package access or images not published yet), install without the registry:
+
+```bash
+./install.sh --build
+```
 
 ## Install with prebuilt images
 
@@ -30,11 +51,13 @@ cp .env.example .env
 
 The installer pulls `clawz-gateway` and `clawz-worker` using `docker-compose.prebuilt.yml`. If pull fails, it falls back to a local build (`docker-compose.build.yml`).
 
-Force local build:
+Force local build (no GHCR login required):
 
 ```bash
 ./install.sh --build
 ```
+
+This builds `gateway` and `worker` from `Dockerfile.gateway` / `Dockerfile.worker` on your machine (first run can take 10–20 minutes).
 
 Custom registry/tag:
 
