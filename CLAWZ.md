@@ -89,7 +89,8 @@ The codebase is a **Cargo workspace of eight crates** under `crates/`, plus an o
 
 | Platform | Command |
 |----------|---------|
-| **Linux / macOS** | `git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/scripts/install.sh` |
+| **Linux / macOS (curl)** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh \| bash` |
+| **Linux / macOS (git)** | `git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/scripts/install.sh` |
 | **Linux / macOS** (from clone) | `./install.sh` or `./scripts/install.sh` |
 | **Windows (PowerShell)** | `git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz; & "$env:USERPROFILE\clawz\scripts\install.ps1"` |
 | **Windows** (from clone) | `.\install.ps1` or `.\scripts\install.ps1` |

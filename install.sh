@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# ClawZ install entrypoint (repo root) — clones/updates repo, runs scripts/install.sh
+# ClawZ install bootstrap (repo root) — safe to pipe from curl; clones repo, runs scripts/install.sh
 #
-# Remote one-liner:
+# Curl one-liner (repo file: /install.sh on branch main — "raw/main" is URL syntax, not a folder):
+#   curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh | bash
+#
+# Git one-liner (works for private repos if you have git credentials):
 #   git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh
+#
+# Custom install dir:
+#   CLAWZ_INSTALL_DIR=~/my-clawz curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh | bash
 #
 # From an existing clone:
 #   ./install.sh

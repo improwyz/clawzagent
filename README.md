@@ -159,10 +159,15 @@ improwyz/clawz/
 
 | Platform | Command |
 |----------|---------|
-| **Linux / macOS** | `git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/scripts/install.sh` |
-| **Linux / macOS** (shorter) | `git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
+| **Linux / macOS (curl)** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh \| bash` |
+| **Linux / macOS (git)** | `git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
 | **Windows (PowerShell)** | `git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz; & "$env:USERPROFILE\clawz\scripts\install.ps1"` |
 | **Already cloned** | `./install.sh` or `./scripts/install.sh` |
+
+**Curl URL vs repo path:** the file lives at `install.sh` in the repo root.  
+`https://github.com/improwyz/clawz/raw/main/install.sh` means branch `main`, file `install.sh` — `raw/main` is not a directory in git.  
+That bootstrap script only needs **git** on your machine; it clones the full repo, then runs `scripts/install.sh` (which can install Docker/Rust if missing).  
+Curl requires the repo to be **public** (or use the git one-liner with your credentials). A 404 from curl usually means the repo is private.
 
 **Options**
 

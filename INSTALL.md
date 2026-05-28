@@ -46,7 +46,15 @@ The installer clones (or uses) the repo, creates `.env` from [.env.example](.env
 
 ### Linux / macOS
 
-**Remote one-liner:**
+**Remote one-liner (curl)** — downloads root `install.sh`, then clones the repo and runs `scripts/install.sh`:
+
+```bash
+curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh | bash
+```
+
+Requires a **public** repo (anonymous HTTP). Custom directory: `CLAWZ_INSTALL_DIR=~/my-clawz curl -fsSL ... | bash`
+
+**Remote one-liner (git)** — use when the repo is private or curl returns 404:
 
 ```bash
 git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/scripts/install.sh
