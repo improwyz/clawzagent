@@ -129,25 +129,88 @@ EOF
 }
 
 ghcr_logged_in() {
-  # docker config.json stores "ghcr.io" auth after: docker login ghcr.io
-  if [[ -f "${HOME}/.docker/config.json" ]] && grep -q '"ghcr.io"' "${HOME}/.docker/config.json" 2>/dev/null; then
+  [[ -f "${HOME}/.docker/config.json" ]] && grep -q '"ghcr.io"' "${HOME}/.docker/config.json" 2>/dev/null
+}
+
+registry_github_user() {
+  if [[ -n "${CLAWZ_REGISTRY_USER:-}" ]]; then
+    echo "$CLAWZ_REGISTRY_USER"
     return 0
+  fi
+  if [[ -n "${GITHUB_USER:-}" ]]; then
+    echo "$GITHUB_USER"
+    return 0
+  fi
+  if command -v gh >/dev/null 2>&1; then
+    gh api user -q .login 2>/dev/null && return 0
   fi
   return 1
 }
 
 registry_login_hint() {
-  warn "Prebuilt images need a GitHub PAT (not your GitHub password):"
-  warn "  echo \"\$GITHUB_TOKEN\" | docker login ghcr.io -u USERNAME --password-stdin"
-  warn "See docs/private-registry.md — or skip registry entirely:"
-  warn "  ./install.sh --build"
+  err "Prebuilt install requires GHCR access (GitHub PAT — not your account password)."
+  err ""
+  err "  export GITHUB_TOKEN=ghp_xxxx   # scopes: read:packages"
+  err "  export GITHUB_USER=your_github_username"
+  err "  ./install.sh"
+  err ""
+  err "Or login manually:"
+  err "  echo \"\$GITHUB_TOKEN\" | docker login ghcr.io -u \$GITHUB_USER --password-stdin"
+  err ""
+  err "Package access: improwyz/clawz-gateway, clawz-worker, clawz-agent must grant your user Read."
+  err "Docs: docs/private-registry.md"
+  err ""
+  err "Maintainers must publish images first (git tag v* or Actions → Release workflow)."
+  err "Slow local compile only if you opt in: ./install.sh --build"
 }
 
-try_prebuilt_pull() {
-  if [[ "${CLAWZ_PREBUILT:-}" == "1" ]] || ghcr_logged_in; then
+ensure_registry_auth() {
+  if ghcr_logged_in; then
+    log "Using existing docker login for ghcr.io"
     return 0
   fi
-  return 1
+
+  local token="${CLAWZ_REGISTRY_TOKEN:-${GITHUB_TOKEN:-${GHCR_TOKEN:-}}}"
+  if [[ -z "$token" ]]; then
+    registry_login_hint
+    exit 1
+  fi
+
+  local user
+  user="$(registry_github_user)" || {
+    err "Set GITHUB_USER or CLAWZ_REGISTRY_USER (your GitHub username, not email)."
+    exit 1
+  }
+
+  log "Logging in to ghcr.io as ${user}..."
+  if ! echo "$token" | docker login ghcr.io -u "$user" --password-stdin >/dev/null; then
+    err "docker login ghcr.io failed — check token scopes (read:packages) and username."
+    exit 1
+  fi
+}
+
+pull_prebuilt_images() {
+  local pull_log
+  pull_log="$(mktemp)"
+  trap 'rm -f "$pull_log"' RETURN
+
+  log "Pulling ${CLAWZ_REGISTRY}/clawz-gateway:${CLAWZ_IMAGE_TAG} and clawz-worker:${CLAWZ_IMAGE_TAG} ..."
+  # shellcheck disable=SC2086
+  if $COMPOSE $(compose_args prebuilt) pull gateway worker 2>"$pull_log"; then
+    return 0
+  fi
+
+  err "Prebuilt image pull failed."
+  sed 's/^/[clawz] /' "$pull_log" >&2 || true
+  err ""
+  if grep -qiE 'unauthorized|denied|403|401' "$pull_log" 2>/dev/null; then
+    err "Auth issue: use a PAT with read:packages and confirm package access on ghcr.io/improwyz."
+  elif grep -qiE 'not found|manifest unknown|404' "$pull_log" 2>/dev/null; then
+    err "Images may not be published yet. Ask maintainers to run the Release workflow or push tag v*."
+    err "Until then, only ./install.sh --build will work (local compile, 10–20 min)."
+  fi
+  registry_login_hint
+  exit 1
 }
 
 install_with_docker() {
@@ -166,33 +229,16 @@ install_with_docker() {
   export CLAWZ_IMAGE_TAG="${CLAWZ_IMAGE_TAG:-latest}"
   export CLAWZ_AGENT_IMAGE="${CLAWZ_AGENT_IMAGE:-${CLAWZ_REGISTRY}/clawz-agent:${CLAWZ_IMAGE_TAG}}"
 
-  local compose_mode="base"
+  local compose_mode="prebuilt"
   if [[ "$use_build" == "1" ]]; then
-    log "Building gateway and worker from source (first run may take 10–20 minutes)..."
+    log "Building gateway and worker from source (--build; first run may take 10–20 minutes)..."
     # shellcheck disable=SC2086
     $COMPOSE $(compose_args base) build gateway worker
     compose_mode="base"
-  elif try_prebuilt_pull; then
-    log "Pulling platform images from ${CLAWZ_REGISTRY} (tag ${CLAWZ_IMAGE_TAG})..."
-    # shellcheck disable=SC2086
-    if $COMPOSE $(compose_args prebuilt) pull gateway worker; then
-      compose_mode="prebuilt"
-    else
-      warn "Registry pull failed — building from source instead."
-      registry_login_hint
-      CLAWZ_INSTALL_BUILD=1
-      compose_mode="base"
-      log "Building gateway and worker from source (first run may take 10–20 minutes)..."
-      # shellcheck disable=SC2086
-      $COMPOSE $(compose_args base) build gateway worker
-    fi
   else
-    log "No ghcr.io login detected — building from source (use CLAWZ_PREBUILT=1 after docker login to pull images)."
-    CLAWZ_INSTALL_BUILD=1
-    compose_mode="base"
-    log "Building gateway and worker (first run may take 10–20 minutes)..."
-    # shellcheck disable=SC2086
-    $COMPOSE $(compose_args base) build gateway worker
+    ensure_registry_auth
+    pull_prebuilt_images
+    compose_mode="prebuilt"
   fi
 
   log "Starting Postgres..."

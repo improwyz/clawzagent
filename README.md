@@ -160,7 +160,7 @@ improwyz/clawz/
 | Platform | Command |
 |----------|---------|
 | **Linux / macOS (curl)** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh \| bash` |
-| **Linux / macOS (git)** | `docker login ghcr.io && git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
+| **Linux / macOS (git)** | `export GITHUB_TOKEN=ghp_xxx GITHUB_USER=you && git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
 | **Windows (PowerShell)** | `git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz; & "$env:USERPROFILE\clawz\scripts\install.ps1"` |
 | **Already cloned** | `./install.sh` or `./scripts/install.sh` |
 
@@ -173,7 +173,7 @@ Curl requires the repo to be **public** (or use the git one-liner with your cred
 
 | Flag | Description |
 |------|-------------|
-| *(default)* | Docker Compose (micro/fleet): **build from source** unless logged into `ghcr.io` (or set `CLAWZ_PREBUILT=1`) |
+| *(default)* | Docker Compose (micro/fleet): **pull prebuilt images** from GHCR (`GITHUB_TOKEN` + `GITHUB_USER` required) |
 | `--docker` / `-Docker` | Force Docker Compose (installs Docker if missing) |
 | `--build` | Build gateway/worker images locally (`docker-compose.build.yml`) |
 | `--registry` / `--tag` | Override `CLAWZ_REGISTRY` / `CLAWZ_IMAGE_TAG` for prebuilt pulls |

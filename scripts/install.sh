@@ -10,8 +10,8 @@
 #
 # Options:
 #   --docker      Use Docker Compose (default when Docker is available)
-#   --build       Build gateway/worker images locally (default when not logged into ghcr.io)
-#   CLAWZ_PREBUILT=1  Force registry pull (requires docker login ghcr.io + package access)
+#   --build       Build gateway/worker locally (10–20 min); default is prebuilt pull from GHCR
+#   GITHUB_TOKEN + GITHUB_USER  Required for default install (PAT with read:packages)
 #   --registry R  Image registry (default: ghcr.io/improwyz)
 #   --tag TAG     Image tag (default: latest)
 #   --source      Build and run from source with cargo (no Docker)
