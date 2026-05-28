@@ -3,7 +3,7 @@ import { IconSidebar } from './IconSidebar';
 import { ChatSidebar } from './ChatSidebar';
 import { ClawzLogo } from '../shared/ClawzLogo';
 import { ThemeToggle } from '../shared/ThemeToggle';
-import { useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useAppStore } from '../../lib/store';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -16,7 +16,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/config': 'Config',
 };
 
-export function Shell({ children }: { children: React.ReactNode }) {
+export function Shell() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chatWidth, setChatWidth] = useState(300);
   const [chatVisible, setChatVisible] = useState(true);
@@ -81,7 +81,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
         ))}
 
         <main className="flex-1 overflow-hidden">
-          {children}
+          <Outlet />
         </main>
       </div>
 
