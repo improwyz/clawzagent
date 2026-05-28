@@ -42,14 +42,18 @@ If pull still fails (no package access or images not published yet), install wit
 
 ## Install with prebuilt images
 
+Only attempted when you are logged into `ghcr.io` or set `CLAWZ_PREBUILT=1`.
+
 ```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+export CLAWZ_PREBUILT=1
 git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz
 cd ~/clawz
 cp .env.example .env
 ./install.sh
 ```
 
-The installer pulls `clawz-gateway` and `clawz-worker` using `docker-compose.prebuilt.yml`. If pull fails, it falls back to a local build (`docker-compose.build.yml`).
+Without login, `./install.sh` **builds from source automatically** (no registry needed).
 
 Force local build (no GHCR login required):
 

@@ -128,10 +128,26 @@ print_success() {
 EOF
 }
 
+ghcr_logged_in() {
+  # docker config.json stores "ghcr.io" auth after: docker login ghcr.io
+  if [[ -f "${HOME}/.docker/config.json" ]] && grep -q '"ghcr.io"' "${HOME}/.docker/config.json" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
 registry_login_hint() {
-  warn "If image pull fails, authenticate to your registry:"
-  warn "  docker login ghcr.io"
-  warn "See docs/private-registry.md"
+  warn "Prebuilt images need a GitHub PAT (not your GitHub password):"
+  warn "  echo \"\$GITHUB_TOKEN\" | docker login ghcr.io -u USERNAME --password-stdin"
+  warn "See docs/private-registry.md — or skip registry entirely:"
+  warn "  ./install.sh --build"
+}
+
+try_prebuilt_pull() {
+  if [[ "${CLAWZ_PREBUILT:-}" == "1" ]] || ghcr_logged_in; then
+    return 0
+  fi
+  return 1
 }
 
 install_with_docker() {
@@ -152,23 +168,31 @@ install_with_docker() {
 
   local compose_mode="base"
   if [[ "$use_build" == "1" ]]; then
-    log "Building gateway and worker from source..."
+    log "Building gateway and worker from source (first run may take 10–20 minutes)..."
     # shellcheck disable=SC2086
     $COMPOSE $(compose_args base) build gateway worker
     compose_mode="base"
-  else
+  elif try_prebuilt_pull; then
     log "Pulling platform images from ${CLAWZ_REGISTRY} (tag ${CLAWZ_IMAGE_TAG})..."
     # shellcheck disable=SC2086
-    if ! $COMPOSE $(compose_args prebuilt) pull gateway worker 2>/dev/null; then
+    if $COMPOSE $(compose_args prebuilt) pull gateway worker; then
+      compose_mode="prebuilt"
+    else
+      warn "Registry pull failed — building from source instead."
       registry_login_hint
-      warn "Pull failed — falling back to local build (or run: ./install.sh --build)"
       CLAWZ_INSTALL_BUILD=1
       compose_mode="base"
+      log "Building gateway and worker from source (first run may take 10–20 minutes)..."
       # shellcheck disable=SC2086
       $COMPOSE $(compose_args base) build gateway worker
-    else
-      compose_mode="prebuilt"
     fi
+  else
+    log "No ghcr.io login detected — building from source (use CLAWZ_PREBUILT=1 after docker login to pull images)."
+    CLAWZ_INSTALL_BUILD=1
+    compose_mode="base"
+    log "Building gateway and worker (first run may take 10–20 minutes)..."
+    # shellcheck disable=SC2086
+    $COMPOSE $(compose_args base) build gateway worker
   fi
 
   log "Starting Postgres..."

@@ -173,7 +173,7 @@ Curl requires the repo to be **public** (or use the git one-liner with your cred
 
 | Flag | Description |
 |------|-------------|
-| *(default)* | Docker Compose (micro/fleet): pull prebuilt images, then `up` (falls back to local build if pull fails) |
+| *(default)* | Docker Compose (micro/fleet): **build from source** unless logged into `ghcr.io` (or set `CLAWZ_PREBUILT=1`) |
 | `--docker` / `-Docker` | Force Docker Compose (installs Docker if missing) |
 | `--build` | Build gateway/worker images locally (`docker-compose.build.yml`) |
 | `--registry` / `--tag` | Override `CLAWZ_REGISTRY` / `CLAWZ_IMAGE_TAG` for prebuilt pulls |
