@@ -2,14 +2,40 @@
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '/api/v1';
 
+export function getStoredAuthToken(): string | null {
+  return typeof localStorage !== 'undefined' ? localStorage.getItem('clawz_token') : null;
+}
+
+export function getStoredApiKey(): string | null {
+  return typeof localStorage !== 'undefined' ? localStorage.getItem('clawz_api_key') : null;
+}
+
+export function setStoredApiKey(key: string) {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem('clawz_api_key', key);
+  }
+}
+
+export function hasAuthCredentials(): boolean {
+  return Boolean(
+    getStoredAuthToken() ||
+      getStoredApiKey() ||
+      (import.meta.env.VITE_API_KEY as string | undefined),
+  );
+}
+
 function authHeaders(): Record<string, string> {
-  const token = typeof localStorage !== 'undefined' ? localStorage.getItem('clawz_token') : null;
+  const token = getStoredAuthToken();
   if (token) return { Authorization: `Bearer ${token}` };
-  const apiKey =
-    (typeof localStorage !== 'undefined' ? localStorage.getItem('clawz_api_key') : null) ||
-    (import.meta.env.VITE_API_KEY as string | undefined);
+  const apiKey = getStoredApiKey() || (import.meta.env.VITE_API_KEY as string | undefined);
   if (apiKey) return { 'X-API-Key': apiKey };
   return {};
+}
+
+let onAuthFailure: (() => void) | null = null;
+
+export function setAuthFailureHandler(handler: (() => void) | null) {
+  onAuthFailure = handler;
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -19,6 +45,9 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const text = await res.text();
   if (!res.ok) {
+    if ((res.status === 401 || res.status === 403) && onAuthFailure) {
+      onAuthFailure();
+    }
     throw new Error(`API ${res.status}: ${text.slice(0, 200)}`);
   }
   const ctype = res.headers.get('content-type') ?? '';
@@ -420,6 +449,18 @@ export interface AuthResponse {
   role: string;
 }
 
+export interface AuthStatus {
+  auth_disabled: boolean;
+}
+
+export async function fetchAuthStatus(): Promise<AuthStatus> {
+  const res = await fetch(`${API_BASE}/system/auth/status`);
+  if (!res.ok) {
+    return { auth_disabled: false };
+  }
+  return (await res.json()) as AuthStatus;
+}
+
 export async function login(email: string, password: string): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE}/system/auth/login`, {
     method: 'POST',
@@ -461,6 +502,7 @@ export async function register(
 export function clearAuthToken() {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem('clawz_token');
+    localStorage.removeItem('clawz_api_key');
   }
 }
 

@@ -59,6 +59,7 @@ pub fn routes() -> Router<AppState> {
         // Authentication
         .route("/auth/login", post(login))
         .route("/auth/register", post(register))
+        .route("/auth/status", get(auth_status))
         .route("/auth/webauthn", post(webauthn_auth))
         // OpenAPI spec
         .route("/openapi", get(openapi_spec))
@@ -231,6 +232,13 @@ async fn system_metrics(State(state): State<AppState>) -> String {
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
+/// `GET /system/auth/status` — whether the gateway enforces credentials.
+async fn auth_status() -> Json<Value> {
+    Json(json!({
+        "auth_disabled": std::env::var("CLAWZ_DISABLE_AUTH").ok().as_deref() == Some("1"),
+    }))
+}
+
 /// `POST /system/auth/login` — authenticate a user and issue a JWT.
 ///
 /// # Security warning
@@ -367,10 +375,12 @@ async fn register(
     state.users.write().await.push(user.clone());
     state.api_keys.write().await.push(api_key.clone());
 
+    let tenant_id = body
+        .tenant_id
+        .clone()
+        .unwrap_or_else(crate::postgres_store::default_tenant);
+
     if let Some(ref pool) = state.db {
-        let tenant_id = body
-            .tenant_id
-            .unwrap_or_else(crate::postgres_store::default_tenant);
         crate::postgres_store::persist_user(pool, &user, &tenant_id)
             .await
             .map_err(|e| GatewayError::Internal(e.to_string()))?;
@@ -383,9 +393,20 @@ async fn register(
         .append_audit(&user_id, "register", "user", &user_id, None)
         .await;
 
+    let token = jwt::create_token_with_tenant(
+        &user.id,
+        &user.email,
+        &user.role,
+        Some(&tenant_id),
+        &state.jwt_secret,
+        24,
+    )
+    .map_err(|e| GatewayError::Internal(e.to_string()))?;
+
     Ok((
         StatusCode::CREATED,
         Json(json!({
+            "token": token,
             "user_id": user.id,
             "email": user.email,
             "role": user.role,

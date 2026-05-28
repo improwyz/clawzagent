@@ -91,6 +91,7 @@ const PUBLIC_PATHS: &[&str] = &[
     "/api/v1/system/health",
     "/api/v1/system/auth/login",
     "/api/v1/system/auth/register",
+    "/api/v1/system/auth/status",
     "/api/v1/system/openapi",
     "/webhooks/twilio",
     "/webhooks/google-voice",
@@ -337,28 +338,46 @@ fn load_api_key_records_from_env() -> Vec<api_key::ApiKeyRecord> {
     };
     raw.split(',')
         .filter_map(|entry| {
+            let entry = entry.trim();
+            if entry.is_empty() {
+                return None;
+            }
             let parts: Vec<&str> = entry.splitn(4, ':').collect();
-            if parts.len() >= 3 {
-                let tenant_id = parts
-                    .get(3)
-                    .filter(|t| !t.is_empty())
-                    .map(|t| (*t).to_string())
-                    .unwrap_or_else(default_tenant_id);
-                Some(api_key::ApiKeyRecord {
+            if parts.len() < 3 {
+                // Plain dev key: "dev-key" — hash at runtime for validation.
+                return Some(api_key::ApiKeyRecord {
                     id: uuid::Uuid::new_v4().to_string(),
-                    key_hash: parts[0].to_string(),
-                    user_id: parts[1].to_string(),
-                    tenant_id,
-                    name: "env key".to_string(),
-                    permissions: vec![parts[2].to_string()],
+                    key_hash: api_key::ApiKeyValidator::hash_key(entry),
+                    user_id: "dev".to_string(),
+                    tenant_id: default_tenant_id(),
+                    name: "plain env key".to_string(),
+                    permissions: vec!["owner".to_string()],
                     created_at: Utc::now(),
                     expires_at: None,
                     revoked: false,
-                })
-            } else {
-                // Malformed entries are silently skipped.
-                None
+                });
             }
+            let tenant_id = parts
+                .get(3)
+                .filter(|t| !t.is_empty())
+                .map(|t| (*t).to_string())
+                .unwrap_or_else(default_tenant_id);
+            let key_hash = if parts[0].len() == 64 && parts[0].chars().all(|c| c.is_ascii_hexdigit()) {
+                parts[0].to_string()
+            } else {
+                api_key::ApiKeyValidator::hash_key(parts[0])
+            };
+            Some(api_key::ApiKeyRecord {
+                id: uuid::Uuid::new_v4().to_string(),
+                key_hash,
+                user_id: parts[1].to_string(),
+                tenant_id,
+                name: "env key".to_string(),
+                permissions: vec![parts[2].to_string()],
+                created_at: Utc::now(),
+                expires_at: None,
+                revoked: false,
+            })
         })
         .collect()
 }
