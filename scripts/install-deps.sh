@@ -3,8 +3,6 @@
 # Sourced by install-common.sh — do not run directly.
 set -euo pipefail
 
-# Public GitHub raw URLs (github.com/.../raw/... — not raw.githubusercontent.com).
-CLAWZ_RAW_BASE="${CLAWZ_RAW_BASE:-https://github.com/improwyz/clawz/raw/main/scripts}"
 CLAWZ_MIN_RUST="${CLAWZ_MIN_RUST:-1.87.0}"
 
 have_command() {
@@ -328,13 +326,4 @@ ensure_node() {
 
   err "Install Node.js 20+ manually: https://nodejs.org/"
   return 1
-}
-
-bootstrap_install_helpers() {
-  # When install.sh is piped from curl, helper scripts are not on disk — fetch them.
-  local dest="$1"
-  mkdir -p "$dest"
-  for f in install-common.sh install-deps.sh; do
-    curl -fsSL "${CLAWZ_RAW_BASE}/${f}" -o "${dest}/${f}"
-  done
 }

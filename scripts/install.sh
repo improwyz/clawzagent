@@ -3,11 +3,10 @@
 #
 # From a clone:
 #   ./scripts/install.sh
-#   ./scripts/install.sh --source
-#   ./scripts/install.sh --with-web
+#   ./install.sh                    # root wrapper (same result)
 #
-# Remote one-liner:
-#   curl -fsSL https://github.com/improwyz/clawz/raw/main/scripts/install.sh | bash
+# Remote one-liner (uses real repo paths — no /raw/main/ download):
+#   git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/scripts/install.sh
 #
 # Options:
 #   --docker      Use Docker Compose (default when Docker is available)
@@ -18,7 +17,17 @@
 
 set -euo pipefail
 
-CLAWZ_RAW_BASE="${CLAWZ_RAW_BASE:-https://github.com/improwyz/clawz/raw/main/scripts}"
+CLAWZ_REPO_URL="${CLAWZ_REPO_URL:-https://github.com/improwyz/clawz.git}"
+CLAWZ_BRANCH="${CLAWZ_BRANCH:-main}"
+CLAWZ_INSTALL_DIR="${CLAWZ_INSTALL_DIR:-${HOME}/clawz}"
+
+# Honor --dir before we clone or source helpers.
+for ((i = 1; i < $#; i++)); do
+  if [[ "${!i}" == "--dir" && $((i + 1)) -le $# ]]; then
+    CLAWZ_INSTALL_DIR="${!((i + 1))}"
+    break
+  fi
+done
 
 _resolve_script_dir() {
   local candidate=""
@@ -29,16 +38,29 @@ _resolve_script_dir() {
     echo "$candidate"
     return 0
   fi
-  command -v curl >/dev/null 2>&1 || {
-    echo "curl is required for the remote installer. Install curl and retry." >&2
+
+  if ! command -v git >/dev/null 2>&1; then
+    echo "[clawz] Git is required. Install Git: https://git-scm.com/downloads" >&2
     exit 1
-  }
-  local tmp
-  tmp="$(mktemp -d)"
-  for f in install-common.sh install-deps.sh; do
-    curl -fsSL "${CLAWZ_RAW_BASE}/${f}" -o "${tmp}/${f}"
-  done
-  echo "$tmp"
+  fi
+
+  local repo_root="${CLAWZ_INSTALL_DIR}"
+  if [[ ! -f "${repo_root}/scripts/install-common.sh" ]]; then
+    if [[ -d "${repo_root}/.git" ]]; then
+      git -C "${repo_root}" fetch --depth 1 origin "${CLAWZ_BRANCH}"
+      git -C "${repo_root}" checkout "${CLAWZ_BRANCH}"
+      git -C "${repo_root}" pull --ff-only origin "${CLAWZ_BRANCH}" || true
+    else
+      echo "[clawz] Cloning ${CLAWZ_REPO_URL} into ${repo_root} ..."
+      git clone --depth 1 --branch "${CLAWZ_BRANCH}" "${CLAWZ_REPO_URL}" "${repo_root}"
+    fi
+  fi
+
+  if [[ ! -f "${repo_root}/scripts/install-common.sh" ]]; then
+    echo "[clawz] Missing ${repo_root}/scripts/install-common.sh after clone." >&2
+    exit 1
+  fi
+  echo "${repo_root}/scripts"
 }
 
 SCRIPT_DIR="$(_resolve_script_dir)"
@@ -49,7 +71,7 @@ MODE="auto"
 WITH_WEB=0
 
 usage() {
-  sed -n '2,18p' "$0"
+  sed -n '2,17p' "$0"
   exit 0
 }
 
@@ -78,13 +100,12 @@ fi
 
 log "ClawZ installer — ${OS}"
 
-ensure_curl
 ensure_git
 
-if ! ensure_repo_root "$SCRIPT_DIR/.."; then
+if ! ensure_repo_root "${SCRIPT_DIR}/.."; then
   clone_or_update_repo
 else
-  cd "$SCRIPT_DIR/.."
+  cd "${SCRIPT_DIR}/.."
 fi
 
 ROOT="$(pwd)"

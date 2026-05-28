@@ -142,29 +142,27 @@ Repository: **[github.com/improwyz/clawz](https://github.com/improwyz/clawz)** (
 
 ### One-click install
 
-The installer bootstraps missing dependencies (**Git**, **curl**, **Docker** or **Rust**), clones (or uses) the repo, writes `.env`, starts **gateway + worker + Postgres (pgvector)**, and waits for health checks.
+The installer clones the repo (or uses your existing tree), bootstraps missing dependencies (**Git**, **Docker** or **Rust**), writes `.env`, starts **gateway + worker + Postgres (pgvector)**, and waits for health checks.
+
+**Repo layout (install scripts)**
+
+```text
+improwyz/clawz/
+├── install.sh                 # wrapper → scripts/install.sh
+├── install.ps1                # wrapper → scripts/install.ps1
+└── scripts/
+    ├── install.sh             # main Linux/macOS installer
+    ├── install-common.sh      # shared helpers
+    ├── install-deps.sh        # installs Docker, Rust, Node, etc.
+    └── install.ps1            # Windows installer
+```
 
 | Platform | Command |
 |----------|---------|
-| **Linux / macOS** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/scripts/install.sh \| bash` |
-| **Linux / macOS** (from clone) | `./install.sh` or `./scripts/install.sh` |
-| **Windows (PowerShell)** | `irm https://github.com/improwyz/clawz/raw/main/scripts/install.ps1 \| iex` |
-| **Windows** (from clone) | `.\install.ps1` or `.\scripts\install.ps1` |
-
-**Install script URLs (GitHub raw, not a `/raw/main/` folder in the repo)**
-
-```text
-https://github.com/{owner}/{repo}/raw/{branch}/{path/in/repo}
-```
-
-| File on `main` | Download URL |
-|----------------|--------------|
-| `scripts/install.sh` | `https://github.com/improwyz/clawz/raw/main/scripts/install.sh` |
-| `scripts/install-common.sh` | `.../raw/main/scripts/install-common.sh` |
-| `scripts/install-deps.sh` | `.../raw/main/scripts/install-deps.sh` |
-| `scripts/install.ps1` | `.../raw/main/scripts/install.ps1` |
-
-The pipe-to-bash one-liner loads `install.sh` first, then fetches `install-common.sh` and `install-deps.sh` from the same `scripts/` path. Use `github.com/.../raw/...` URLs (not `github.com/.../main/...` without `raw`, and not `raw.githubusercontent.com` if that host is blocked).
+| **Linux / macOS** | `git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/scripts/install.sh` |
+| **Linux / macOS** (shorter) | `git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
+| **Windows (PowerShell)** | `git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz; & "$env:USERPROFILE\clawz\scripts\install.ps1"` |
+| **Already cloned** | `./install.sh` or `./scripts/install.sh` |
 
 **Options**
 
