@@ -6,10 +6,11 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: improwyz
+
 jobs:
-  # =============================================================================
-  # Multi-arch Docker build for T2 (containerized)
-  # =============================================================================
   docker:
     runs-on: ubuntu-latest
     permissions:
@@ -17,7 +18,13 @@ jobs:
       packages: write
     strategy:
       matrix:
-        platform: [linux/amd64, linux/arm64, linux/riscv64]
+        include:
+          - image: clawz-gateway
+            dockerfile: Dockerfile.gateway
+          - image: clawz-worker
+            dockerfile: Dockerfile.worker
+          - image: clawz-agent
+            dockerfile: Dockerfile.agent
     steps:
       - uses: actions/checkout@v4
 
@@ -30,24 +37,31 @@ jobs:
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push worker image
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_OWNER }}/${{ matrix.image }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile.worker
-          platforms: ${{ matrix.platform }}
+          file: ./${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ghcr.io/clawznet/worker:${{ github.ref_name }}-${{ matrix.platform }}
-            ghcr.io/clawznet/worker:latest-${{ matrix.platform }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-  # =============================================================================
-  # Build standalone binaries for T1/T3 (bare-metal + Tauri)
-  # =============================================================================
   binaries:
     runs-on: ubuntu-latest
     strategy:
@@ -79,13 +93,10 @@ jobs:
             clawz-${{ matrix.arch }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  # =============================================================================
-  # Verify install script
-  # =============================================================================
   install-script:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Verify install script syntax
         run: |
-          shellcheck scripts/install.sh || true
+          shellcheck scripts/install.sh scripts/install-common.sh || true

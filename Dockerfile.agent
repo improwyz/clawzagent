@@ -1,0 +1,16 @@
+# Stage 1: Build
+FROM rust:1.88-bookworm AS builder
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+
+RUN cargo build --release -p clawz-worker --bin clawz-agent
+RUN strip /app/target/release/clawz-agent || true
+
+# Stage 2: Runtime
+FROM gcr.io/distroless/cc-debian12
+COPY --from=builder /app/target/release/clawz-agent /usr/local/bin/
+USER nonroot:nonroot
+EXPOSE 8081
+ENTRYPOINT ["/usr/local/bin/clawz-agent"]

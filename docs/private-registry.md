@@ -1,0 +1,80 @@
+# Private container registry for ClawZ
+
+Platform images are published to **GitHub Container Registry (GHCR)** and should be **private** for production. Credentials are never stored in this repository.
+
+## Images
+
+| Image | Purpose |
+|-------|---------|
+| `ghcr.io/improwyz/clawz-gateway:<tag>` | HTTP API / gateway |
+| `ghcr.io/improwyz/clawz-worker:<tag>` | Worker control plane + fleet orchestration |
+| `ghcr.io/improwyz/clawz-agent:<tag>` | Per-tenant agent runtime (spawned by worker) |
+| `pgvector/pgvector:pg15` | Postgres (public upstream) |
+
+## Authenticate before install
+
+```bash
+echo "$GITHUB_TOKEN" | docker login ghcr.io -u YOUR_GITHUB_USER --password-stdin
+```
+
+Token scopes: `read:packages` (pull), `write:packages` (CI publish).
+
+## Install with prebuilt images
+
+```bash
+git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz
+cd ~/clawz
+cp .env.example .env
+./install.sh
+```
+
+The installer pulls `clawz-gateway` and `clawz-worker` using `docker-compose.prebuilt.yml`. If pull fails, it falls back to a local build (`docker-compose.build.yml`).
+
+Force local build:
+
+```bash
+./install.sh --build
+```
+
+Custom registry/tag:
+
+```bash
+CLAWZ_REGISTRY=ghcr.io/myorg CLAWZ_IMAGE_TAG=v1.0.0 ./install.sh
+```
+
+## Private agent image pulls (fleet mode)
+
+The worker spawns `clawz-agent` containers via the host Docker API. The worker container must be able to pull your private agent image.
+
+Options:
+
+1. **Mount Docker credentials** (development only):
+
+   ```yaml
+   worker:
+     volumes:
+       - /var/run/docker.sock:/var/run/docker.sock
+       - ${HOME}/.docker/config.json:/root/.docker/config.json:ro
+   ```
+
+2. **Robot account + `docker login` on the host** before starting compose (worker uses host daemon via socket).
+
+3. **Public agent image** for demos only (not recommended for production).
+
+## Digest pinning
+
+Prefer immutable deploys:
+
+```bash
+export CLAWZ_IMAGE_TAG=sha256:abc123...
+```
+
+Or pin in compose:
+
+```yaml
+image: ghcr.io/improwyz/clawz-gateway@sha256:...
+```
+
+## Package visibility
+
+In GitHub: **Packages** → select package → **Package settings** → change visibility to **Private**.

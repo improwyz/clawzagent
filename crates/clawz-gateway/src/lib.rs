@@ -40,6 +40,7 @@ pub mod shutdown;
 pub mod telephony;
 pub mod tui;
 pub mod voice_pipeline;
+pub mod worker_fleet;
 pub mod ws;
 
 use axum::{http::StatusCode, response::IntoResponse};
@@ -526,6 +527,12 @@ pub struct AppState {
     pub platform_store: Option<Arc<dyn clawz_services::PlatformStore>>,
     /// Fleet deploy scheduler (standalone or Docker per `CLAWZ_MODE`).
     pub agent_scheduler: Option<Arc<dyn AgentScheduler>>,
+    /// Per-tenant admission before fleet spawn.
+    pub admission: Arc<crate::scheduling::AdmissionController>,
+    /// Routes to warm agents or spawns via in-process scheduler (standalone).
+    pub tenant_router: Option<Arc<crate::scheduling::TenantRouter>>,
+    /// Delegates fleet spawn/list to worker control API when `WORKER_URL` is set.
+    pub worker_fleet: Option<Arc<crate::worker_fleet::WorkerFleetClient>>,
     /// Cloud provider deployment orchestrator (18 adapters).
     pub deploy_manager: Arc<crate::deploy::DeployManager>,
     /// Per-agent personality metadata (traits, tone) until persisted in identity store.
@@ -568,6 +575,17 @@ impl AppState {
     ) -> Self {
         let (event_tx, _) = broadcast::channel(256);
         let db_for_deploy = db.clone();
+        let admission = Arc::new(crate::scheduling::AdmissionController::new(
+            std::env::var("CLAWZ_MAX_CONCURRENT_PER_TENANT")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(10),
+            100,
+        ));
+        let tenant_router = agent_scheduler
+            .as_ref()
+            .map(|s| Arc::new(crate::scheduling::TenantRouter::new(s.clone())));
+        let worker_fleet = crate::worker_fleet::WorkerFleetClient::from_env().map(Arc::new);
         Self {
             agents: Arc::new(RwLock::new(Vec::new())),
             conversations: Arc::new(RwLock::new(Vec::new())),
@@ -593,6 +611,9 @@ impl AppState {
             db,
             platform_store,
             agent_scheduler,
+            admission,
+            tenant_router,
+            worker_fleet,
             deploy_manager: Arc::new(crate::deploy::DeployManager::new_default(
                 Arc::new(crate::deploy::MemoryDeploymentStore::new()),
                 db_for_deploy,

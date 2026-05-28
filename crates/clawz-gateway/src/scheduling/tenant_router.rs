@@ -30,7 +30,7 @@ use std::sync::Arc;
 use clawz_core::{
     error::Result,
     traits::AgentScheduler,
-    types::orchestration::{AgentHandle, AgentSpec},
+    types::orchestration::AgentHandle,
     types::tenant::TenantContext,
 };
 
@@ -93,7 +93,8 @@ impl TenantRouter {
         // per-request resource sizing (memory, CPU, model variants) down from HTTP
         // headers or body. If that becomes a requirement, the spec should be
         // constructed from ctx or an external profile store before this call.
-        self.scheduler.spawn_agent(ctx, AgentSpec::default()).await
+        let spec = clawz_worker::orchestration::default_agent_spec();
+        self.scheduler.spawn_agent(ctx, spec).await
     }
 }
 

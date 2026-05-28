@@ -42,7 +42,15 @@ improwyz/clawz/
 
 ## One-click install (recommended)
 
-The installer clones (or uses) the repo, creates `.env` from [.env.example](.env.example), starts **gateway + worker + Postgres (pgvector)**, and waits for health checks.
+The installer clones (or uses) the repo, creates `.env` from [.env.example](.env.example), pulls **prebuilt platform images** from GHCR (or builds locally on failure), starts **gateway + worker + Postgres (pgvector)** in **fleet/micro** mode, and waits for health checks.
+
+**Private images:** authenticate before install:
+
+```bash
+docker login ghcr.io
+```
+
+See [docs/private-registry.md](docs/private-registry.md).
 
 ### Linux / macOS
 
@@ -57,6 +65,7 @@ Requires a **public** repo (anonymous HTTP). Custom directory: `CLAWZ_INSTALL_DI
 **Remote one-liner (git)** — use when the repo is private or curl returns 404:
 
 ```bash
+docker login ghcr.io
 git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/scripts/install.sh
 ```
 
@@ -87,6 +96,9 @@ git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz
 | Linux / macOS | Windows (PowerShell) | Description |
 |---------------|----------------------|-------------|
 | `--docker` | `-Docker` | Force Docker Compose (default when Docker is running) |
+| `--build` | — | Build gateway/worker images locally instead of pulling from registry |
+| `--registry R` | — | Image registry (default: `ghcr.io/improwyz`) |
+| `--tag TAG` | — | Image tag (default: `latest`) |
 | `--source` | `-Source` | Build with `cargo` and run local binaries (no Docker) |
 | `--with-web` | `-WithWeb` | Build the React dashboard in `web/` |
 | `--dir PATH` | `-InstallDir PATH` | Clone/install location (default: `~/clawz` or `%USERPROFILE%\clawz`) |
@@ -102,6 +114,12 @@ curl http://localhost:3000/api/v1/system/health
 
 Open **http://localhost:3000** in a browser for the gateway API (and dashboard if built).
 
+**Fleet smoke test** (agent containers via worker Docker socket):
+
+```bash
+./scripts/fleet-smoke.sh
+```
+
 ---
 
 ## Docker Compose (manual)
@@ -109,11 +127,19 @@ Open **http://localhost:3000** in a browser for the gateway API (and dashboard i
 If you prefer not to use the installer:
 
 ```bash
+docker login ghcr.io   # private registry
 git clone https://github.com/improwyz/clawz.git
 cd clawz
 cp .env.example .env
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml pull
+docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d
 curl http://localhost:3000/health
+```
+
+Local build (no registry):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
 Services started:
@@ -210,7 +236,11 @@ Key variables:
 
 | Variable | Purpose |
 |----------|---------|
-| `CLAWZ_MODE` | `standalone`, `micro`, or `elastic` |
+| `CLAWZ_MODE` | `standalone`, `micro`, or `elastic` (Compose defaults to `micro`) |
+| `CLAWZ_REGISTRY` / `CLAWZ_IMAGE_TAG` | Prebuilt image coordinates (`ghcr.io/improwyz`, `latest`) |
+| `CLAWZ_AGENT_IMAGE` | Image for spawned agent containers |
+| `CLAWZ_DOCKER_NETWORK` | Docker network for fleet agents (`clawz-net`) |
+| `CLAWZ_MAX_AGENTS` | Max concurrent agent containers per worker |
 | `CLAWZ_DISABLE_AUTH` | Dev only — set to `0` or unset in production |
 | `CLAWZ_STUB_PROVIDER` | Dev stub LLM — disable when using real providers |
 | `VALID_API_KEYS` | Comma-separated API keys (required when auth enabled) |
@@ -221,6 +251,9 @@ Key variables:
 | `CLAWZ_PUBLIC_URL` | Public HTTPS base for webhooks (telephony, channels) |
 
 See [README.md — Configuration](README.md#configuration) for TOML config and `CLAWZ__SECTION__KEY` overrides.
+
+**Private registry:** [docs/private-registry.md](docs/private-registry.md)  
+**Dependency audit CSV:** [docs/install-dependencies.csv](docs/install-dependencies.csv) (regenerate with `./scripts/export-install-dependencies.sh`)
 
 ---
 

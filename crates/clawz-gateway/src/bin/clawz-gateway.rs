@@ -46,14 +46,19 @@ async fn main() -> anyhow::Result<()> {
     let platform_store = db.as_ref().map(|pool| {
         PostgresPlatformStore::new(pool.clone()) as Arc<dyn clawz_services::PlatformStore>
     });
-    let agent_scheduler = match build_agent_scheduler() {
-        Ok(s) => {
-            tracing::info!("fleet scheduler ready ({:?})", DeploymentMode::from_env());
-            Some(s)
-        }
-        Err(e) => {
-            tracing::warn!("fleet scheduler unavailable: {e}");
-            None
+    let agent_scheduler = if std::env::var("WORKER_URL").is_ok() {
+        tracing::info!("fleet spawn delegated to worker (WORKER_URL set)");
+        None
+    } else {
+        match build_agent_scheduler() {
+            Ok(s) => {
+                tracing::info!("fleet scheduler ready ({:?})", DeploymentMode::from_env());
+                Some(s)
+            }
+            Err(e) => {
+                tracing::warn!("fleet scheduler unavailable: {e}");
+                None
+            }
         }
     };
     let state = AppState::full(

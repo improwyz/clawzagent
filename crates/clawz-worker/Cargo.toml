@@ -74,6 +74,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Error handling
 anyhow = "1"
 
+[[bin]]
+name = "clawz-agent"
+path = "src/bin/clawz-agent.rs"
+
 [features]
 esp32 = []
 

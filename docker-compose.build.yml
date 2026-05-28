@@ -1,0 +1,13 @@
+# Overlay: build gateway and worker from local source (maintainers / offline install).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker

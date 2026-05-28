@@ -7,6 +7,11 @@ CLAWZ_BRANCH="${CLAWZ_BRANCH:-main}"
 CLAWZ_INSTALL_DIR="${CLAWZ_INSTALL_DIR:-${HOME}/clawz}"
 GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:3000}"
 COMPOSE="${COMPOSE:-docker compose}"
+CLAWZ_REGISTRY="${CLAWZ_REGISTRY:-ghcr.io/improwyz}"
+CLAWZ_IMAGE_TAG="${CLAWZ_IMAGE_TAG:-latest}"
+# Default: fleet stack + prebuilt pull. Use COMPOSE_FILE_BUILD for local image build.
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml:docker-compose.prebuilt.yml}"
+COMPOSE_FILE_BUILD="docker-compose.yml:docker-compose.build.yml"
 
 _SCRIPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
 # shellcheck source=install-deps.sh
@@ -114,7 +119,14 @@ print_success() {
 EOF
 }
 
+registry_login_hint() {
+  warn "If image pull fails, authenticate to your registry:"
+  warn "  docker login ghcr.io"
+  warn "See docs/private-registry.md"
+}
+
 install_with_docker() {
+  local use_build="${CLAWZ_INSTALL_BUILD:-0}"
   ensure_docker || exit 1
   if ! $COMPOSE version >/dev/null 2>&1; then
     err "Docker Compose v2 not found (try: ${COMPOSE} version)"
@@ -122,14 +134,39 @@ install_with_docker() {
   fi
 
   write_env_file
-  log "Building gateway, worker, and database..."
-  $COMPOSE build gateway worker
+  # shellcheck disable=SC1091
+  [[ -f .env ]] && set -a && source .env && set +a
+
+  export CLAWZ_REGISTRY="${CLAWZ_REGISTRY:-ghcr.io/improwyz}"
+  export CLAWZ_IMAGE_TAG="${CLAWZ_IMAGE_TAG:-latest}"
+  export CLAWZ_AGENT_IMAGE="${CLAWZ_AGENT_IMAGE:-${CLAWZ_REGISTRY}/clawz-agent:${CLAWZ_IMAGE_TAG}}"
+
+  if [[ "$use_build" == "1" ]]; then
+    export COMPOSE_FILE="$COMPOSE_FILE_BUILD"
+    log "Building gateway and worker from source..."
+    $COMPOSE build gateway worker
+  else
+    export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml:docker-compose.prebuilt.yml}"
+    log "Pulling platform images from ${CLAWZ_REGISTRY} (tag ${CLAWZ_IMAGE_TAG})..."
+    if ! $COMPOSE pull gateway worker 2>/dev/null; then
+      registry_login_hint
+      warn "Pull failed — falling back to local build (use --build to skip this attempt)"
+      export COMPOSE_FILE="$COMPOSE_FILE_BUILD"
+      CLAWZ_INSTALL_BUILD=1
+      $COMPOSE build gateway worker
+    fi
+  fi
+
   log "Starting Postgres..."
   $COMPOSE up -d db
-  log "Starting worker and gateway..."
+  log "Starting worker and gateway (CLAWZ_MODE=micro, fleet orchestration)..."
   $COMPOSE up -d worker gateway
   wait_for_gateway
-  print_success "Docker Compose"
+  if [[ "$use_build" == "1" ]]; then
+    print_success "Docker Compose (built from source)"
+  else
+    print_success "Docker Compose (prebuilt images)"
+  fi
 }
 
 install_from_source() {

@@ -15,7 +15,7 @@
 
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Extension, Path, State},
     http::StatusCode,
     routing::{get, post},
 };
@@ -25,9 +25,10 @@ use serde_json::{Value, json};
 use uuid::Uuid;
 
 // Dependency: crate root types shared across fleet, agents, and governance modules.
+use crate::auth::AuthContext;
+use crate::scheduling::tenant_context_from_auth;
 use crate::{AppState, DeploymentRecord, FleetNodeRecord, GatewayError};
-use clawz_core::types::orchestration::AgentSpec;
-use clawz_core::types::tenant::{TenantContext, TenantId};
+use clawz_worker::orchestration::default_agent_spec;
 
 /// Assemble the fleet sub-router.
 ///
@@ -260,6 +261,7 @@ async fn fleet_mesh(State(state): State<AppState>) -> Json<Value> {
 /// node's `agent_ids` list so the mesh view stays consistent.
 async fn fleet_deploy(
     State(state): State<AppState>,
+    auth: Option<Extension<AuthContext>>,
     Json(body): Json<FleetDeployBody>,
 ) -> Result<(StatusCode, Json<Value>), GatewayError> {
     let agent_id = body
@@ -294,41 +296,54 @@ async fn fleet_deploy(
         updated_at: now,
     };
 
-    // Schedule on the orchestration backend when configured (standalone or Docker).
-    if let Some(ref scheduler) = state.agent_scheduler {
-        let agent_model = {
-            let agents = state.agents.read().await;
-            agents
-                .iter()
-                .find(|a| a.id == agent_id)
-                .map(|a| a.model.clone())
-                .unwrap_or_else(|| "claude-sonnet-4-5".to_string())
-        };
-        let ctx = TenantContext::new(
-            TenantId::new("default"),
-            clawz_core::types::tenant::Role::Operator,
-        );
-        let spec = AgentSpec {
-            image: format!("clawz/agent:{}", agent_model.replace('/', "-")),
-            capabilities: vec!["chat".into(), "tools".into()],
-            ..AgentSpec::default()
-        };
-        match scheduler.spawn_agent(&ctx, spec).await {
-            Ok(handle) => {
-                deployment.status = "running".to_string();
-                tracing::info!(
-                    agent_id = %agent_id,
-                    handle_id = %handle.id,
-                    mesh_ip = %handle.mesh_ip,
-                    "fleet deploy scheduled via AgentScheduler"
-                );
-            }
-            Err(e) => {
-                deployment.status = "failed".to_string();
-                tracing::warn!("fleet deploy scheduler failed: {e}");
-            }
+    // Schedule on worker fleet API or in-process scheduler (tenant from auth).
+    let auth_ctx = auth.map(|Extension(a)| a).unwrap_or_else(crate::auth::dev_auth_context);
+    let tenant_ctx = tenant_context_from_auth(&auth_ctx);
+    let capabilities = vec!["chat".into(), "tools".into()];
+    let mut spec = default_agent_spec();
+    spec.capabilities = capabilities.clone();
+
+    let ticket = state.admission.admit(&tenant_ctx).await.map_err(|e| {
+        GatewayError::Internal(format!("admission denied: {e}"))
+    })?;
+
+    let schedule_result: Result<(), clawz_core::error::ClawzError> = async {
+        if let Some(ref fleet) = state.worker_fleet {
+            let handle = fleet
+                .spawn(&tenant_ctx, spec, &capabilities)
+                .await?;
+            tracing::info!(
+                agent_id = %agent_id,
+                handle_id = %handle.id,
+                tenant = %tenant_ctx.tenant_id,
+                "fleet deploy scheduled via worker"
+            );
+        } else if let Some(ref router) = state.tenant_router {
+            let handle = router.route(&tenant_ctx, &capabilities).await?;
+            tracing::info!(
+                agent_id = %agent_id,
+                handle_id = %handle.id,
+                tenant = %tenant_ctx.tenant_id,
+                "fleet deploy scheduled via TenantRouter"
+            );
+        } else if let Some(ref scheduler) = state.agent_scheduler {
+            scheduler.spawn_agent(&tenant_ctx, spec).await?;
+        }
+        Ok(())
+    }
+    .await;
+
+    match schedule_result {
+        Ok(()) => {
+            deployment.status = "running".to_string();
+        }
+        Err(e) => {
+            deployment.status = "failed".to_string();
+            tracing::warn!("fleet deploy scheduler failed: {e}");
         }
     }
+
+    state.admission.release(ticket).await;
 
     // Append the agent to the node's local list so mesh queries can report
     // per-node agent counts without a secondary lookup.
@@ -419,7 +434,7 @@ async fn deploy_to_node(
         agent_id: body.agent_id,
         node_id: Some(body.node_id.unwrap_or(id)),
     };
-    fleet_deploy(State(state), Json(deploy_body)).await
+    fleet_deploy(State(state), None, Json(deploy_body)).await
 }
 
 /// `GET /fleet/{id}/logs` — synthetic node log stream.

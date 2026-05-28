@@ -160,7 +160,7 @@ improwyz/clawz/
 | Platform | Command |
 |----------|---------|
 | **Linux / macOS (curl)** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh \| bash` |
-| **Linux / macOS (git)** | `git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
+| **Linux / macOS (git)** | `docker login ghcr.io && git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
 | **Windows (PowerShell)** | `git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz; & "$env:USERPROFILE\clawz\scripts\install.ps1"` |
 | **Already cloned** | `./install.sh` or `./scripts/install.sh` |
 
@@ -173,8 +173,10 @@ Curl requires the repo to be **public** (or use the git one-liner with your cred
 
 | Flag | Description |
 |------|-------------|
-| *(default)* | Docker Compose when Docker is available; otherwise installs Rust and builds from source |
+| *(default)* | Docker Compose (micro/fleet): pull prebuilt images, then `up` (falls back to local build if pull fails) |
 | `--docker` / `-Docker` | Force Docker Compose (installs Docker if missing) |
+| `--build` | Build gateway/worker images locally (`docker-compose.build.yml`) |
+| `--registry` / `--tag` | Override `CLAWZ_REGISTRY` / `CLAWZ_IMAGE_TAG` for prebuilt pulls |
 | `--source` / `-Source` | Force `cargo` build (installs Rust via rustup if missing) |
 | `--with-web` / `-WithWeb` | Build the React dashboard in `web/` (installs Node.js 20+ if missing) |
 | `--dir PATH` / `-InstallDir PATH` | Clone/install location (default: `~/clawz` or `%USERPROFILE%\clawz`) |
@@ -188,11 +190,18 @@ curl http://localhost:3000/api/v1/system/health
 **Stop / logs**
 
 ```bash
-docker compose down          # Docker install
-docker compose logs -f gateway worker
+docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml down
+docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml logs -f gateway worker
 ```
 
-Copy `.env.example` to `.env` before production and set real secrets (`CLAWZ_JWT_SECRET`, `CLAWZ_WORKER_TOKEN`, disable `CLAWZ_DISABLE_AUTH`).
+**Fleet verification** (Docker socket on worker; spawns tenant agent containers):
+
+```bash
+./scripts/fleet-smoke.sh
+```
+
+Copy `.env.example` to `.env` before production and set real secrets (`CLAWZ_JWT_SECRET`, `CLAWZ_WORKER_TOKEN`, disable `CLAWZ_DISABLE_AUTH`).  
+Prebuilt images: `docker login ghcr.io` then install — see [docs/private-registry.md](docs/private-registry.md).
 
 Full install guide: **[INSTALL.md](INSTALL.md)** (all platforms, production checklist, troubleshooting).
 
@@ -211,9 +220,12 @@ cp .env.example .env
 #### 2. Docker Compose (recommended)
 
 ```bash
-docker compose up -d --build
+docker login ghcr.io
+docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d
 curl http://localhost:3000/api/v1/system/health
 ```
+
+Private registry: [docs/private-registry.md](docs/private-registry.md).
 
 #### 3. Or build from source
 

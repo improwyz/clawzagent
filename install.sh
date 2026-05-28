@@ -5,6 +5,7 @@
 #   curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh | bash
 #
 # Git one-liner (works for private repos if you have git credentials):
+#   docker login ghcr.io
 #   git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh
 #
 # Custom install dir:

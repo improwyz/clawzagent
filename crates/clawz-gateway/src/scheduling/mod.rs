@@ -26,7 +26,9 @@
 //! // and role context used by both admission and routing decisions.
 
 pub mod admission;
+pub mod context;
 pub mod tenant_router;
 
 pub use admission::{AdmissionController, AdmissionTicket};
+pub use context::tenant_context_from_auth;
 pub use tenant_router::TenantRouter;

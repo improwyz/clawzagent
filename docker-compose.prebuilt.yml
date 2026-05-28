@@ -1,0 +1,11 @@
+# Overlay: pull platform images from a registry (private GHCR recommended).
+# Usage: docker login ghcr.io && docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml pull
+
+services:
+  gateway:
+    image: ${CLAWZ_REGISTRY:-ghcr.io/improwyz}/clawz-gateway:${CLAWZ_IMAGE_TAG:-latest}
+    pull_policy: if_not_present
+
+  worker:
+    image: ${CLAWZ_REGISTRY:-ghcr.io/improwyz}/clawz-worker:${CLAWZ_IMAGE_TAG:-latest}
+    pull_policy: if_not_present

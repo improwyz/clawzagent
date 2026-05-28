@@ -256,12 +256,21 @@ impl AgentScheduler for BollardScheduler {
 
         // Pass runtime configuration into the container as env vars so the
         // agent process can self-identify and connect to the mesh.
-        let env: Vec<String> = vec![
+        let mut env: Vec<String> = vec![
             format!("CLAWZ_AGENT_ID={agent_id}"),
             format!("CLAWZ_TENANT_ID={}", ctx.tenant_id),
             format!("CLAWZ_MESH_IP=127.0.0.1"),
             format!("CLAWZ_MAX_TOOLS={}", spec.max_tools),
         ];
+        if let Ok(url) = std::env::var("CLAWZ_PUBLIC_URL")
+            .or_else(|_| std::env::var("CLAWZ_GATEWAY_URL"))
+        {
+            env.push(format!("CLAWZ_GATEWAY_URL={url}"));
+            env.push(format!("CLAWZ_PUBLIC_URL={url}"));
+        }
+        if let Ok(url) = std::env::var("WORKER_URL") {
+            env.push(format!("WORKER_URL={url}"));
+        }
 
         // Translate abstract resource limits from AgentSpec into Docker
         // HostConfig fields. Memory is expressed in bytes; CPU in nano-CPUs.

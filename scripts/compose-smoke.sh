@@ -11,6 +11,8 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 COMPOSE="${COMPOSE:-docker compose}"
+export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml:docker-compose.build.yml}"
+export CLAWZ_MODE="${CLAWZ_MODE:-micro}"
 GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:3000}"
 
 cleanup() {

@@ -1,17 +1,16 @@
-version: '3.8'
+# ClawZ platform stack (fleet/micro default).
+# Pull prebuilt images:  docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d
+# Build from source:     docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 
 services:
   gateway:
-    build:
-      context: .
-      dockerfile: Dockerfile.gateway
     ports:
       - "3000:3000"
     env_file:
       - .env
     environment:
       - RUST_LOG=info
-      - CLAWZ_MODE=standalone
+      - CLAWZ_MODE=micro
       - CLAWZ_DISABLE_AUTH=1
       - CLAWZ_STUB_PROVIDER=1
       - VALID_API_KEYS=dev-key
@@ -21,6 +20,7 @@ services:
       - WORKER_URL=http://worker:50051
       - DATABASE_URL=postgresql://postgres:password@db:5432/clawz
       - CLAWZ_PUBLIC_URL=http://localhost:3000
+      - CLAWZ_WORKER_FLEET_URL=http://worker:50051
     depends_on:
       db:
         condition: service_healthy
@@ -30,20 +30,23 @@ services:
       - clawz-net
 
   worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.worker
     ports:
       - "50051:50051"
     env_file:
       - .env
     environment:
       - RUST_LOG=info
-      - CLAWZ_MODE=standalone
+      - CLAWZ_MODE=micro
       - CLAWZ_STUB_PROVIDER=1
       - CLAWZ_WORKER_TOKEN=dev-compose-worker-token
       - DATABASE_URL=postgresql://postgres:password@db:5432/clawz
       - CLAWZ_CONTROL_ADDR=0.0.0.0:50051
+      - CLAWZ_AGENT_IMAGE=${CLAWZ_AGENT_IMAGE:-ghcr.io/improwyz/clawz-agent:latest}
+      - CLAWZ_DOCKER_NETWORK=${CLAWZ_DOCKER_NETWORK:-clawz-net}
+      - CLAWZ_MAX_AGENTS=${CLAWZ_MAX_AGENTS:-50}
+      - CLAWZ_PUBLIC_URL=http://gateway:3000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       db:
         condition: service_healthy
@@ -67,6 +70,7 @@ services:
 
 networks:
   clawz-net:
+    name: clawz-net
     driver: bridge
 
 volumes:

@@ -19,13 +19,19 @@ use clawz_services::dto::{
     ProviderHealthResponse, RunTurnRequest, RunTurnResponse, TestChannelRequest,
     TestChannelResponse,
 };
+use clawz_core::traits::AgentScheduler;
+use clawz_core::types::orchestration::AgentSpec;
+use clawz_core::types::tenant::{Role, TenantContext, TenantId};
+use serde::Deserialize;
 use serde_json::json;
 
+use crate::orchestration::default_agent_spec;
 use crate::service::WorkerService;
 
 #[derive(Clone)]
 pub struct ControlState {
     pub service: Arc<WorkerService>,
+    pub agent_scheduler: Option<Arc<dyn AgentScheduler>>,
 }
 
 /// Expected bearer token from `WORKER_INTERNAL_TOKEN` or `CLAWZ_WORKER_TOKEN`.
@@ -81,6 +87,8 @@ pub fn routes(state: ControlState) -> Router {
         .route("/v1/channels/test", post(test_channel))
         .route("/v1/channels/webhook", post(channel_webhook))
         .route("/v1/channels/send", post(channel_send))
+        .route("/v1/fleet/spawn", post(fleet_spawn))
+        .route("/v1/fleet/agents", get(fleet_list_agents))
         .layer(middleware::from_fn(auth_middleware))
         .with_state(state)
 }
@@ -209,4 +217,85 @@ async fn channel_send(
         .await
         .map(Json)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+struct FleetSpawnBody {
+    tenant_id: String,
+    #[serde(default)]
+    role: Option<String>,
+    #[serde(default)]
+    spec: Option<AgentSpec>,
+    #[serde(default)]
+    capabilities: Option<Vec<String>>,
+}
+
+fn role_from_str(s: &str) -> Role {
+    match s.to_lowercase().as_str() {
+        "owner" => Role::Owner,
+        "admin" => Role::Admin,
+        "operator" => Role::Operator,
+        "agent" => Role::Agent,
+        "tool" => Role::Tool,
+        _ => Role::Viewer,
+    }
+}
+
+async fn fleet_spawn(
+    State(state): State<ControlState>,
+    Json(body): Json<FleetSpawnBody>,
+) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let scheduler = state
+        .agent_scheduler
+        .clone()
+        .or_else(|| state.service.agent_scheduler())
+        .ok_or((
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            "fleet scheduler not available (set CLAWZ_MODE=micro and mount docker.sock)"
+                .to_string(),
+        ))?;
+
+    let ctx = TenantContext::new(
+        TenantId::new(body.tenant_id),
+        body.role
+            .as_deref()
+            .map(role_from_str)
+            .unwrap_or(Role::Operator),
+    );
+    let mut spec = body.spec.unwrap_or_else(default_agent_spec);
+    if let Some(caps) = body.capabilities {
+        spec.capabilities = caps;
+    }
+
+    let handle = scheduler
+        .spawn_agent(&ctx, spec)
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(json!({ "handle": handle })))
+}
+
+async fn fleet_list_agents(
+    State(state): State<ControlState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let tenant_id = params.get("tenant_id").cloned().unwrap_or_else(|| {
+        std::env::var("CLAWZ_TENANT_ID").unwrap_or_else(|_| "default".to_string())
+    });
+
+    let scheduler = state
+        .agent_scheduler
+        .clone()
+        .or_else(|| state.service.agent_scheduler())
+        .ok_or((
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            "fleet scheduler not available".to_string(),
+        ))?;
+
+    let agents = scheduler
+        .list_agents(&tenant_id)
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(json!({ "agents": agents })))
 }

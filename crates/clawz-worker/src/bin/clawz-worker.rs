@@ -6,7 +6,9 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use clawz_core::deployment::DeploymentMode;
 use clawz_worker::control_api::{self, ControlState};
+use clawz_worker::orchestration::factory::create_scheduler;
 use clawz_worker::service::WorkerService;
 use tracing_subscriber::EnvFilter;
 
@@ -35,7 +37,26 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let service = Arc::new(WorkerService::new().await?);
-    let app = control_api::routes(ControlState { service });
+    let mode = DeploymentMode::from_env();
+    let agent_scheduler = match mode {
+        DeploymentMode::Standalone => None,
+        DeploymentMode::Micro | DeploymentMode::Elastic => {
+            match create_scheduler(mode) {
+                Ok(s) => {
+                    tracing::info!("worker fleet scheduler ready ({mode:?})");
+                    Some(s)
+                }
+                Err(e) => {
+                    tracing::warn!("worker fleet scheduler unavailable: {e}");
+                    None
+                }
+            }
+        }
+    };
+    let app = control_api::routes(ControlState {
+        service,
+        agent_scheduler,
+    });
 
     let listener = tokio::net::TcpListener::bind(control_addr).await?;
     tracing::info!("clawz-worker control API listening on {}", control_addr);

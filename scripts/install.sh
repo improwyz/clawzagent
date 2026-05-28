@@ -10,6 +10,10 @@
 #
 # Options:
 #   --docker      Use Docker Compose (default when Docker is available)
+#   --build       Build gateway/worker images locally instead of pulling from registry
+#                 (see docker-compose.build.yml; no GHCR login required)
+#   --registry R  Image registry (default: ghcr.io/improwyz)
+#   --tag TAG     Image tag (default: latest)
 #   --source      Build and run from source with cargo (no Docker)
 #   --with-web    Build the React dashboard in web/
 #   --dir PATH    Install/clone location (default: ~/clawz)
@@ -69,6 +73,7 @@ source "${SCRIPT_DIR}/install-common.sh"
 
 MODE="auto"
 WITH_WEB=0
+CLAWZ_INSTALL_BUILD=0
 
 usage() {
   sed -n '2,17p' "$0"
@@ -78,6 +83,15 @@ usage() {
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --docker) MODE="docker"; shift ;;
+    --build) CLAWZ_INSTALL_BUILD=1; shift ;;
+    --registry)
+      CLAWZ_REGISTRY="$2"
+      shift 2
+      ;;
+    --tag)
+      CLAWZ_IMAGE_TAG="$2"
+      shift 2
+      ;;
     --source) MODE="source"; shift ;;
     --with-web) WITH_WEB=1; shift ;;
     --dir)

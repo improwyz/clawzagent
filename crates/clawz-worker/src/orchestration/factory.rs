@@ -25,6 +25,39 @@ use clawz_core::{deployment::DeploymentMode, error::Result, traits::AgentSchedul
 
 // Dependency: sibling modules — concrete scheduler implementations
 use super::{BollardScheduler, StandaloneScheduler};
+use super::tool_orchestrator::{DockerToolOrchestrator, InMemoryToolOrchestrator};
+use clawz_core::traits::ToolOrchestrator;
+use clawz_core::types::orchestration::AgentSpec;
+
+/// Default agent image from environment (`CLAWZ_AGENT_IMAGE` or registry/tag).
+pub fn env_agent_image() -> String {
+    std::env::var("CLAWZ_AGENT_IMAGE").unwrap_or_else(|_| {
+        let registry =
+            std::env::var("CLAWZ_REGISTRY").unwrap_or_else(|_| "ghcr.io/improwyz".to_string());
+        let tag = std::env::var("CLAWZ_IMAGE_TAG").unwrap_or_else(|_| "latest".to_string());
+        format!("{registry}/clawz-agent:{tag}")
+    })
+}
+
+/// Docker network for spawned agent/tool containers (compose: `clawz-net`).
+pub fn env_docker_network() -> String {
+    std::env::var("CLAWZ_DOCKER_NETWORK").unwrap_or_else(|_| "clawz-net".to_string())
+}
+
+/// Maximum concurrent agent containers on this worker host.
+pub fn env_max_agents() -> usize {
+    std::env::var("CLAWZ_MAX_AGENTS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(50)
+}
+
+/// [`AgentSpec`] with image and limits from environment.
+pub fn default_agent_spec() -> AgentSpec {
+    let mut spec = AgentSpec::default();
+    spec.image = env_agent_image();
+    spec
+}
 
 /// Creates an [`AgentScheduler`] appropriate for the given deployment mode.
 ///
@@ -51,8 +84,20 @@ pub fn create_scheduler(mode: DeploymentMode) -> Result<Arc<dyn AgentScheduler>>
         // Both Micro and Elastic map to the same backend; elasticity is handled
         // at a higher level ( orchestrator / autoscaler ) rather than here.
         DeploymentMode::Micro | DeploymentMode::Elastic => {
-            let scheduler = BollardScheduler::new(10)?;
+            let scheduler =
+                BollardScheduler::with_network(env_max_agents(), env_docker_network())?;
             Ok(Arc::new(scheduler))
+        }
+    }
+}
+
+/// Tool orchestrator for isolated tool types (browser, sandbox, MCP bridge).
+pub fn create_tool_orchestrator(mode: DeploymentMode) -> Result<Arc<dyn ToolOrchestrator>> {
+    match mode {
+        DeploymentMode::Standalone => Ok(Arc::new(InMemoryToolOrchestrator::new())),
+        DeploymentMode::Micro | DeploymentMode::Elastic => {
+            let orch = DockerToolOrchestrator::with_network(env_docker_network())?;
+            Ok(Arc::new(orch))
         }
     }
 }

@@ -4,8 +4,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use clawz_core::deployment::DeploymentMode;
 use clawz_core::error::{ClawzError, Result};
-use clawz_core::traits::GovernanceEngine;
+use clawz_core::traits::{AgentScheduler, GovernanceEngine, ToolOrchestrator};
+use clawz_core::types::orchestration::{SpawnConfig, ToolType};
 use clawz_core::types::agent::AgentConfig;
 use clawz_core::types::message::{ChatRequest, Message};
 use clawz_services::dto::{
@@ -26,6 +28,7 @@ use crate::runtime::agent::{AgentRuntime, RuntimeDependencies};
 use crate::runtime::fan_out::{AggregationStrategy, FanOut, FanOutConfig};
 use crate::runtime::team::{Task, Team, TeamRole};
 use crate::runtime::turn_coordinator::{RoomRuntimeProvider, TurnCoordinator};
+use crate::orchestration::factory::{create_scheduler, create_tool_orchestrator, env_docker_network};
 use crate::tools::registry::ToolRegistry;
 use crate::tools::tool_trait::{ToolConfig, ToolContext};
 use std::time::Duration;
@@ -37,6 +40,17 @@ pub struct WorkerService {
     provider_router: Arc<ProviderRouter>,
     runtimes: RwLock<HashMap<String, Arc<AgentRuntime>>>,
     turn_coordinator: TurnCoordinator,
+    agent_scheduler: Option<Arc<dyn AgentScheduler>>,
+    tool_orchestrator: Option<Arc<dyn ToolOrchestrator>>,
+}
+
+fn isolated_tool_type(tool_name: &str) -> Option<ToolType> {
+    match tool_name {
+        "browser" | "browser_navigate" | "web_browser" => Some(ToolType::Browser),
+        "sandbox" | "bash" | "shell" | "code_sandbox" => Some(ToolType::Sandbox),
+        "mcp" | "mcp_bridge" | "mcp_call" => Some(ToolType::McpBridge),
+        _ => None,
+    }
 }
 
 impl WorkerService {
@@ -58,13 +72,26 @@ impl WorkerService {
         let tools = Arc::new(ToolRegistry::new());
         tools.register_builtins().await;
 
+        let mode = DeploymentMode::from_env();
+        let agent_scheduler = match mode {
+            DeploymentMode::Standalone => None,
+            DeploymentMode::Micro | DeploymentMode::Elastic => create_scheduler(mode).ok(),
+        };
+        let tool_orchestrator = create_tool_orchestrator(mode).ok();
+
         Ok(Self {
             governance,
             tools,
             provider_router,
             runtimes: RwLock::new(HashMap::new()),
             turn_coordinator: TurnCoordinator::new(),
+            agent_scheduler,
+            tool_orchestrator,
         })
+    }
+
+    pub fn agent_scheduler(&self) -> Option<Arc<dyn AgentScheduler>> {
+        self.agent_scheduler.clone()
     }
 
     pub fn approval_workflow(&self) -> Arc<crate::governance::approval::ApprovalWorkflow> {
@@ -168,7 +195,32 @@ impl WorkerService {
             config: ToolConfig::default(),
         };
 
+        let tool_handle = if let (Some(orch), Some(tool_type)) = (
+            self.tool_orchestrator.as_ref(),
+            isolated_tool_type(&req.tool_name),
+        ) {
+            let config = SpawnConfig {
+                memory_mb: 256,
+                cpu_millicores: 500,
+                image: String::new(),
+                env: vec![],
+                labels: vec![(
+                    "owner-agent-id".to_string(),
+                    req.agent_id.clone(),
+                )],
+                network: env_docker_network(),
+            };
+            Some(orch.spawn_tool(tool_type, config).await?)
+        } else {
+            None
+        };
+
         let result = self.tools.execute(&req.tool_name, &ctx, req.args).await?;
+
+        if let (Some(orch), Some(handle)) = (self.tool_orchestrator.as_ref(), tool_handle.as_ref())
+        {
+            let _ = orch.reap_tool(handle).await;
+        }
 
         Ok(ExecuteToolResponse {
             tool_name: req.tool_name,

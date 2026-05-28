@@ -33,7 +33,11 @@ pub use bollard_scheduler::BollardScheduler;
 
 /// Factory function that selects a scheduler implementation based on the
 /// current [`DeploymentMode`].
-pub use factory::create_scheduler;
+pub use factory::{
+    create_scheduler, create_tool_orchestrator, default_agent_spec, env_agent_image,
+    env_docker_network, env_max_agents,
+};
+pub use tool_orchestrator::{DockerToolOrchestrator, InMemoryToolOrchestrator};
 
 /// Manager that tracks tool lifetimes and reaps idle or orphaned tools.
 pub use lifecycle::LifecycleManager;

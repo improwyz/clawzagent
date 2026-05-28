@@ -298,15 +298,21 @@ The `DeploymentMode` enum (clawz-core::deployment) controls which subsystems act
 
 ## Installation
 
-For local development, use the one-click installer (Docker Compose by default):
+For local development, use the one-click installer (Docker Compose **micro/fleet** by default):
 
 ```bash
-./scripts/install.sh              # Linux/macOS — gateway + worker + Postgres
-./scripts/install.sh --with-web   # Include React dashboard
-./scripts/install.sh --source     # Force cargo build without Docker
+docker login ghcr.io              # required for private prebuilt images on GHCR
+git clone https://github.com/improwyz/clawz.git ~/clawz && cd ~/clawz
+./scripts/install.sh              # pull prebuilt gateway/worker (falls back to local build)
+./scripts/install.sh --build      # force local image build (docker-compose.build.yml)
+./scripts/install.sh --with-web   # include React dashboard
+./scripts/install.sh --source     # cargo build without Docker
 ```
 
-Windows: `.\scripts\install.ps1`. Full guide: **[INSTALL.md](INSTALL.md)**.
+Compose overlays: `docker-compose.prebuilt.yml` (registry pull), `docker-compose.build.yml` (local build).  
+Private registry: **[docs/private-registry.md](docs/private-registry.md)**. Full guide: **[INSTALL.md](INSTALL.md)**.
+
+Windows: `.\scripts\install.ps1`.
 
 **Branding:** Logo assets in **`web/public/branding/`** — silver on dark, copper on light. UI tokens: **[crates/clawz-tauri/design/design-system.md](crates/clawz-tauri/design/design-system.md)**.
 
