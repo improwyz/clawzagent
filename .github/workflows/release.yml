@@ -63,36 +63,56 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  binaries:
+  # Optional: attach bare-metal binaries to the GitHub Release (not required for GHCR install).
+  # The old softprops/upload-gh-release-assets action was removed from GitHub Marketplace.
+  build-binary:
     runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
             arch: amd64
+            cross: x86_64-linux-gnu
           - target: aarch64-unknown-linux-gnu
             arch: arm64
-          - target: riscv64gc-unknown-linux-gnu
-            arch: riscv64
+            cross: aarch64-linux-gnu
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cross-compilation toolchains
+      - name: Install cross-compilation toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-cross-${{ matrix.arch }} binutils-${{ matrix.arch }}-linux-gnu
+          sudo apt-get install -y "gcc-${{ matrix.cross }}" "binutils-${{ matrix.cross }}"
 
       - name: Build worker binary
         run: |
-          cargo build --release --features t1 -p clawz-worker
-          mv target/release/clawz-worker "clawz-${{ matrix.arch }}"
+          rustup target add "${{ matrix.target }}"
+          cargo build --release -p clawz-worker --target "${{ matrix.target }}"
+          cp "target/${{ matrix.target }}/release/clawz-worker" "clawz-${{ matrix.arch }}"
 
-      - name: Upload Release Asset
-        uses: softprops/upload-gh-release-assets@v2
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: |
-            clawz-${{ matrix.arch }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          name: clawz-${{ matrix.arch }}
+          path: clawz-${{ matrix.arch }}
+
+  github-release:
+    needs: [docker, build-binary]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release with binary assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/clawz-*
 
   install-script:
     runs-on: ubuntu-latest
