@@ -1,3 +1,4 @@
+import { Outlet } from 'react-router-dom';
 import { AuthGate } from './AuthGate';
 import { Shell } from '../layout/Shell';
 
@@ -5,7 +6,9 @@ import { Shell } from '../layout/Shell';
 export function AuthedLayout() {
   return (
     <AuthGate>
-      <Shell />
+      <Shell>
+        <Outlet />
+      </Shell>
     </AuthGate>
   );
 }

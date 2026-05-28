@@ -14,7 +14,7 @@
     "react": "^19",
     "react-dom": "^19",
     "react-grid-layout": "^1",
-    "react-router-dom": "^7",
+    "react-router-dom": "^6.28.2",
     "recharts": "^2",
     "zustand": "^5"
   },
