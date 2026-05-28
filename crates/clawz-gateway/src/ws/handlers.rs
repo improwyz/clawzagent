@@ -189,49 +189,29 @@ async fn handle_events(mut socket: WebSocket) {
 }
 
 // ---------------------------------------------------------------------------
-// metrics — jittered operational metrics
+// metrics — live operational metrics from gateway state
 // ---------------------------------------------------------------------------
 
-/// Upgrade an HTTP connection to a WebSocket that pushes simulated gateway
-/// metrics every 2 seconds.
-pub async fn metrics(ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(handle_metrics)
+/// Upgrade an HTTP connection to a WebSocket that pushes gateway metrics every 2 seconds.
+pub async fn metrics(State(state): State<AppState>, ws: WebSocketUpgrade) -> Response {
+    ws.on_upgrade(move |socket| handle_metrics(socket, state))
 }
 
-/// Streams synthetic operational metrics that jitter within realistic bounds.
+/// Streams the same snapshot as `GET /dashboard/metrics` (no synthetic jitter).
 ///
 /// Protocol:
 /// - Outbound: `{"type":"metrics","timestamp":"...","data":{...}}`
-async fn handle_metrics(mut socket: WebSocket) {
+async fn handle_metrics(mut socket: WebSocket, state: AppState) {
     let mut tick = interval(Duration::from_secs(2));
-    // Why: start with "plausible" demo values so the first frame isn't all zeros.
-    let mut active_agents: u32 = 3;
-    let mut rpm: u32 = 42;
-    let mut latency: u32 = 120;
-    let mut memory: u32 = 512;
-    let mut cpu: u32 = 25;
 
     loop {
         tokio::select! {
             _ = tick.tick() => {
-                // Why: deterministic pseudo-random walk keeps the demo dashboard
-                // visually alive without needing an external metrics source.
-                active_agents = (active_agents + 1) % 12;
-                rpm = (rpm + 7) % 200;
-                latency = 50 + (latency + 13) % 150;
-                memory = 256 + (memory + 17) % 512;
-                cpu = (cpu + 5) % 80;
-
+                let snapshot = crate::routes::dashboard::snapshot_dashboard_metrics(&state).await;
                 let payload = json!({
                     "type": "metrics",
                     "timestamp": Utc::now().to_rfc3339(),
-                    "data": {
-                        "active_agents": active_agents,
-                        "requests_per_min": rpm,
-                        "avg_latency_ms": latency,
-                        "memory_mb": memory,
-                        "cpu_percent": cpu,
-                    }
+                    "data": snapshot,
                 });
                 if socket.send(text_msg!(payload)).await.is_err() {
                     break;

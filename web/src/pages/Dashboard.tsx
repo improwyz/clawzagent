@@ -51,10 +51,11 @@ export function Dashboard() {
     return () => wsRef.current?.close();
   }, []);
 
-  const activeAgents = live.active_agents ?? metrics?.active_agents;
-  const totalConvos = live.total_conversations ?? metrics?.total_conversations;
-  const reqPerMin = live.requests_per_min ?? metrics?.requests_per_min;
-  const avgLatency = live.avg_latency_ms ?? metrics?.avg_latency_ms;
+  // REST snapshot is source of truth; WS only fills gaps while the query is loading.
+  const activeAgents = metrics?.active_agents ?? live.active_agents;
+  const totalConvos = metrics?.total_conversations ?? live.total_conversations;
+  const reqPerMin = metrics?.requests_per_min ?? live.requests_per_min;
+  const avgLatency = metrics?.avg_latency_ms ?? live.avg_latency_ms;
 
   const chartData = metrics?.requests_over_time ?? [
     { time: '00:00', count: 0 },
@@ -76,9 +77,7 @@ export function Dashboard() {
           label="Active Agents"
           value={activeAgents ?? '—'}
           loading={metricsLoading && activeAgents === undefined}
-          variant="success"
-          trend="up"
-          change="live"
+          variant={activeAgents ? 'success' : 'default'}
         />
         <StatCard
           label="Total Conversations"
