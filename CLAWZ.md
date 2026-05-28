@@ -89,9 +89,9 @@ The codebase is a **Cargo workspace of eight crates** under `crates/`, plus an o
 
 | Platform | Command |
 |----------|---------|
-| **Linux / macOS** | `curl -fsSL https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.sh \| bash` |
+| **Linux / macOS** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/scripts/install.sh \| bash` |
 | **Linux / macOS** (from clone) | `./install.sh` or `./scripts/install.sh` |
-| **Windows (PowerShell)** | `irm https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.ps1 \| iex` |
+| **Windows (PowerShell)** | `irm https://github.com/improwyz/clawz/raw/main/scripts/install.ps1 \| iex` |
 | **Windows** (from clone) | `.\install.ps1` or `.\scripts\install.ps1` |
 
 Options: `--docker` / `-Docker`, `--source` / `-Source`, `--with-web` / `-WithWeb`, `--dir PATH` / `-InstallDir PATH`.

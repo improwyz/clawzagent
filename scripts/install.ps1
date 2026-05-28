@@ -6,7 +6,7 @@
 #   .\scripts\install.ps1 -WithWeb
 #
 # Remote one-liner (PowerShell):
-#   irm https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.ps1 | iex
+#   irm https://github.com/improwyz/clawz/raw/main/scripts/install.ps1 | iex
 #
 param(
     [switch]$Docker,

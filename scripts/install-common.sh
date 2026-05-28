@@ -8,6 +8,10 @@ CLAWZ_INSTALL_DIR="${CLAWZ_INSTALL_DIR:-${HOME}/clawz}"
 GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:3000}"
 COMPOSE="${COMPOSE:-docker compose}"
 
+_SCRIPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)"
+# shellcheck source=install-deps.sh
+source "${_SCRIPT_LIB_DIR}/install-deps.sh"
+
 log() { printf '\033[1;34m[clawz]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[clawz]\033[0m %s\n' "$*"; }
 err() { printf '\033[1;31m[clawz]\033[0m %s\n' "$*" >&2; }
@@ -46,7 +50,7 @@ clone_or_update_repo() {
     git -C "$CLAWZ_INSTALL_DIR" pull --ff-only origin "$CLAWZ_BRANCH" || true
   else
     log "Cloning ClawZ into $CLAWZ_INSTALL_DIR"
-    require_command git "Install Git: https://git-scm.com/downloads"
+    ensure_git
     git clone --depth 1 --branch "$CLAWZ_BRANCH" "$CLAWZ_REPO_URL" "$CLAWZ_INSTALL_DIR"
   fi
   cd "$CLAWZ_INSTALL_DIR"
@@ -111,13 +115,9 @@ EOF
 }
 
 install_with_docker() {
-  require_command docker "Install Docker: https://docs.docker.com/get-docker/"
-  if ! docker info >/dev/null 2>&1; then
-    err "Docker daemon is not running. Start Docker Desktop / dockerd and retry."
-    exit 1
-  fi
+  ensure_docker || exit 1
   if ! $COMPOSE version >/dev/null 2>&1; then
-    err "Docker Compose v2 not found (try: docker compose version)"
+    err "Docker Compose v2 not found (try: ${COMPOSE} version)"
     exit 1
   fi
 
@@ -133,7 +133,8 @@ install_with_docker() {
 }
 
 install_from_source() {
-  require_command cargo "Install Rust 1.87+: https://rustup.rs"
+  ensure_rust || exit 1
+  load_cargo_env
   require_command curl "curl is required for smoke checks"
 
   write_env_file
@@ -166,7 +167,7 @@ install_web_dashboard() {
     warn "web/ directory not found — skipping dashboard"
     return
   fi
-  require_command npm "Install Node.js 20+: https://nodejs.org/"
+  ensure_node || exit 1
   log "Installing web dashboard dependencies..."
   (cd web && npm ci)
   log "Building web dashboard..."

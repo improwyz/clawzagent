@@ -138,24 +138,42 @@ The Cargo workspace under `crates/` layers shared libraries beneath the gateway 
 
 ## Quick Start
 
+Repository: **[github.com/improwyz/clawz](https://github.com/improwyz/clawz)** (branch `main`).
+
 ### One-click install
 
-Pick your platform — the installer clones (or uses) the repo, creates `.env`, starts **gateway + worker + Postgres (pgvector)**, and waits for health checks.
+The installer bootstraps missing dependencies (**Git**, **curl**, **Docker** or **Rust**), clones (or uses) the repo, writes `.env`, starts **gateway + worker + Postgres (pgvector)**, and waits for health checks.
 
 | Platform | Command |
 |----------|---------|
-| **Linux / macOS** | `curl -fsSL https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.sh \| bash` |
+| **Linux / macOS** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/scripts/install.sh \| bash` |
 | **Linux / macOS** (from clone) | `./install.sh` or `./scripts/install.sh` |
-| **Windows (PowerShell)** | `irm https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.ps1 \| iex` |
+| **Windows (PowerShell)** | `irm https://github.com/improwyz/clawz/raw/main/scripts/install.ps1 \| iex` |
 | **Windows** (from clone) | `.\install.ps1` or `.\scripts\install.ps1` |
+
+**Install script URLs (GitHub raw, not a `/raw/main/` folder in the repo)**
+
+```text
+https://github.com/{owner}/{repo}/raw/{branch}/{path/in/repo}
+```
+
+| File on `main` | Download URL |
+|----------------|--------------|
+| `scripts/install.sh` | `https://github.com/improwyz/clawz/raw/main/scripts/install.sh` |
+| `scripts/install-common.sh` | `.../raw/main/scripts/install-common.sh` |
+| `scripts/install-deps.sh` | `.../raw/main/scripts/install-deps.sh` |
+| `scripts/install.ps1` | `.../raw/main/scripts/install.ps1` |
+
+The pipe-to-bash one-liner loads `install.sh` first, then fetches `install-common.sh` and `install-deps.sh` from the same `scripts/` path. Use `github.com/.../raw/...` URLs (not `github.com/.../main/...` without `raw`, and not `raw.githubusercontent.com` if that host is blocked).
 
 **Options**
 
 | Flag | Description |
 |------|-------------|
-| `--docker` / `-Docker` | Force Docker Compose (default when Docker is running) |
-| `--source` / `-Source` | Build with `cargo` and run local binaries (no Docker) |
-| `--with-web` / `-WithWeb` | Build the React dashboard in `web/` |
+| *(default)* | Docker Compose when Docker is available; otherwise installs Rust and builds from source |
+| `--docker` / `-Docker` | Force Docker Compose (installs Docker if missing) |
+| `--source` / `-Source` | Force `cargo` build (installs Rust via rustup if missing) |
+| `--with-web` / `-WithWeb` | Build the React dashboard in `web/` (installs Node.js 20+ if missing) |
 | `--dir PATH` / `-InstallDir PATH` | Clone/install location (default: `~/clawz` or `%USERPROFILE%\clawz`) |
 
 After install, open **http://localhost:3000** and run:

@@ -18,6 +18,33 @@ Windows users need **PowerShell 5.1+** for the install script.
 
 ---
 
+## GitHub repo layout vs install URLs
+
+Public repo: **[github.com/improwyz/clawz](https://github.com/improwyz/clawz)** — default branch **`main`**.
+
+`/raw/main/` is **not a folder in the repository**. It is GitHub’s URL pattern to download file contents:
+
+```text
+https://github.com/{owner}/{repo}/raw/{branch}/{path/in/repo}
+```
+
+| Path in repo (on `main`) | Purpose | Raw download URL |
+|--------------------------|---------|------------------|
+| `scripts/install.sh` | Linux/macOS one-click installer (entry point) | `https://github.com/improwyz/clawz/raw/main/scripts/install.sh` |
+| `scripts/install-common.sh` | Shared install helpers (loaded by `install.sh`) | `.../raw/main/scripts/install-common.sh` |
+| `scripts/install-deps.sh` | Auto-install Docker, Rust, Git, etc. | `.../raw/main/scripts/install-deps.sh` |
+| `scripts/install.ps1` | Windows installer | `.../raw/main/scripts/install.ps1` |
+| `install.sh` (repo root) | Optional wrapper → `scripts/install.sh` | `.../raw/main/install.sh` (only if present in repo) |
+| `docker-compose.yml` | Docker stack | clone repo; not used in curl one-liner |
+| `Cargo.toml`, `crates/` | Source build | clone repo |
+
+**Do not use** `https://github.com/.../main/scripts/...` (missing `/raw/`) — that returns an HTML page, not the script.  
+**Do not use** `raw.githubusercontent.com/...` if your environment blocks that host; the `github.com/.../raw/...` URLs serve the same bytes.
+
+The remote one-liner fetches `install.sh` first, then downloads `install-common.sh` and `install-deps.sh` from the same `scripts/` prefix. All three files must exist on `main` for the pipe-to-bash flow to work.
+
+---
+
 ## One-click install (recommended)
 
 The installer clones (or uses) the repo, creates `.env` from [.env.example](.env.example), starts **gateway + worker + Postgres (pgvector)**, and waits for health checks.
@@ -27,7 +54,7 @@ The installer clones (or uses) the repo, creates `.env` from [.env.example](.env
 **Remote one-liner:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.sh | bash
+curl -fsSL https://github.com/improwyz/clawz/raw/main/scripts/install.sh | bash
 ```
 
 **From a clone:**
@@ -39,10 +66,10 @@ curl -fsSL https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install
 
 ### Windows (PowerShell)
 
-**Remote one-liner:**
+**Remote one-liner** (after `scripts/install.ps1` is on `main`):
 
 ```powershell
-irm https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.ps1 | iex
+irm https://github.com/improwyz/clawz/raw/main/scripts/install.ps1 | iex
 ```
 
 **From a clone:**

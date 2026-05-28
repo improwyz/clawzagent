@@ -7,7 +7,7 @@
 #   ./scripts/install.sh --with-web
 #
 # Remote one-liner:
-#   curl -fsSL https://raw.githubusercontent.com/improwyz/clawz/main/scripts/install.sh | bash
+#   curl -fsSL https://github.com/improwyz/clawz/raw/main/scripts/install.sh | bash
 #
 # Options:
 #   --docker      Use Docker Compose (default when Docker is available)
@@ -18,7 +18,30 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLAWZ_RAW_BASE="${CLAWZ_RAW_BASE:-https://github.com/improwyz/clawz/raw/main/scripts}"
+
+_resolve_script_dir() {
+  local candidate=""
+  if [[ -n "${BASH_SOURCE[0]:-}" && "${BASH_SOURCE[0]}" != "bash" && "${BASH_SOURCE[0]}" != "-" ]]; then
+    candidate="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd)" || true
+  fi
+  if [[ -n "$candidate" && -f "${candidate}/install-common.sh" ]]; then
+    echo "$candidate"
+    return 0
+  fi
+  command -v curl >/dev/null 2>&1 || {
+    echo "curl is required for the remote installer. Install curl and retry." >&2
+    exit 1
+  }
+  local tmp
+  tmp="$(mktemp -d)"
+  for f in install-common.sh install-deps.sh; do
+    curl -fsSL "${CLAWZ_RAW_BASE}/${f}" -o "${tmp}/${f}"
+  done
+  echo "$tmp"
+}
+
+SCRIPT_DIR="$(_resolve_script_dir)"
 # shellcheck source=install-common.sh
 source "${SCRIPT_DIR}/install-common.sh"
 
@@ -55,6 +78,9 @@ fi
 
 log "ClawZ installer — ${OS}"
 
+ensure_curl
+ensure_git
+
 if ! ensure_repo_root "$SCRIPT_DIR/.."; then
   clone_or_update_repo
 else
@@ -65,21 +91,23 @@ ROOT="$(pwd)"
 log "Using repository at $ROOT"
 
 if [[ "$MODE" == "auto" ]]; then
-  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  if ensure_docker; then
     MODE="docker"
   else
+    warn "Docker unavailable — installing Rust and using source build"
+    ensure_rust
     MODE="source"
-    warn "Docker not available — falling back to source install"
   fi
 fi
 
 case "$MODE" in
-  docker) install_with_docker ;;
-  source) install_from_source ;;
+  docker) ensure_docker; install_with_docker ;;
+  source) ensure_rust; install_from_source ;;
   *) err "Invalid mode: $MODE"; exit 1 ;;
 esac
 
 if [[ "$WITH_WEB" -eq 1 ]]; then
+  ensure_node
   install_web_dashboard
 fi
 
