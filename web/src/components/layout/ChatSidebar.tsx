@@ -10,11 +10,12 @@ export function ChatSidebar({ width, onResize }: { width: number; onResize: (w: 
   const startWidthRef = useRef(width);
   const { chatAgentId, chatRoomId, setChatRoomId } = useAppStore();
 
-  const { data: rooms = [] } = useQuery({
+  const { data: roomsRaw } = useQuery({
     queryKey: ['rooms'],
     queryFn: fetchRooms,
     refetchInterval: 30_000,
   });
+  const rooms = Array.isArray(roomsRaw) ? roomsRaw : [];
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     isResizing.current = true;

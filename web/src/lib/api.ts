@@ -1,4 +1,6 @@
-const API_BASE = '/api/v1';
+/** Default: same-origin `/api/v1` (Vite dev/preview proxy). Override at build: VITE_API_BASE=http://host:3000/api/v1 */
+const API_BASE =
+  (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '/api/v1';
 
 function authHeaders(): Record<string, string> {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('clawz_token') : null;
@@ -10,11 +12,25 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...init?.headers },
     ...init,
   });
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${res.status}: ${text}`);
+    throw new Error(`API ${res.status}: ${text.slice(0, 200)}`);
   }
-  return res.json() as Promise<T>;
+  const ctype = res.headers.get('content-type') ?? '';
+  if (!ctype.includes('json') && text.trimStart().startsWith('<')) {
+    throw new Error(
+      'API returned HTML instead of JSON — is the gateway reachable? ' +
+        'For vite preview, set preview.proxy in vite.config.ts or build with VITE_API_BASE=http://host:3000/api/v1',
+    );
+  }
+  if (!text) {
+    return undefined as T;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`API returned invalid JSON: ${text.slice(0, 120)}`);
+  }
 }
 
 interface PaginatedResponse<T> {
@@ -27,6 +43,18 @@ function unwrapData<T>(payload: PaginatedResponse<T> | T): T {
     return (payload as PaginatedResponse<T>).data as T;
   }
   return payload as T;
+}
+
+/** Normalize gateway list payloads: `{ data }`, `{ rooms }`, or a bare array. */
+function asArray<T>(payload: unknown): T[] {
+  if (Array.isArray(payload)) return payload as T[];
+  if (payload != null && typeof payload === 'object') {
+    const obj = payload as Record<string, unknown>;
+    if (Array.isArray(obj.data)) return obj.data as T[];
+    if (Array.isArray(obj.rooms)) return obj.rooms as T[];
+    if (Array.isArray(obj.items)) return obj.items as T[];
+  }
+  return [];
 }
 
 // ── Agents ─────────────────────────────────────────────────────────────────
@@ -43,8 +71,8 @@ export interface Agent {
 }
 
 export async function fetchAgents() {
-  const res = await req<PaginatedResponse<Agent[]> | Agent[]>('/agents');
-  return unwrapData(res) ?? [];
+  const res = await req<PaginatedResponse<Agent[]> | Agent[] | unknown>('/agents');
+  return asArray<Agent>(res);
 }
 export function fetchAgent(id: string) { return req<Agent>(`/agents/${id}`); }
 export function createAgent(data: Partial<Agent>) {
@@ -191,8 +219,8 @@ export interface Channel {
 }
 
 export async function fetchChannels() {
-  const res = await req<PaginatedResponse<Channel[]> | Channel[]>('/channels');
-  const raw = unwrapData(res) ?? [];
+  const res = await req<PaginatedResponse<Channel[]> | Channel[] | unknown>('/channels');
+  const raw = asArray<Channel>(res);
   return raw.map((ch) => ({
     ...ch,
     type: ch.type ?? (ch as { channel_type?: string }).channel_type ?? 'unknown',
@@ -479,10 +507,10 @@ export interface PromoteMessageResponse {
   source_message_id: string;
 }
 
-/** `GET /rooms` — list rooms (when gateway exposes list endpoint). */
+/** `GET /rooms` — gateway returns `{ "rooms": [...] }`. */
 export async function listRooms() {
-  const res = await req<PaginatedResponse<Room[]> | Room[]>('/rooms');
-  return unwrapData(res) ?? [];
+  const res = await req<unknown>('/rooms');
+  return asArray<Room>(res);
 }
 
 export function fetchRooms() {

@@ -1,4 +1,11 @@
+/** Same-origin ws by default; set VITE_GATEWAY_ORIGIN=http://host:3000 when UI is on another port. */
 function wsBaseUrl(): string {
+  const env = import.meta.env.VITE_GATEWAY_ORIGIN as string | undefined;
+  if (env) {
+    const u = new URL(env);
+    const proto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${proto}//${u.host}`;
+  }
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${proto}//${location.host}`;
 }
