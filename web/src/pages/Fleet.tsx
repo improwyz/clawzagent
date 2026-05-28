@@ -57,7 +57,7 @@ function MeshTopology({ nodes }: { nodes: FleetNode[] }) {
             fill="#71717a"
             fontSize="9"
           >
-            {node.hostname.split('.')[0].slice(0, 10)}
+            {(node.hostname ?? node.id).split('.')[0].slice(0, 10)}
           </text>
         </g>
       ))}

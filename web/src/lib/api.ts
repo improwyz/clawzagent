@@ -4,7 +4,12 @@ const API_BASE =
 
 function authHeaders(): Record<string, string> {
   const token = typeof localStorage !== 'undefined' ? localStorage.getItem('clawz_token') : null;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  if (token) return { Authorization: `Bearer ${token}` };
+  const apiKey =
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('clawz_api_key') : null) ||
+    (import.meta.env.VITE_API_KEY as string | undefined);
+  if (apiKey) return { 'X-API-Key': apiKey };
+  return {};
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
@@ -57,6 +62,44 @@ function asArray<T>(payload: unknown): T[] {
   return [];
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function normalizeAgent(raw: Record<string, unknown>): Agent {
+  const status = String(raw.status ?? 'idle').toLowerCase();
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? 'agent'),
+    model: String(raw.model ?? 'stub'),
+    status: (['idle', 'running', 'error', 'stopped'].includes(status)
+      ? status
+      : 'idle') as Agent['status'],
+    last_active: String(raw.last_active ?? raw.updated_at ?? new Date().toISOString()),
+    system_prompt: raw.system_prompt != null ? String(raw.system_prompt) : undefined,
+    tools: Array.isArray(raw.tools) ? (raw.tools as string[]) : undefined,
+  };
+}
+
+function normalizeFleetNode(raw: Record<string, unknown>): FleetNode {
+  const status = String(raw.status ?? 'offline').toLowerCase();
+  const agentIds = Array.isArray(raw.agent_ids) ? raw.agent_ids : [];
+  const host = String(raw.hostname ?? raw.host ?? raw.name ?? 'localhost');
+  return {
+    id: String(raw.id ?? ''),
+    hostname: host,
+    status: (['online', 'offline', 'busy'].includes(status) ? status : 'offline') as FleetNode['status'],
+    agent_count: Number(raw.agent_count ?? agentIds.length ?? 0),
+    cpu_pct: Number(raw.cpu_pct ?? 0),
+    mem_pct: Number(raw.mem_pct ?? 0),
+    region: String(raw.region ?? 'default'),
+    uptime: String(raw.uptime ?? '—'),
+    type: String(raw.type ?? raw.node_type ?? 'worker'),
+  };
+}
+
 // ── Agents ─────────────────────────────────────────────────────────────────
 export interface Agent {
   id: string;
@@ -71,8 +114,8 @@ export interface Agent {
 }
 
 export async function fetchAgents() {
-  const res = await req<PaginatedResponse<Agent[]> | Agent[] | unknown>('/agents');
-  return asArray<Agent>(res);
+  const res = await req<unknown>('/agents');
+  return asArray<Record<string, unknown>>(res).map(normalizeAgent);
 }
 export function fetchAgent(id: string) { return req<Agent>(`/agents/${id}`); }
 export function createAgent(data: Partial<Agent>) {
@@ -128,16 +171,12 @@ export interface Deployment {
 }
 
 export async function fetchFleet() {
-  const res = await req<PaginatedResponse<FleetNode[]> | { nodes?: FleetNode[]; deployments?: Deployment[] }>(
-    '/fleet',
+  const res = await req<unknown>('/fleet');
+  const nodes = asArray<Record<string, unknown>>(res).map(normalizeFleetNode);
+  const deployments = asArray<Deployment>(
+    asRecord(res).deployments ?? [],
   );
-  if (Array.isArray((res as PaginatedResponse<FleetNode[]>).data)) {
-    return { nodes: (res as PaginatedResponse<FleetNode[]>).data ?? [], deployments: [] as Deployment[] };
-  }
-  return {
-    nodes: (res as { nodes?: FleetNode[] }).nodes ?? [],
-    deployments: (res as { deployments?: Deployment[] }).deployments ?? [],
-  };
+  return { nodes, deployments };
 }
 export function deployAgent(agentId: string, nodeId: string, provider: string) {
   return req<Deployment>('/fleet/deploy', {
@@ -191,7 +230,81 @@ export interface GovernanceData {
   prism_scores: { dimension: string; score: number; status: 'pass' | 'warn' | 'fail' }[];
 }
 
-export function fetchGovernance() { return req<GovernanceData>('/governance'); }
+async function safeReq(path: string): Promise<unknown> {
+  try {
+    return await req<unknown>(path);
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchGovernance(): Promise<GovernanceData> {
+  const [policiesRes, auditRes, proposalsRes, prismRes, agents] = await Promise.all([
+    safeReq('/governance/policies'),
+    safeReq('/governance/audit?limit=50'),
+    safeReq('/governance/proposals'),
+    safeReq('/system/prism'),
+    fetchAgents().catch(() => [] as Agent[]),
+  ]);
+
+  const policies: Policy[] = asArray<Record<string, unknown>>(policiesRes).map((p) => ({
+    id: String(p.id ?? ''),
+    name: String(p.name ?? ''),
+    description: String(p.description ?? ''),
+    rule: Array.isArray(p.rules) ? (p.rules as string[]).join('; ') : String(p.rule ?? ''),
+    active: Boolean(p.enabled ?? p.active ?? true),
+    created_at: String(p.created_at ?? ''),
+  }));
+
+  const audit_logs: AuditLog[] = asArray<Record<string, unknown>>(auditRes).map((e) => ({
+    id: String(e.id ?? ''),
+    agent_id: String(e.resource_id ?? e.agent_id ?? ''),
+    agent_name: String(e.actor ?? e.resource_type ?? 'system'),
+    action: String(e.action ?? ''),
+    outcome: 'allowed' as const,
+    timestamp: String(e.created_at ?? e.timestamp ?? new Date().toISOString()),
+    details: e.details != null ? String(e.details) : undefined,
+  }));
+
+  const approvals: Approval[] = asArray<Record<string, unknown>>(proposalsRes).map((p) => {
+    const agent = agents.find((a) => a.id === p.agent_id);
+    return {
+      id: String(p.id ?? ''),
+      agent_id: String(p.agent_id ?? ''),
+      agent_name: agent?.name ?? String(p.agent_id ?? 'agent'),
+      action: String(p.action ?? ''),
+      details: JSON.stringify(p.context ?? {}),
+      requested_at: String(p.created_at ?? new Date().toISOString()),
+      status: (String(p.status ?? 'pending').toLowerCase() === 'approved'
+        ? 'approved'
+        : String(p.status ?? '').toLowerCase() === 'rejected'
+          ? 'rejected'
+          : 'pending') as Approval['status'],
+    };
+  });
+
+  const prismRaw = asRecord(prismRes).dimensions;
+  const prism_scores = asArray<Record<string, unknown>>(prismRaw).map((d) => {
+    const status = String(d.status ?? 'planned');
+    return {
+      dimension: String(d.dimension ?? d.title ?? ''),
+      score: status === 'implemented' ? 900 : status === 'partial' ? 500 : 200,
+      status: (status === 'implemented' ? 'pass' : status === 'partial' ? 'warn' : 'fail') as
+        | 'pass'
+        | 'warn'
+        | 'fail',
+    };
+  });
+
+  const trust_scores: TrustScore[] = agents.map((a) => ({
+    agent_id: a.id,
+    agent_name: a.name,
+    score: a.status === 'running' ? 750 : a.status === 'error' ? 300 : 600,
+    tier: (a.status === 'error' ? 'bronze' : 'silver') as TrustScore['tier'],
+  }));
+
+  return { policies, trust_scores, audit_logs, approvals, prism_scores };
+}
 export function createPolicy(data: Partial<Policy>) {
   return req<Policy>('/governance/policies', { method: 'POST', body: JSON.stringify(data) });
 }
@@ -202,10 +315,16 @@ export function deletePolicy(id: string) {
   return req<void>(`/governance/policies/${id}`, { method: 'DELETE' });
 }
 export function approveAction(id: string) {
-  return req<Approval>(`/governance/approvals/${id}/approve`, { method: 'POST' });
+  return req<Approval>(`/governance/proposals/${id}/vote`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'approve', approver_id: 'dashboard' }),
+  });
 }
 export function rejectAction(id: string) {
-  return req<Approval>(`/governance/approvals/${id}/reject`, { method: 'POST' });
+  return req<Approval>(`/governance/proposals/${id}/vote`, {
+    method: 'POST',
+    body: JSON.stringify({ decision: 'reject', approver_id: 'dashboard', reason: 'rejected' }),
+  });
 }
 
 // ── Channels ───────────────────────────────────────────────────────────────
@@ -365,7 +484,25 @@ export interface ConfigData {
   system: { port: number; jwt_secret_masked: string };
 }
 
-export function fetchConfig() { return req<ConfigData>('/config'); }
+export async function fetchConfig(): Promise<ConfigData> {
+  const [sysRes, channels] = await Promise.all([
+    safeReq('/system/config'),
+    fetchChannels().catch(() => [] as Channel[]),
+  ]);
+  const sys = asRecord(sysRes);
+  return {
+    providers: [],
+    channels,
+    default_provider: 'stub',
+    docker_registry: String(import.meta.env.VITE_DOCKER_REGISTRY ?? 'ghcr.io/improwyz'),
+    cloudflare: {},
+    saas_connectors: [],
+    system: {
+      port: Number(import.meta.env.VITE_GATEWAY_PORT ?? 3000),
+      jwt_secret_masked: '********',
+    },
+  };
+}
 export function updateProvider(id: string, data: Partial<Provider>) {
   return req<Provider>(`/config/providers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }

@@ -6,7 +6,7 @@ import { DonutChart } from '../components/widgets/DonutChart';
 import { FleetTable } from '../components/widgets/FleetTable';
 import { ChannelGrid } from '../components/widgets/ChannelGrid';
 import { GovernancePanel } from '../components/widgets/GovernancePanel';
-import { fetchMetrics, fetchFleet, fetchChannels } from '../lib/api';
+import { fetchMetrics, fetchFleet, fetchChannels, fetchGovernance } from '../lib/api';
 import { connectMetrics } from '../lib/ws';
 
 interface LiveMetrics {
@@ -38,9 +38,11 @@ export function Dashboard() {
     refetchInterval: 30_000,
   });
 
-  // No GET /governance aggregate on gateway — approvals panel uses empty list until added.
-  const govLoading = false;
-  const governance = { approvals: [] as const };
+  const { data: governance, isLoading: govLoading } = useQuery({
+    queryKey: ['governance'],
+    queryFn: fetchGovernance,
+    refetchInterval: 60_000,
+  });
 
   useEffect(() => {
     wsRef.current = connectMetrics((data) => {

@@ -162,8 +162,8 @@ export function Tools() {
       <div className="grid grid-cols-4 gap-3">
         <StatCard label="Total Tools" value={tools.length} loading={isLoading} />
         <StatCard label="Enabled" value={enabled} loading={isLoading} variant="success" />
-        <StatCard label="MCP Servers" value={data?.mcp_servers.length ?? 0} loading={isLoading} />
-        <StatCard label="Docker Tools" value={data?.docker_tools.length ?? 0} loading={isLoading} />
+        <StatCard label="MCP Servers" value={data?.mcp_servers?.length ?? 0} loading={isLoading} />
+        <StatCard label="Docker Tools" value={data?.docker_tools?.length ?? 0} loading={isLoading} />
       </div>
 
       {/* Tabs */}

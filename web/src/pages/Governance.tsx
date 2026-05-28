@@ -131,7 +131,7 @@ export function Governance() {
   const [policyModal, setPolicyModal] = useState<{ open: boolean; policy?: Policy }>({ open: false });
   const [auditFilter, setAuditFilter] = useState('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['governance'],
     queryFn: fetchGovernance,
     refetchInterval: 15_000,
@@ -150,7 +150,7 @@ export function Governance() {
     { id: 'prism', label: 'PRISM' },
   ];
 
-  const pending = data?.approvals.filter((a) => a.status === 'pending') ?? [];
+  const pending = (data?.approvals ?? []).filter((a) => a.status === 'pending');
   const filteredLogs = (data?.audit_logs ?? []).filter((l: AuditLog) =>
     !auditFilter || l.agent_name.toLowerCase().includes(auditFilter.toLowerCase()) ||
     l.action.toLowerCase().includes(auditFilter.toLowerCase()),
@@ -162,16 +162,25 @@ export function Governance() {
         <h2 className="text-zinc-100 font-semibold">Governance</h2>
       </div>
 
+      {isError && (
+        <div className="rounded-lg border border-red-500/30 bg-red-900/20 px-3 py-2 text-red-300 text-sm">
+          Failed to load governance data: {String(error)}
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
         <StatCard label="Pending Approvals" value={pending.length} loading={isLoading} variant={pending.length > 0 ? 'warning' : 'default'} />
-        <StatCard label="Policies" value={data?.policies.length ?? 0} loading={isLoading} />
+        <StatCard label="Policies" value={data?.policies?.length ?? 0} loading={isLoading} />
         <StatCard label="Avg Trust Score" value={
-          data?.trust_scores.length
-            ? Math.round(data.trust_scores.reduce((s, t) => s + t.score, 0) / data.trust_scores.length)
+          (data?.trust_scores?.length ?? 0) > 0
+            ? Math.round(
+                (data?.trust_scores ?? []).reduce((s, t) => s + t.score, 0) /
+                  (data?.trust_scores?.length ?? 1),
+              )
             : 0
         } loading={isLoading} />
-        <StatCard label="Audit Events Today" value={data?.audit_logs.length ?? 0} loading={isLoading} />
+        <StatCard label="Audit Events Today" value={data?.audit_logs?.length ?? 0} loading={isLoading} />
       </div>
 
       {/* Tabs */}
