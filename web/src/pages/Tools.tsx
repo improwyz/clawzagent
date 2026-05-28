@@ -4,7 +4,15 @@ import { StatCard } from '../components/widgets/StatCard';
 import { Badge, statusVariant } from '../components/shared/Badge';
 import { EmptyState } from '../components/shared/EmptyState';
 import { Modal } from '../components/shared/Modal';
-import { fetchTools, toggleTool, executeTool, type Tool, type McpServer, type DockerTool } from '../lib/api';
+import {
+  fetchTools,
+  toggleTool,
+  executeTool,
+  createMcpServer,
+  type Tool,
+  type McpServer,
+  type DockerTool,
+} from '../lib/api';
 
 const CATEGORY_ICONS: Record<string, string> = {
   web: '🌐',
@@ -20,7 +28,13 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 type Tab = 'catalog' | 'docker' | 'mcp' | 'execute';
 
-function ToolCard({ tool, onToggle }: { tool: Tool; onToggle: (id: string, enabled: boolean) => void }) {
+function ToolCard({
+  tool,
+  onToggle,
+}: {
+  tool: Tool;
+  onToggle: (tool: Tool, enabled: boolean) => void;
+}) {
   const icon = CATEGORY_ICONS[tool.category?.toLowerCase()] ?? '⚙';
   return (
     <div className="widget-3d p-3 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col gap-2">
@@ -35,7 +49,7 @@ function ToolCard({ tool, onToggle }: { tool: Tool; onToggle: (id: string, enabl
           </div>
         </div>
         <button
-          onClick={() => onToggle(tool.id, !tool.enabled)}
+          onClick={() => onToggle(tool, !tool.enabled)}
           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ${
             tool.enabled ? 'bg-blue-600' : 'bg-zinc-700'
           }`}
@@ -137,20 +151,34 @@ export function Tools() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('catalog');
   const [mcpModal, setMcpModal] = useState(false);
+  const [mcpName, setMcpName] = useState('');
+  const [mcpUrl, setMcpUrl] = useState('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['tools'],
     queryFn: fetchTools,
     refetchInterval: 30_000,
   });
 
   const toggleMut = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => toggleTool(id, enabled),
+    mutationFn: ({ tool, enabled }: { tool: Tool; enabled: boolean }) =>
+      toggleTool(tool.id, enabled, { category: tool.category, description: tool.description }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tools'] }),
   });
 
+  const mcpCreateMut = useMutation({
+    mutationFn: () => createMcpServer({ name: mcpName.trim(), url: mcpUrl.trim() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['tools'] });
+      setMcpModal(false);
+      setMcpName('');
+      setMcpUrl('');
+    },
+  });
+
+  const catalog = data?.catalog ?? data?.tools ?? [];
   const tools = data?.tools ?? [];
-  const enabled = tools.filter((t) => t.enabled).length;
+  const enabled = catalog.filter((t) => t.enabled).length;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto p-4 gap-4">
@@ -160,7 +188,7 @@ export function Tools() {
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
-        <StatCard label="Total Tools" value={tools.length} loading={isLoading} />
+        <StatCard label="Catalog" value={catalog.length} loading={isLoading} />
         <StatCard label="Enabled" value={enabled} loading={isLoading} variant="success" />
         <StatCard label="MCP Servers" value={data?.mcp_servers?.length ?? 0} loading={isLoading} />
         <StatCard label="Docker Tools" value={data?.docker_tools?.length ?? 0} loading={isLoading} />
@@ -183,20 +211,25 @@ export function Tools() {
         </div>
 
         <div className="p-4">
+          {isError && (
+            <div className="mb-4 px-3 py-2 bg-red-900/30 border border-red-700 rounded text-red-400 text-sm">
+              Failed to load tools: {String(error)}
+            </div>
+          )}
           {tab === 'catalog' && (
-            tools.length === 0 && !isLoading ? (
-              <EmptyState icon="🔧" title="No tools registered" description="Tools are loaded from the provider configuration." />
+            catalog.length === 0 && !isLoading ? (
+              <EmptyState icon="🔧" title="No tools in catalog" description="Restart the gateway to seed built-in tools." />
             ) : (
               <div className="grid grid-cols-3 gap-3">
                 {isLoading
                   ? Array.from({ length: 9 }).map((_, i) => (
                     <div key={i} className="h-20 bg-zinc-800 rounded-xl animate-pulse" />
                   ))
-                  : tools.map((tool) => (
+                  : catalog.map((tool) => (
                     <ToolCard
                       key={tool.id}
                       tool={tool}
-                      onToggle={(id, en) => toggleMut.mutate({ id, enabled: en })}
+                      onToggle={(t, en) => toggleMut.mutate({ tool: t, enabled: en })}
                     />
                   ))}
               </div>
@@ -276,15 +309,31 @@ export function Tools() {
         <div className="space-y-3">
           <div>
             <label className="block text-zinc-400 text-xs mb-1">Server Name</label>
-            <input className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500" placeholder="my-mcp-server" />
+            <input
+              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
+              placeholder="my-mcp-server"
+              value={mcpName}
+              onChange={(e) => setMcpName(e.target.value)}
+            />
           </div>
           <div>
             <label className="block text-zinc-400 text-xs mb-1">URL</label>
-            <input className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 font-mono" placeholder="ws://localhost:3000/mcp" />
+            <input
+              className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500 font-mono"
+              placeholder="ws://localhost:3000/mcp"
+              value={mcpUrl}
+              onChange={(e) => setMcpUrl(e.target.value)}
+            />
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setMcpModal(false)} className="px-3 py-1.5 rounded-lg text-sm bg-zinc-700 text-zinc-300 hover:bg-zinc-600">Cancel</button>
-            <button onClick={() => setMcpModal(false)} className="px-3 py-1.5 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-500">Connect</button>
+            <button
+              onClick={() => mcpCreateMut.mutate()}
+              disabled={mcpCreateMut.isPending || !mcpName.trim() || !mcpUrl.trim()}
+              className="px-3 py-1.5 rounded-lg text-sm bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
+            >
+              {mcpCreateMut.isPending ? 'Connecting...' : 'Connect'}
+            </button>
           </div>
         </div>
       </Modal>

@@ -10,6 +10,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/metrics", get(dashboard_metrics))
         .route("/config", get(dashboard_config))
+        .route("/tools", get(dashboard_tools))
 }
 
 /// Mask a stored API key for display (never return the full secret).
@@ -198,4 +199,9 @@ async fn dashboard_config(State(state): State<AppState>) -> Json<Value> {
             "gateway_version": env!("CARGO_PKG_VERSION"),
         },
     }))
+}
+
+/// `GET /dashboard/tools` — tool catalog, Docker library, and MCP servers for the UI.
+async fn dashboard_tools(State(state): State<AppState>) -> Json<Value> {
+    Json(crate::tool_catalog::snapshot_dashboard_tools(&state).await)
 }

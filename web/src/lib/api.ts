@@ -427,34 +427,123 @@ export interface DockerTool {
 
 export interface ToolsData {
   tools: Tool[];
+  catalog?: Tool[];
   mcp_servers: McpServer[];
   docker_tools: DockerTool[];
 }
 
-export async function fetchTools(): Promise<ToolsData> {
-  const res = await req<PaginatedResponse<Array<Record<string, unknown>>> | ToolsData>('/tools');
-  if (res != null && typeof res === 'object' && 'tools' in res && Array.isArray((res as ToolsData).tools)) {
-    return res as ToolsData;
-  }
-  const raw = unwrapData(res as PaginatedResponse<Array<Record<string, unknown>>>) ?? [];
-  const tools: Tool[] = raw.map((t) => ({
-    id: String(t.id ?? ''),
-    name: String(t.name ?? ''),
-    category: String(t.category ?? t.tool_type ?? 'function'),
-    description: String(t.description ?? ''),
-    enabled: Boolean(t.enabled ?? true),
-    icon: t.icon as string | undefined,
-  }));
-  return { tools, mcp_servers: [], docker_tools: [] };
+function normalizeTool(raw: Record<string, unknown>): Tool {
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? ''),
+    category: String(raw.category ?? raw.tool_type ?? 'function'),
+    description: String(raw.description ?? ''),
+    enabled: Boolean(raw.enabled ?? true),
+    icon: raw.icon != null ? String(raw.icon) : undefined,
+  };
 }
-export function toggleTool(id: string, enabled: boolean) {
+
+function normalizeDockerTool(raw: Record<string, unknown>): DockerTool {
+  const status = String(raw.status ?? 'stopped').toLowerCase();
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? ''),
+    image: String(raw.image ?? ''),
+    status: (['running', 'stopped', 'error'].includes(status)
+      ? status
+      : 'stopped') as DockerTool['status'],
+    port: raw.port != null ? Number(raw.port) : undefined,
+  };
+}
+
+function normalizeMcpServer(raw: Record<string, unknown>): McpServer {
+  const status = String(raw.status ?? 'disconnected').toLowerCase();
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? ''),
+    url: String(raw.url ?? ''),
+    status: (['connected', 'disconnected', 'error'].includes(status)
+      ? status
+      : 'disconnected') as McpServer['status'],
+    tools_count: Number(raw.tools_count ?? 0),
+  };
+}
+
+export async function fetchTools(): Promise<ToolsData> {
+  const payload = await req<Record<string, unknown>>('/dashboard/tools');
+  const data = asRecord(payload);
+  const tools = asArray<Record<string, unknown>>(data.tools).map(normalizeTool);
+  const catalog = asArray<Record<string, unknown>>(data.catalog).map(normalizeTool);
+  return {
+    tools,
+    catalog: catalog.length > 0 ? catalog : tools,
+    mcp_servers: asArray<Record<string, unknown>>(data.mcp_servers).map(normalizeMcpServer),
+    docker_tools: asArray<Record<string, unknown>>(data.docker_tools).map(normalizeDockerTool),
+  };
+}
+
+export function createTool(data: {
+  name: string;
+  description?: string;
+  tool_type: string;
+  config?: Record<string, unknown>;
+  enabled?: boolean;
+}) {
+  return req<Tool>('/tools', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function registerCatalogTool(name: string, toolType: string, description: string) {
+  return createTool({
+    name,
+    description,
+    tool_type: toolType,
+    enabled: true,
+    config: { source: 'catalog' },
+  });
+}
+
+export function toggleTool(
+  id: string,
+  enabled: boolean,
+  meta?: { category?: string; description?: string },
+) {
+  if (id.startsWith('catalog-')) {
+    if (!enabled) {
+      return Promise.reject(new Error('Install the tool first by enabling it'));
+    }
+    const name = id.slice('catalog-'.length);
+    return registerCatalogTool(
+      name,
+      meta?.category ?? 'function',
+      meta?.description ?? `Built-in tool: ${name}`,
+    );
+  }
   return req<Tool>(`/tools/${id}`, { method: 'PUT', body: JSON.stringify({ enabled }) });
 }
-export function executeTool(id: string, args: Record<string, unknown>) {
-  return req<{ result: unknown; duration_ms: number }>(`/tools/${id}/execute`, {
+
+export function createMcpServer(data: { name: string; url: string }) {
+  return createTool({
+    name: data.name,
+    description: `MCP server at ${data.url}`,
+    tool_type: 'mcp',
+    enabled: true,
+    config: { url: data.url },
+  });
+}
+
+export async function executeTool(id: string, args: Record<string, unknown>) {
+  const data = await req<{
+    result?: { output?: unknown; execution_time_ms?: number; status?: string };
+    duration_ms?: number;
+  }>(`/tools/${id}/execute`, {
     method: 'POST',
     body: JSON.stringify({ args }),
   });
+  const nested = data.result;
+  return {
+    result: nested?.output ?? nested ?? data,
+    duration_ms: nested?.execution_time_ms ?? data.duration_ms ?? 0,
+  };
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────

@@ -141,6 +141,7 @@ async fn main() -> anyhow::Result<()> {
                 state.tools.read().await.len()
             );
         }
+        clawz_gateway::tool_catalog::ensure_default_tools(&state).await;
         if let Ok(mut audit) = postgres_store::load_audit_entries(pool).await {
             audit.reverse();
             *state.audit_log.write().await = audit;
@@ -158,6 +159,8 @@ async fn main() -> anyhow::Result<()> {
             }
             tracing::info!("hydrated {restored} cloud deployments from database");
         }
+    } else {
+        clawz_gateway::tool_catalog::ensure_default_tools(&state).await;
     }
     let server = GatewayServer::new(state);
 
