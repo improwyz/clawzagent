@@ -148,11 +148,12 @@ async fn system_info(State(state): State<AppState>) -> Json<Value> {
 /// In this in-memory implementation values are either sourced from
 /// environment variables or hard-coded defaults. A persistent backend would
 /// read from a configuration store instead.
-async fn get_config() -> Json<Value> {
+async fn get_config(State(state): State<AppState>) -> Json<Value> {
+    let settings = state.ui_settings.read().await;
     Json(json!({
-        "log_level": std::env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
-        "max_agents": 100,
-        "enable_audit": true,
+        "log_level": settings.log_level,
+        "max_agents": settings.max_agents,
+        "enable_audit": settings.enable_audit,
         "gateway_version": env!("CARGO_PKG_VERSION"),
     }))
 }
@@ -161,27 +162,41 @@ async fn get_config() -> Json<Value> {
 ///
 /// Currently echoes the body back because there is no persistent config store.
 /// In production this would validate, persist, and hot-reload the changes.
-async fn update_config(Json(body): Json<UpdateConfigBody>) -> Json<Value> {
-    // In a real implementation this would persist to a KV store and notify
-    // background tasks of the new limits.
+async fn update_config(
+    State(state): State<AppState>,
+    Json(body): Json<UpdateConfigBody>,
+) -> Json<Value> {
+    let mut settings = state.ui_settings.write().await;
+    if let Some(level) = body.log_level {
+        settings.log_level = level;
+    }
+    if let Some(max) = body.max_agents {
+        settings.max_agents = max;
+    }
+    if let Some(audit) = body.enable_audit {
+        settings.enable_audit = audit;
+    }
     Json(json!({
         "updated": true,
         "config": {
-            "log_level": body.log_level.unwrap_or_else(|| "info".to_string()),
-            "max_agents": body.max_agents.unwrap_or(100),
-            "enable_audit": body.enable_audit.unwrap_or(true),
+            "log_level": settings.log_level,
+            "max_agents": settings.max_agents,
+            "enable_audit": settings.enable_audit,
         }
     }))
 }
 
 /// `POST /system/config/reset` — restore factory defaults.
-async fn reset_config() -> Json<Value> {
+async fn reset_config(State(state): State<AppState>) -> Json<Value> {
+    let defaults = crate::UiSettings::from_env();
+    let mut settings = state.ui_settings.write().await;
+    *settings = defaults.clone();
     Json(json!({
         "reset": true,
         "config": {
-            "log_level": "info",
-            "max_agents": 100,
-            "enable_audit": true,
+            "log_level": defaults.log_level,
+            "max_agents": defaults.max_agents,
+            "enable_audit": defaults.enable_audit,
         }
     }))
 }

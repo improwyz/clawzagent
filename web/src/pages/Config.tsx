@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge, statusVariant } from '../components/shared/Badge';
 import { Modal } from '../components/shared/Modal';
@@ -6,10 +6,10 @@ import {
   fetchConfig,
   updateProvider,
   createProvider,
-  rotateJwtSecret,
-  updateCloudflare,
-  connectSaas,
-  disconnectSaas,
+  updateChannel,
+  createChannel,
+  updateSystemConfig,
+  exportConfig,
   login,
   type Provider,
 } from '../lib/api';
@@ -35,8 +35,15 @@ function ProviderModal({
   const [error, setError] = useState('');
 
   const mutation = useMutation({
-    mutationFn: (data: typeof form) =>
-      initial ? updateProvider(initial.id, data) : createProvider(data),
+    mutationFn: (data: typeof form) => {
+      const payload = {
+        name: data.name,
+        type: data.type,
+        enabled: data.enabled,
+        api_key: data.api_key.trim() || undefined,
+      };
+      return initial ? updateProvider(initial.id, payload) : createProvider(payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['config'] });
       onClose();
@@ -178,27 +185,53 @@ export function Config() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('providers');
   const [providerModal, setProviderModal] = useState<{ open: boolean; provider?: Provider }>({ open: false });
-
-  const { data, isLoading } = useQuery({
+  const [systemForm, setSystemForm] = useState({
+    log_level: 'info',
+    max_agents: 100,
+    enable_audit: true,
+  });
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['config'],
     queryFn: fetchConfig,
   });
 
-  const rotateMut = useMutation({
-    mutationFn: rotateJwtSecret,
+  useEffect(() => {
+    if (data?.system) {
+      setSystemForm({
+        log_level: data.system.log_level ?? 'info',
+        max_agents: data.system.max_agents ?? 100,
+        enable_audit: data.system.enable_audit ?? true,
+      });
+    }
+  }, [data]);
+
+  const channelMut = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      updateChannel(id, { enabled }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['config'] }),
   });
 
-  const cfMut = useMutation({
-    mutationFn: ({ service, enabled }: { service: string; enabled: boolean }) =>
-      updateCloudflare(service, enabled),
+  const channelCreateMut = useMutation({
+    mutationFn: (body: { name: string; channel_type: string }) => createChannel(body),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['config'] }),
   });
 
-  const saasMut = useMutation({
-    mutationFn: ({ id, connected }: { id: string; connected: boolean }) =>
-      connected ? disconnectSaas(id) : connectSaas(id),
+  const systemMut = useMutation({
+    mutationFn: () => updateSystemConfig(systemForm),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['config'] }),
+  });
+
+  const exportMut = useMutation({
+    mutationFn: exportConfig,
+    onSuccess: (cfg) => {
+      const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'clawz-config.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    },
   });
 
   const tabs: { id: Tab; label: string }[] = [
@@ -229,6 +262,11 @@ export function Config() {
         </div>
 
         <div className="p-4">
+          {isError && (
+            <div className="mb-4 px-3 py-2 bg-red-900/30 border border-red-700 rounded text-red-400 text-sm">
+              Failed to load config: {String(error)}
+            </div>
+          )}
           {isLoading && (
             <div className="space-y-2">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -282,9 +320,29 @@ export function Config() {
           )}
 
           {!isLoading && tab === 'channels' && (
-            <div className="space-y-2">
+            <div className="space-y-3">
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    const name = window.prompt('Channel name');
+                    const channel_type = window.prompt('Type (webhook, slack, email, telegram)', 'webhook');
+                    if (name?.trim() && channel_type?.trim()) {
+                      channelCreateMut.mutate({
+                        name: name.trim(),
+                        channel_type: channel_type.trim(),
+                      });
+                    }
+                  }}
+                  disabled={channelCreateMut.isPending}
+                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-500 disabled:opacity-50"
+                >
+                  + Add Channel
+                </button>
+              </div>
               {(data?.channels ?? []).length === 0 ? (
-                <div className="py-8 text-center text-zinc-500 text-sm">No channels configured.</div>
+                <div className="py-8 text-center text-zinc-500 text-sm">
+                  No channels yet. Add a webhook, Slack, or other integration.
+                </div>
               ) : (
                 (data?.channels ?? []).map((ch) => (
                   <div key={ch.id} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-800">
@@ -295,7 +353,11 @@ export function Config() {
                         <Badge variant={statusVariant(ch.status)}>{ch.status}</Badge>
                       </div>
                     </div>
-                    <Toggle checked={ch.enabled} onChange={() => {}} />
+                    <Toggle
+                      checked={ch.enabled}
+                      onChange={(v) => channelMut.mutate({ id: ch.id, enabled: v })}
+                      disabled={channelMut.isPending}
+                    />
                   </div>
                 ))
               )}
@@ -305,21 +367,23 @@ export function Config() {
           {!isLoading && tab === 'cloudflare' && (
             <div className="space-y-2">
               <p className="text-zinc-500 text-sm mb-3">
-                Enable or disable Cloudflare services per component.
+                Status is read from gateway environment variables (
+                <code className="text-zinc-400">CLOUDFLARE_API_TOKEN</code>,{' '}
+                <code className="text-zinc-400">CLAWZ_CF_*_ENABLED</code>).
               </p>
-              {Object.entries(data?.cloudflare ?? {}).length === 0 ? (
+              {Object.entries(data?.cloudflare ?? {}).filter(([k]) => k !== 'configured').length === 0 ? (
                 <div className="py-8 text-center text-zinc-500 text-sm">No Cloudflare config.</div>
               ) : (
-                Object.entries(data?.cloudflare ?? {}).map(([service, enabled]) => (
+                Object.entries(data?.cloudflare ?? {})
+                  .filter(([k]) => k !== 'configured')
+                  .map(([service, enabled]) => (
                   <div key={service} className="flex items-center justify-between p-3 rounded-lg bg-zinc-800">
                     <div>
-                      <div className="text-zinc-200 text-sm">{service}</div>
+                      <div className="text-zinc-200 text-sm capitalize">{service.replace(/_/g, ' ')}</div>
                     </div>
-                    <Toggle
-                      checked={enabled}
-                      onChange={(v) => cfMut.mutate({ service, enabled: v })}
-                      disabled={cfMut.isPending}
-                    />
+                    <Badge variant={enabled ? 'success' : 'default'}>
+                      {enabled ? 'enabled' : 'off'}
+                    </Badge>
                   </div>
                 ))
               )}
@@ -328,29 +392,24 @@ export function Config() {
 
           {!isLoading && tab === 'saas' && (
             <div className="space-y-2">
+              <p className="text-zinc-500 text-sm mb-3">
+                Connectors are enabled on the gateway via environment variables (OAuth UI coming later).
+              </p>
               {(data?.saas_connectors ?? []).length === 0 ? (
                 <div className="py-8 text-center text-zinc-500 text-sm">No SaaS connectors available.</div>
               ) : (
                 (data?.saas_connectors ?? []).map((s) => (
                   <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-800">
                     {s.icon && <span className="text-xl">{s.icon}</span>}
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="text-zinc-100 text-sm">{s.name}</div>
+                      {s.env_hint && (
+                        <div className="text-zinc-500 text-xs font-mono truncate">{s.env_hint}</div>
+                      )}
                     </div>
                     <Badge variant={s.connected ? 'success' : 'default'}>
                       {s.connected ? 'connected' : 'disconnected'}
                     </Badge>
-                    <button
-                      onClick={() => saasMut.mutate({ id: s.id, connected: s.connected })}
-                      disabled={saasMut.isPending}
-                      className={`px-2.5 py-1 text-xs rounded transition-colors disabled:opacity-50 ${
-                        s.connected
-                          ? 'bg-red-600/20 text-red-400 hover:bg-red-600/30'
-                          : 'bg-blue-600/20 text-blue-400 hover:bg-blue-600/30'
-                      }`}
-                    >
-                      {s.connected ? 'Disconnect' : 'Connect'}
-                    </button>
                   </div>
                 ))
               )}
@@ -359,20 +418,30 @@ export function Config() {
 
           {!isLoading && tab === 'system' && (
             <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-zinc-800 border border-zinc-700 space-y-3">
-                <h3 className="text-zinc-200 text-sm font-medium">Sign in</h3>
-                <p className="text-zinc-500 text-xs">
-                  Stores a JWT in <code className="text-zinc-400">localStorage.clawz_token</code> for API requests.
-                </p>
-                <LoginForm />
-              </div>
+              {!data?.system.auth_disabled && (
+                <div className="p-4 rounded-lg bg-zinc-800 border border-zinc-700 space-y-3">
+                  <h3 className="text-zinc-200 text-sm font-medium">Sign in</h3>
+                  <p className="text-zinc-500 text-xs">
+                    Stores a JWT in <code className="text-zinc-400">localStorage.clawz_token</code> for API requests.
+                  </p>
+                  <LoginForm />
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-zinc-400 text-xs mb-1">Gateway Port</label>
                   <input
                     readOnly
                     className="w-full bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-lg px-3 py-2 font-mono"
-                    value={data?.system.port ?? 8000}
+                    value={data?.system.port ?? 3000}
+                  />
+                </div>
+                <div>
+                  <label className="block text-zinc-400 text-xs mb-1">Gateway Version</label>
+                  <input
+                    readOnly
+                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-lg px-3 py-2 font-mono"
+                    value={data?.system.gateway_version ?? '—'}
                   />
                 </div>
                 <div>
@@ -392,38 +461,72 @@ export function Config() {
                   />
                 </div>
                 <div>
-                  <label className="block text-zinc-400 text-xs mb-1">JWT Secret</label>
-                  <div className="flex gap-2">
+                  <label className="block text-zinc-400 text-xs mb-1">Log Level</label>
+                  <select
+                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2"
+                    value={systemForm.log_level}
+                    onChange={(e) => setSystemForm((f) => ({ ...f, log_level: e.target.value }))}
+                  >
+                    {['trace', 'debug', 'info', 'warn', 'error'].map((l) => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-zinc-400 text-xs mb-1">Max Agents</label>
+                  <input
+                    type="number"
+                    min={1}
+                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2"
+                    value={systemForm.max_agents}
+                    onChange={(e) =>
+                      setSystemForm((f) => ({ ...f, max_agents: Number(e.target.value) || 1 }))
+                    }
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
-                      readOnly
-                      type="password"
-                      className="flex-1 bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-lg px-3 py-2 font-mono"
-                      value={data?.system.jwt_secret_masked ?? '••••••••'}
+                      type="checkbox"
+                      checked={systemForm.enable_audit}
+                      onChange={(e) =>
+                        setSystemForm((f) => ({ ...f, enable_audit: e.target.checked }))
+                      }
                     />
-                    <button
-                      onClick={() => rotateMut.mutate()}
-                      disabled={rotateMut.isPending}
-                      className="px-3 py-1.5 text-sm bg-yellow-600/20 text-yellow-400 rounded-lg hover:bg-yellow-600/30 disabled:opacity-50 whitespace-nowrap"
-                    >
-                      {rotateMut.isPending ? '...' : 'Rotate'}
-                    </button>
-                  </div>
+                    <span className="text-zinc-300 text-sm">Enable audit log</span>
+                  </label>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-zinc-400 text-xs mb-1">JWT Secret</label>
+                  <input
+                    readOnly
+                    type="password"
+                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm rounded-lg px-3 py-2 font-mono"
+                    value={data?.system.jwt_secret_masked ?? '••••••••'}
+                  />
+                  <p className="text-zinc-500 text-xs mt-1">
+                    Set <code className="text-zinc-400">CLAWZ_JWT_SECRET</code> on the gateway host.
+                  </p>
                 </div>
               </div>
 
-              <div className="pt-3 border-t border-zinc-800">
+              <p className="text-zinc-500 text-xs">
+                System settings are held in gateway memory until restart. Set{' '}
+                <code className="text-zinc-400">LOG_LEVEL</code>,{' '}
+                <code className="text-zinc-400">CLAWZ_MAX_AGENTS</code> in the environment for persistence.
+              </p>
+              <div className="flex gap-2 pt-3 border-t border-zinc-800">
                 <button
-                  onClick={async () => {
-                    const { exportConfig: exp } = await import('../lib/api');
-                    const cfg = await exp();
-                    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'clawz-config.json';
-                    a.click();
-                  }}
-                  className="px-3 py-1.5 text-sm bg-zinc-700 text-zinc-300 rounded-lg hover:bg-zinc-600"
+                  onClick={() => systemMut.mutate()}
+                  disabled={systemMut.isPending}
+                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"
+                >
+                  {systemMut.isPending ? 'Saving...' : 'Save System Settings'}
+                </button>
+                <button
+                  onClick={() => exportMut.mutate()}
+                  disabled={exportMut.isPending}
+                  className="px-3 py-1.5 text-sm bg-zinc-700 text-zinc-300 rounded-lg hover:bg-zinc-600 disabled:opacity-50"
                 >
                   Export Config
                 </button>

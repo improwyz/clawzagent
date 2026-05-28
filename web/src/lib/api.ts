@@ -376,8 +376,24 @@ export async function fetchChannels() {
     messages: ch.messages ?? 0,
   }));
 }
-export function updateChannel(id: string, data: Partial<Channel>) {
-  return req<Channel>(`/channels/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export function createChannel(data: {
+  name: string;
+  channel_type: string;
+  enabled?: boolean;
+  config?: Record<string, unknown>;
+}) {
+  return req<Channel>('/channels', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateChannel(id: string, data: Partial<Channel> & { enabled?: boolean }) {
+  return req<Channel>(`/channels/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      name: data.name,
+      channel_type: data.type,
+      enabled: data.enabled,
+    }),
+  });
 }
 export function testChannel(id: string) {
   return req<{ success: boolean; message: string }>(`/channels/${id}/test`, { method: 'POST' });
@@ -521,53 +537,141 @@ export interface ConfigData {
   channels: Channel[];
   default_provider: string;
   docker_registry: string;
-  cloudflare: Record<string, boolean>;
-  saas_connectors: { id: string; name: string; connected: boolean; icon?: string }[];
-  system: { port: number; jwt_secret_masked: string };
+  cloudflare: Record<string, boolean | string>;
+  saas_connectors: {
+    id: string;
+    name: string;
+    connected: boolean;
+    icon?: string;
+    env_hint?: string;
+  }[];
+  system: {
+    port: number;
+    jwt_secret_masked: string;
+    log_level?: string;
+    max_agents?: number;
+    enable_audit?: boolean;
+    auth_disabled?: boolean;
+    gateway_version?: string;
+  };
+}
+
+function normalizeProvider(raw: Record<string, unknown>): Provider {
+  const providerType = String(raw.provider_type ?? raw.type ?? 'anthropic');
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? ''),
+    type: providerType,
+    api_key_masked:
+      raw.api_key_masked != null ? String(raw.api_key_masked) : undefined,
+    enabled: Boolean(raw.enabled ?? true),
+    models: Array.isArray(raw.models) ? (raw.models as string[]) : undefined,
+  };
 }
 
 export async function fetchConfig(): Promise<ConfigData> {
-  const [sysRes, channels] = await Promise.all([
-    safeReq('/system/config'),
-    fetchChannels().catch(() => [] as Channel[]),
-  ]);
-  const sys = asRecord(sysRes);
+  const payload = await req<ConfigData | Record<string, unknown>>('/dashboard/config');
+  const data = asRecord(payload);
+  const system = asRecord(data.system);
+  const cloudflare = asRecord(data.cloudflare);
+  const cfToggles: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(cloudflare)) {
+    if (typeof value === 'boolean') {
+      cfToggles[key] = value;
+    }
+  }
   return {
-    providers: [],
-    channels,
-    default_provider: 'stub',
-    docker_registry: String(import.meta.env.VITE_DOCKER_REGISTRY ?? 'ghcr.io/improwyz'),
-    cloudflare: {},
-    saas_connectors: [],
+    providers: asArray<Record<string, unknown>>(data.providers).map(normalizeProvider),
+    channels: asArray<Record<string, unknown>>(data.channels).map((ch) => ({
+      id: String(ch.id ?? ''),
+      name: String(ch.name ?? ''),
+      type: String(ch.type ?? ch.channel_type ?? 'unknown'),
+      status: (String(ch.status ?? 'idle') as Channel['status']) || 'idle',
+      messages: Number(ch.messages ?? 0),
+      enabled: Boolean(ch.enabled ?? true),
+    })),
+    default_provider: String(data.default_provider ?? 'none'),
+    docker_registry: String(
+      data.docker_registry ?? import.meta.env.VITE_DOCKER_REGISTRY ?? 'ghcr.io/improwyz',
+    ),
+    cloudflare: cfToggles,
+    saas_connectors: asArray<Record<string, unknown>>(data.saas_connectors).map((s) => ({
+      id: String(s.id ?? ''),
+      name: String(s.name ?? s.id ?? ''),
+      connected: Boolean(s.connected),
+      icon: s.icon != null ? String(s.icon) : undefined,
+      env_hint: s.env_hint != null ? String(s.env_hint) : undefined,
+    })),
     system: {
-      port: Number(import.meta.env.VITE_GATEWAY_PORT ?? 3000),
-      jwt_secret_masked: '********',
+      port: Number(system.port ?? import.meta.env.VITE_GATEWAY_PORT ?? 3000),
+      jwt_secret_masked: String(system.jwt_secret_masked ?? '********'),
+      log_level: system.log_level != null ? String(system.log_level) : undefined,
+      max_agents: system.max_agents != null ? Number(system.max_agents) : undefined,
+      enable_audit:
+        system.enable_audit != null ? Boolean(system.enable_audit) : undefined,
+      auth_disabled:
+        system.auth_disabled != null ? Boolean(system.auth_disabled) : undefined,
+      gateway_version:
+        system.gateway_version != null ? String(system.gateway_version) : undefined,
     },
   };
 }
-export function updateProvider(id: string, data: Partial<Provider>) {
-  return req<Provider>(`/config/providers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-}
-export function createProvider(data: Partial<Provider>) {
-  return req<Provider>('/config/providers', { method: 'POST', body: JSON.stringify(data) });
-}
-export function rotateJwtSecret() {
-  return req<{ secret_masked: string }>('/config/system/rotate-jwt', { method: 'POST' });
-}
-export function exportConfig() {
-  return req<Record<string, unknown>>('/config/export');
-}
-export function updateCloudflare(service: string, enabled: boolean) {
-  return req<void>('/config/cloudflare', {
+
+export function updateProvider(id: string, data: Partial<Provider> & { api_key?: string }) {
+  return req<Provider>(`/providers/${id}`, {
     method: 'PUT',
-    body: JSON.stringify({ service, enabled }),
+    body: JSON.stringify({
+      name: data.name,
+      provider_type: data.type,
+      api_key: data.api_key || undefined,
+      enabled: data.enabled,
+    }),
   });
 }
-export function connectSaas(id: string) {
-  return req<void>(`/config/saas/${id}/connect`, { method: 'POST' });
+
+export function createProvider(data: Partial<Provider> & { api_key?: string }) {
+  return req<Provider>('/providers', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: data.name,
+      provider_type: data.type,
+      api_key: data.api_key || undefined,
+      enabled: data.enabled ?? true,
+    }),
+  });
 }
-export function disconnectSaas(id: string) {
-  return req<void>(`/config/saas/${id}/disconnect`, { method: 'POST' });
+
+export function updateSystemConfig(body: {
+  log_level?: string;
+  max_agents?: number;
+  enable_audit?: boolean;
+}) {
+  return req<Record<string, unknown>>('/system/config', {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function exportConfig() {
+  return fetchConfig();
+}
+
+/** Cloudflare toggles are read from gateway env — not mutable at runtime yet. */
+export async function updateCloudflare(_service: string, _enabled: boolean) {
+  throw new Error(
+    'Cloudflare services are configured via gateway environment variables (see docs).',
+  );
+}
+
+/** SaaS connectors connect via env credentials until OAuth UI is implemented. */
+export async function connectSaas(_id: string) {
+  throw new Error(
+    'Set CLAWZ_CONNECTOR_<NAME>_CONNECTED=1 and provider credentials in the gateway environment.',
+  );
+}
+
+export async function disconnectSaas(_id: string) {
+  throw new Error('Unset CLAWZ_CONNECTOR_<NAME>_CONNECTED on the gateway host.');
 }
 
 // ── Rooms ────────────────────────────────────────────────────────────────────

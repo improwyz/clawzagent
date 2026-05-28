@@ -469,6 +469,32 @@ pub struct AutonomousSessionRecord {
 /// [`tokio::sync::RwLock`] so that concurrent handlers can read and write safely.
 ///
 /// # Design note
+/// Dashboard-editable gateway settings (in-memory until a config store exists).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct UiSettings {
+    pub log_level: String,
+    pub max_agents: u32,
+    pub enable_audit: bool,
+}
+
+impl UiSettings {
+    pub fn from_env() -> Self {
+        let max_agents = std::env::var("CLAWZ_MAX_AGENTS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(100);
+        let enable_audit = std::env::var("CLAWZ_ENABLE_AUDIT")
+            .ok()
+            .map(|v| v != "0" && !v.eq_ignore_ascii_case("false"))
+            .unwrap_or(true);
+        Self {
+            log_level: std::env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
+            max_agents,
+            enable_audit,
+        }
+    }
+}
+
 /// The current implementation uses in-memory vectors for rapid prototyping.
 /// In production this will likely be backed by PostgreSQL or Redis.
 #[derive(Clone)]
@@ -539,6 +565,8 @@ pub struct AppState {
     pub personality: Arc<RwLock<HashMap<String, serde_json::Value>>>,
     /// Human-in-the-loop approval queue (shared with worker in standalone mode).
     pub approval_workflow: Arc<clawz_worker::governance::approval::ApprovalWorkflow>,
+    /// Runtime UI settings (survives until gateway restart).
+    pub ui_settings: Arc<RwLock<UiSettings>>,
 }
 
 /// Personality preferences stored per agent.
@@ -620,6 +648,7 @@ impl AppState {
             )),
             personality: Arc::new(RwLock::new(HashMap::new())),
             approval_workflow,
+            ui_settings: Arc::new(RwLock::new(UiSettings::from_env())),
         }
     }
 
