@@ -25,6 +25,7 @@ Thumbs.db
 /docs/*
 !/docs/private-registry.md
 !/docs/install-dependencies.csv
+!/docs/deployment-build-strategy.md
 
 # Node
 node_modules/
