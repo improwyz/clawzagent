@@ -9,6 +9,8 @@ import {
   fetchAgents,
   createAgent,
   deleteAgent,
+  stopAgent,
+  fetchAgentHistory,
   createRoom,
   fetchRooms,
   type Agent,
@@ -151,14 +153,28 @@ function CreateAgentModal({ open, onClose }: { open: boolean; onClose: () => voi
   );
 }
 
-function AgentRow({ agent, onDelete, onChat, onTeamRoom, selected }: {
+function AgentRow({
+  agent,
+  onDelete,
+  onChat,
+  onTeamRoom,
+  onStop,
+  selected,
+}: {
   agent: Agent;
   onDelete: (id: string) => void;
   onChat: (agent: Agent) => void;
   onTeamRoom: (agent: Agent) => void;
+  onStop: (id: string) => void;
   selected: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+
+  const { data: history, isLoading: historyLoading } = useQuery({
+    queryKey: ['agent-history', agent.id],
+    queryFn: () => fetchAgentHistory(agent.id),
+    enabled: expanded,
+  });
 
   return (
     <>
@@ -198,6 +214,14 @@ function AgentRow({ agent, onDelete, onChat, onTeamRoom, selected }: {
             >
               Team
             </button>
+            {agent.status === 'running' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onStop(agent.id); }}
+                className="px-2 py-1 text-xs rounded bg-yellow-600/20 text-yellow-400 hover:bg-yellow-600/30 transition-colors"
+              >
+                Stop
+              </button>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); onDelete(agent.id); }}
               className="px-2 py-1 text-xs rounded bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors"
@@ -245,6 +269,28 @@ function AgentRow({ agent, onDelete, onChat, onTeamRoom, selected }: {
                 </div>
               </div>
             </div>
+            <div className="mt-3 pt-3 border-t border-zinc-800">
+              <div className="text-zinc-500 text-xs uppercase tracking-wider mb-2">
+                Run history ({history?.total ?? 0})
+              </div>
+              {historyLoading ? (
+                <div className="text-zinc-500 text-xs">Loading history…</div>
+              ) : (history?.messages ?? []).length === 0 ? (
+                <div className="text-zinc-500 text-xs">No messages yet</div>
+              ) : (
+                <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                  {(history?.messages ?? []).slice(-8).map((msg, i) => (
+                    <div key={msg.id ?? i} className="text-xs bg-zinc-800 rounded p-2">
+                      <span className="text-zinc-500 uppercase">{msg.role}</span>
+                      <span className="text-zinc-400 ml-2 truncate block">
+                        {msg.content.slice(0, 120)}
+                        {msg.content.length > 120 ? '…' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </td>
         </tr>
       )}
@@ -275,6 +321,14 @@ export function Agents() {
   const deleteMutation = useMutation({
     mutationFn: deleteAgent,
     onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
+  });
+
+  const stopMutation = useMutation({
+    mutationFn: stopAgent,
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ['agents'] });
+      qc.invalidateQueries({ queryKey: ['agent-history', id] });
+    },
   });
 
   const openTeamRoom = async (leader: Agent) => {
@@ -411,6 +465,7 @@ export function Agents() {
                       key={agent.id}
                       agent={agent}
                       onDelete={(id) => setDeleteTarget(id)}
+                      onStop={(id) => stopMutation.mutate(id)}
                       onChat={(a) => {
                         setChatRoom(null);
                         setChatAgent(chatAgent?.id === a.id ? null : a);

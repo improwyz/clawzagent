@@ -4,6 +4,8 @@ import { Badge, statusVariant } from '../components/shared/Badge';
 import { Modal } from '../components/shared/Modal';
 import {
   fetchConfig,
+  fetchCloudProviders,
+  fetchCloudDeployments,
   updateProvider,
   createProvider,
   updateChannel,
@@ -14,7 +16,7 @@ import {
   type Provider,
 } from '../lib/api';
 
-type Tab = 'providers' | 'channels' | 'cloudflare' | 'saas' | 'system';
+type Tab = 'providers' | 'channels' | 'cloud' | 'cloudflare' | 'saas' | 'system';
 
 function ProviderModal({
   open,
@@ -195,6 +197,18 @@ export function Config() {
     queryFn: fetchConfig,
   });
 
+  const { data: cloudProviders = [], isLoading: cloudProvidersLoading } = useQuery({
+    queryKey: ['cloud-providers'],
+    queryFn: fetchCloudProviders,
+    enabled: tab === 'cloud',
+  });
+
+  const { data: cloudDeployments = [], isLoading: cloudDeploymentsLoading } = useQuery({
+    queryKey: ['cloud-deployments'],
+    queryFn: fetchCloudDeployments,
+    enabled: tab === 'cloud',
+  });
+
   useEffect(() => {
     if (data?.system) {
       setSystemForm({
@@ -237,6 +251,7 @@ export function Config() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'providers', label: 'Providers' },
     { id: 'channels', label: 'Channels' },
+    { id: 'cloud', label: 'Cloud' },
     { id: 'cloudflare', label: 'Cloudflare' },
     { id: 'saas', label: 'SaaS' },
     { id: 'system', label: 'System' },
@@ -361,6 +376,85 @@ export function Config() {
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {!isLoading && tab === 'cloud' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-zinc-300 text-sm font-medium mb-3">Cloud providers</h3>
+                {cloudProvidersLoading ? (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="h-12 bg-zinc-800 rounded-lg animate-pulse" />
+                    ))}
+                  </div>
+                ) : cloudProviders.length === 0 ? (
+                  <div className="py-6 text-center text-zinc-500 text-sm">No cloud adapters registered.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {cloudProviders.map((p) => (
+                      <div key={p.id} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-800">
+                        <div className="flex-1 min-w-0">
+                          <div className="text-zinc-100 text-sm font-medium">{p.display_name}</div>
+                          <div className="text-zinc-500 text-xs font-mono">{p.id}</div>
+                        </div>
+                        <div className="flex flex-wrap gap-1 justify-end">
+                          {p.deploy_modes.map((mode) => (
+                            <Badge key={mode} variant="default">{mode}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <h3 className="text-zinc-300 text-sm font-medium mb-3">Cloud deployments</h3>
+                {cloudDeploymentsLoading ? (
+                  <div className="h-24 bg-zinc-800 rounded-lg animate-pulse" />
+                ) : cloudDeployments.length === 0 ? (
+                  <div className="py-6 text-center text-zinc-500 text-sm">
+                    No cloud deployments yet. Use POST /api/v1/cloud/deploy from the API or CLI.
+                  </div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-zinc-800">
+                        <th className="text-left text-zinc-400 text-xs font-medium px-3 py-2">ID</th>
+                        <th className="text-left text-zinc-400 text-xs font-medium px-3 py-2">Provider</th>
+                        <th className="text-left text-zinc-400 text-xs font-medium px-3 py-2">Status</th>
+                        <th className="text-left text-zinc-400 text-xs font-medium px-3 py-2">URL</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-800">
+                      {cloudDeployments.map((d) => (
+                        <tr key={d.id} className="hover:bg-zinc-800/50">
+                          <td className="px-3 py-2.5 text-zinc-300 font-mono text-xs">{d.id.slice(0, 8)}…</td>
+                          <td className="px-3 py-2.5 text-zinc-400 text-xs">{d.provider_id}</td>
+                          <td className="px-3 py-2.5">
+                            <Badge variant={statusVariant(String(d.status))}>{String(d.status)}</Badge>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            {d.url ? (
+                              <a
+                                href={d.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-400 text-xs hover:underline truncate block max-w-xs"
+                              >
+                                {d.url}
+                              </a>
+                            ) : (
+                              <span className="text-zinc-500 text-xs">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
           )}
 

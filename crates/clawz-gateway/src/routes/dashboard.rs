@@ -11,6 +11,7 @@ pub fn routes() -> Router<AppState> {
         .route("/metrics", get(dashboard_metrics))
         .route("/config", get(dashboard_config))
         .route("/tools", get(dashboard_tools))
+        .merge(crate::routes::dashboard_overview::routes())
 }
 
 /// Mask a stored API key for display (never return the full secret).

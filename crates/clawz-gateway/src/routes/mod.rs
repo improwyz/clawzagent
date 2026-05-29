@@ -57,6 +57,8 @@ pub mod system;
 
 /// Dashboard JSON metrics for the web UI.
 pub mod dashboard;
+/// Dashboard overview (health, counts, API catalog).
+pub mod dashboard_overview;
 
 /// Cloud provider deployment API (`/cloud/*`).
 pub mod cloud_deploy;

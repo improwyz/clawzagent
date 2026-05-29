@@ -6,7 +6,14 @@ import { DonutChart } from '../components/widgets/DonutChart';
 import { FleetTable } from '../components/widgets/FleetTable';
 import { ChannelGrid } from '../components/widgets/ChannelGrid';
 import { GovernancePanel } from '../components/widgets/GovernancePanel';
-import { fetchMetrics, fetchFleet, fetchChannels, fetchGovernance } from '../lib/api';
+import {
+  fetchMetrics,
+  fetchFleet,
+  fetchChannels,
+  fetchGovernance,
+  fetchDashboardOverview,
+} from '../lib/api';
+import { Badge } from '../components/shared/Badge';
 import { connectMetrics } from '../lib/ws';
 
 interface LiveMetrics {
@@ -44,6 +51,12 @@ export function Dashboard() {
     refetchInterval: 60_000,
   });
 
+  const { data: overview, isLoading: overviewLoading } = useQuery({
+    queryKey: ['dashboard-overview'],
+    queryFn: fetchDashboardOverview,
+    refetchInterval: 30_000,
+  });
+
   useEffect(() => {
     wsRef.current = connectMetrics((data) => {
       setLive((prev) => ({ ...prev, ...(data as LiveMetrics) }));
@@ -69,10 +82,32 @@ export function Dashboard() {
 
   const providerData = metrics?.provider_distribution ?? [];
 
+  const overviewConversations = overview?.counts.conversations;
+  const overviewPending = overview?.counts.pending_approvals;
+
   return (
     <div className="flex flex-col h-full overflow-y-auto p-4 gap-4">
+      {/* Health strip from overview */}
+      {overview && (
+        <div className="widget-3d rounded-xl bg-zinc-900 border border-zinc-800 px-4 py-2.5 flex flex-wrap items-center gap-3 text-sm">
+          <Badge variant={overview.health.status === 'healthy' ? 'success' : 'warning'}>
+            {overview.health.status}
+          </Badge>
+          <span className="text-zinc-400 font-mono text-xs">v{overview.health.version}</span>
+          <span className="text-zinc-500 text-xs">
+            uptime{' '}
+            <span className="text-zinc-300 font-mono">
+              {Math.floor(overview.health.uptime_secs / 60)}m
+            </span>
+          </span>
+          {overview.health.auth_disabled && (
+            <Badge variant="warning">auth off</Badge>
+          )}
+        </div>
+      )}
+
       {/* KPI row */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard
           label="Active Agents"
           value={activeAgents ?? '—'}
@@ -96,6 +131,23 @@ export function Dashboard() {
           unit="ms"
           loading={metricsLoading && avgLatency === undefined}
           variant={avgLatency !== undefined && avgLatency > 500 ? 'error' : 'default'}
+        />
+        <StatCard
+          label="Conversations"
+          value={
+            overviewConversations !== undefined
+              ? overviewConversations.toLocaleString()
+              : totalConvos !== undefined
+                ? totalConvos.toLocaleString()
+                : '—'
+          }
+          loading={overviewLoading && metricsLoading}
+        />
+        <StatCard
+          label="Pending Approvals"
+          value={overviewPending ?? governance?.approvals?.filter((a) => a.status === 'pending').length ?? '—'}
+          loading={overviewLoading && govLoading}
+          variant={(overviewPending ?? 0) > 0 ? 'warning' : 'default'}
         />
       </div>
 

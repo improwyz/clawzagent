@@ -7,6 +7,7 @@ import { Governance } from './pages/Governance';
 import { Fleet } from './pages/Fleet';
 import { Tools } from './pages/Tools';
 import { Config } from './pages/Config';
+import { Monitoring } from './pages/Monitoring';
 import { Login } from './pages/Login';
 
 export const router = createBrowserRouter([
@@ -27,6 +28,7 @@ export const router = createBrowserRouter([
       { path: 'fleet', element: <Fleet /> },
       { path: 'tools', element: <Tools /> },
       { path: 'config', element: <Config /> },
+      { path: 'monitoring', element: <Monitoring /> },
     ],
   },
 ]);

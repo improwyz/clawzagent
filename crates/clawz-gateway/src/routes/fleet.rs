@@ -47,6 +47,7 @@ pub fn routes() -> Router<AppState> {
         .route("/mesh", get(fleet_mesh))
         .route("/deploy", post(fleet_deploy))
         .route("/metrics", get(fleet_metrics))
+        .route("/deployments", get(list_fleet_deployments))
         // Per-node extra endpoints kept for backward compatibility
         .route("/{id}/deploy", post(deploy_to_node))
         .route("/{id}/logs", get(node_logs))
@@ -383,6 +384,41 @@ async fn fleet_deploy(
     }
 
     Ok((StatusCode::CREATED, Json(json!(deployment))))
+}
+
+/// `GET /fleet/deployments` — list in-process agent deployments on fleet nodes.
+async fn list_fleet_deployments(State(state): State<AppState>) -> Json<Value> {
+    let deployments = state.deployments.read().await;
+    let agents = state.agents.read().await;
+    let nodes = state.fleet_nodes.read().await;
+
+    let data: Vec<Value> = deployments
+        .iter()
+        .map(|d| {
+            let agent_name = agents
+                .iter()
+                .find(|a| a.id == d.agent_id)
+                .map(|a| a.name.as_str())
+                .unwrap_or(d.agent_id.as_str());
+            let node_name = nodes
+                .iter()
+                .find(|n| n.id == d.node_id)
+                .map(|n| n.name.as_str())
+                .unwrap_or(d.node_id.as_str());
+            json!({
+                "id": d.id,
+                "agent_id": d.agent_id,
+                "agent_name": agent_name,
+                "node_id": d.node_id,
+                "node_name": node_name,
+                "provider": "fleet",
+                "status": d.status,
+                "deployed_at": d.created_at,
+            })
+        })
+        .collect();
+
+    Json(json!({ "data": data, "total": data.len() }))
 }
 
 /// `GET /fleet/metrics` — aggregate fleet-wide statistics.

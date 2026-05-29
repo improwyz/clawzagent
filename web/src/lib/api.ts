@@ -2,6 +2,15 @@
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '/api/v1';
 
+/** Gateway origin without `/api/v1` (for `/health` and other root routes). */
+function gatewayOrigin(): string {
+  const base = API_BASE.replace(/\/$/, '');
+  if (base.endsWith('/api/v1')) {
+    return base.slice(0, -'/api/v1'.length) || '';
+  }
+  return base;
+}
+
 export function getStoredAuthToken(): string | null {
   return typeof localStorage !== 'undefined' ? localStorage.getItem('clawz_token') : null;
 }
@@ -112,6 +121,28 @@ function normalizeAgent(raw: Record<string, unknown>): Agent {
   };
 }
 
+function normalizeDeployment(raw: Record<string, unknown>): Deployment {
+  const status = String(raw.status ?? 'stopped').toLowerCase();
+  const mapped =
+    status === 'complete' || status === 'pending'
+      ? status === 'pending'
+        ? 'running'
+        : 'stopped'
+      : status;
+  return {
+    id: String(raw.id ?? ''),
+    agent_id: String(raw.agent_id ?? ''),
+    agent_name: String(raw.agent_name ?? ''),
+    node_id: String(raw.node_id ?? ''),
+    node_name: String(raw.node_name ?? ''),
+    provider: String(raw.provider ?? 'fleet'),
+    status: (['running', 'stopped', 'failed'].includes(mapped)
+      ? mapped
+      : 'stopped') as Deployment['status'],
+    deployed_at: String(raw.deployed_at ?? raw.created_at ?? new Date().toISOString()),
+  };
+}
+
 function normalizeFleetNode(raw: Record<string, unknown>): FleetNode {
   const status = String(raw.status ?? 'offline').toLowerCase();
   const agentIds = Array.isArray(raw.agent_ids) ? raw.agent_ids : [];
@@ -157,9 +188,66 @@ export function deleteAgent(id: string) {
   return req<void>(`/agents/${id}`, { method: 'DELETE' });
 }
 export function runAgent(id: string, message: string) {
-  return req<{ run_id: string }>(`/agents/${id}/run`, {
+  return req<{ run_id: string; conversation_id?: string; content?: string }>(
+    `/agents/${id}/run`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    },
+  );
+}
+
+export function stopAgent(id: string) {
+  return req<{ id: string; status: string }>(`/agents/${id}/stop`, { method: 'POST' });
+}
+
+export function startAgent(id: string) {
+  return req<{ id: string; status: string }>(`/agents/${id}/start`, { method: 'POST' });
+}
+
+export function fetchAgentStatus(id: string) {
+  return req<{ id: string; status: string }>(`/agents/${id}/status`);
+}
+
+export interface AgentHistoryMessage {
+  id?: string;
+  role: string;
+  content: string;
+  created_at?: string;
+}
+
+export interface AgentHistory {
+  agent_id: string;
+  messages: AgentHistoryMessage[];
+  total: number;
+}
+
+export async function fetchAgentHistory(id: string): Promise<AgentHistory> {
+  const res = await req<Record<string, unknown>>(`/agents/${id}/history`);
+  const messages = asArray<Record<string, unknown>>(res.messages).map((m) => ({
+    id: m.id != null ? String(m.id) : undefined,
+    role: String(m.role ?? 'user'),
+    content: String(m.content ?? ''),
+    created_at: m.created_at != null ? String(m.created_at) : undefined,
+  }));
+  return {
+    agent_id: String(res.agent_id ?? id),
+    messages,
+    total: Number(res.total ?? messages.length),
+  };
+}
+
+export function runAutonomous(
+  id: string,
+  opts?: { maxTurns?: number; costBudgetUsd?: number; systemPrompt?: string },
+) {
+  return req<{ session_id: string; status: string }>(`/agents/${id}/autonomous`, {
     method: 'POST',
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({
+      maxTurns: opts?.maxTurns,
+      costBudgetUsd: opts?.costBudgetUsd,
+      systemPrompt: opts?.systemPrompt,
+    }),
   });
 }
 
@@ -173,7 +261,95 @@ export interface DashboardMetrics {
   provider_distribution: { name: string; value: number }[];
 }
 
-export function fetchMetrics() { return req<DashboardMetrics>('/dashboard/metrics'); }
+export function fetchMetrics() {
+  return req<DashboardMetrics>('/dashboard/metrics');
+}
+
+// ── Dashboard overview ─────────────────────────────────────────────────────
+
+export interface DashboardOverviewHealth {
+  status: string;
+  uptime_secs: number;
+  version: string;
+  auth_disabled: boolean;
+}
+
+export interface DashboardOverviewCounts {
+  agents: number;
+  agents_running: number;
+  conversations: number;
+  rooms: number;
+  channels: number;
+  providers: number;
+  tools: number;
+  policies: number;
+  fleet_nodes: number;
+  fleet_nodes_online: number;
+  deployments: number;
+  audit_entries: number;
+  pending_approvals: number;
+}
+
+export interface DashboardApiCatalogItem {
+  method: string;
+  path: string;
+  summary: string;
+}
+
+export interface DashboardApiCatalogGroup {
+  group: string;
+  items: DashboardApiCatalogItem[];
+}
+
+export interface DashboardOverview {
+  health: DashboardOverviewHealth;
+  counts: DashboardOverviewCounts;
+  links: Record<string, string>;
+  api_catalog: DashboardApiCatalogGroup[];
+  generated_at: string;
+}
+
+export async function fetchDashboardOverview(): Promise<DashboardOverview> {
+  const raw = await req<Record<string, unknown>>('/dashboard/overview');
+  const health = asRecord(raw.health);
+  const counts = asRecord(raw.counts);
+  const catalog = asArray<Record<string, unknown>>(raw.api_catalog).map((g) => ({
+    group: String(g.group ?? ''),
+    items: asArray<Record<string, unknown>>(g.items).map((item) => ({
+      method: String(item.method ?? ''),
+      path: String(item.path ?? ''),
+      summary: String(item.summary ?? ''),
+    })),
+  }));
+  return {
+    health: {
+      status: String(health.status ?? 'unknown'),
+      uptime_secs: Number(health.uptime_secs ?? 0),
+      version: String(health.version ?? ''),
+      auth_disabled: Boolean(health.auth_disabled),
+    },
+    counts: {
+      agents: Number(counts.agents ?? 0),
+      agents_running: Number(counts.agents_running ?? 0),
+      conversations: Number(counts.conversations ?? 0),
+      rooms: Number(counts.rooms ?? 0),
+      channels: Number(counts.channels ?? 0),
+      providers: Number(counts.providers ?? 0),
+      tools: Number(counts.tools ?? 0),
+      policies: Number(counts.policies ?? 0),
+      fleet_nodes: Number(counts.fleet_nodes ?? 0),
+      fleet_nodes_online: Number(counts.fleet_nodes_online ?? 0),
+      deployments: Number(counts.deployments ?? 0),
+      audit_entries: Number(counts.audit_entries ?? 0),
+      pending_approvals: Number(counts.pending_approvals ?? 0),
+    },
+    links: Object.fromEntries(
+      Object.entries(asRecord(raw.links)).map(([k, v]) => [k, String(v)]),
+    ),
+    api_catalog: catalog,
+    generated_at: String(raw.generated_at ?? new Date().toISOString()),
+  };
+}
 
 // ── Fleet ──────────────────────────────────────────────────────────────────
 export interface FleetNode {
@@ -200,17 +376,189 @@ export interface Deployment {
 }
 
 export async function fetchFleet() {
-  const res = await req<unknown>('/fleet');
-  const nodes = asArray<Record<string, unknown>>(res).map(normalizeFleetNode);
-  const deployments = asArray<Deployment>(
-    asRecord(res).deployments ?? [],
-  );
+  const [fleetRes, deploymentsRes] = await Promise.all([
+    req<unknown>('/fleet'),
+    req<unknown>('/fleet/deployments'),
+  ]);
+  const nodes = asArray<Record<string, unknown>>(fleetRes).map(normalizeFleetNode);
+  const deployments = asArray<Record<string, unknown>>(deploymentsRes).map(normalizeDeployment);
   return { nodes, deployments };
 }
-export function deployAgent(agentId: string, nodeId: string, provider: string) {
+
+export function deployAgent(agentId: string, nodeId: string, _provider?: string) {
   return req<Deployment>('/fleet/deploy', {
     method: 'POST',
-    body: JSON.stringify({ agent_id: agentId, node_id: nodeId, provider }),
+    body: JSON.stringify({ agent_id: agentId, node_id: nodeId }),
+  }).then((d) => normalizeDeployment(asRecord(d)));
+}
+
+export interface FleetMeshNode {
+  id: string;
+  name: string;
+  node_type: string;
+  host: string;
+  port: number;
+  status: string;
+  agent_count: number;
+}
+
+export interface FleetMeshConnection {
+  from: string;
+  to: string;
+  latency_ms: number;
+  bandwidth_mbps?: number;
+}
+
+export interface FleetMesh {
+  nodes: FleetMeshNode[];
+  connections: FleetMeshConnection[];
+  total_nodes: number;
+  online_nodes: number;
+}
+
+export async function fetchFleetMesh(): Promise<FleetMesh> {
+  const raw = await req<Record<string, unknown>>('/fleet/mesh');
+  return {
+    nodes: asArray<Record<string, unknown>>(raw.nodes).map((n) => ({
+      id: String(n.id ?? ''),
+      name: String(n.name ?? ''),
+      node_type: String(n.node_type ?? 'worker'),
+      host: String(n.host ?? ''),
+      port: Number(n.port ?? 0),
+      status: String(n.status ?? 'offline'),
+      agent_count: Number(n.agent_count ?? 0),
+    })),
+    connections: asArray<Record<string, unknown>>(raw.connections).map((c) => ({
+      from: String(c.from ?? ''),
+      to: String(c.to ?? ''),
+      latency_ms: Number(c.latency_ms ?? 0),
+      bandwidth_mbps: c.bandwidth_mbps != null ? Number(c.bandwidth_mbps) : undefined,
+    })),
+    total_nodes: Number(raw.total_nodes ?? 0),
+    online_nodes: Number(raw.online_nodes ?? 0),
+  };
+}
+
+export interface FleetMetrics {
+  nodes: { total: number; online: number; offline: number; degraded: number };
+  deployments: { total: number; active: number };
+  agents: { total: number; running: number };
+  computed_at?: string;
+}
+
+export function fetchFleetMetrics() {
+  return req<FleetMetrics>('/fleet/metrics');
+}
+
+export interface KanbanColumn {
+  id: string;
+  name: string;
+  tasks: Record<string, unknown>[];
+}
+
+export async function fetchFleetKanban() {
+  const raw = await req<Record<string, unknown>>('/fleet/kanban');
+  return asArray<Record<string, unknown>>(raw.columns).map((col) => ({
+    id: String(col.id ?? ''),
+    name: String(col.name ?? ''),
+    tasks: asArray<Record<string, unknown>>(col.tasks),
+  })) as KanbanColumn[];
+}
+
+export interface FleetNodeLog {
+  level: string;
+  message: string;
+  timestamp: string;
+}
+
+export async function fetchFleetNodeLogs(nodeId: string) {
+  const raw = await req<Record<string, unknown>>(`/fleet/${nodeId}/logs`);
+  return {
+    node_id: String(raw.node_id ?? nodeId),
+    logs: asArray<Record<string, unknown>>(raw.logs).map((l) => ({
+      level: String(l.level ?? 'info'),
+      message: String(l.message ?? ''),
+      timestamp: String(l.timestamp ?? ''),
+    })) as FleetNodeLog[],
+    total: Number(raw.total ?? 0),
+  };
+}
+
+export function createFleetNode(data: {
+  name: string;
+  node_type?: string;
+  host?: string;
+  port?: number;
+}) {
+  return req<Record<string, unknown>>('/fleet', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteFleetNode(id: string) {
+  return req<void>(`/fleet/${id}`, { method: 'DELETE' });
+}
+
+// ── Cloud deploy ───────────────────────────────────────────────────────────
+export interface CloudProvider {
+  id: string;
+  display_name: string;
+  deploy_modes: string[];
+}
+
+export async function fetchCloudProviders() {
+  const res = await req<unknown>('/cloud/providers');
+  return asArray<Record<string, unknown>>(res).map(
+    (p): CloudProvider => ({
+      id: String(p.id ?? ''),
+      display_name: String(p.display_name ?? p.name ?? p.id ?? ''),
+      deploy_modes: Array.isArray(p.deploy_modes)
+        ? (p.deploy_modes as string[])
+        : Array.isArray(p.modes)
+          ? (p.modes as string[])
+          : [],
+    }),
+  );
+}
+
+export interface CloudDeployment {
+  id: string;
+  provider_id?: string;
+  external_resource?: string;
+  url?: string;
+  status?: string;
+  region?: string;
+  created_at?: string;
+}
+
+export async function fetchCloudDeployments() {
+  const res = await req<unknown>('/cloud/deployments');
+  return asArray<Record<string, unknown>>(res).map(
+    (d): CloudDeployment => ({
+      id: String(d.id ?? ''),
+      provider_id: d.provider_id != null ? String(d.provider_id) : undefined,
+      external_resource:
+        d.external_resource != null ? String(d.external_resource) : undefined,
+      url: d.url != null ? String(d.url) : undefined,
+      status: d.status != null ? String(d.status) : undefined,
+      region: d.region != null ? String(d.region) : undefined,
+      created_at: d.created_at != null ? String(d.created_at) : undefined,
+    }),
+  );
+}
+
+export function deployToCloud(body: {
+  provider_id?: string;
+  mode?: string;
+  image?: string;
+  env_vars?: Record<string, string>;
+  region?: string;
+  replicas?: number;
+}) {
+  return req<{ provider_id: string; deployment: CloudDeployment }>('/cloud/deploy', {
+    method: 'POST',
+    body: JSON.stringify(body),
   });
 }
 
@@ -356,6 +704,86 @@ export function rejectAction(id: string) {
   });
 }
 
+export async function fetchPolicies() {
+  const res = await req<unknown>('/governance/policies');
+  return asArray<Record<string, unknown>>(res).map(
+    (p): Policy => ({
+      id: String(p.id ?? ''),
+      name: String(p.name ?? ''),
+      description: String(p.description ?? ''),
+      rule: Array.isArray(p.rules) ? (p.rules as string[]).join('; ') : String(p.rule ?? ''),
+      active: Boolean(p.enabled ?? p.active ?? true),
+      created_at: String(p.created_at ?? ''),
+    }),
+  );
+}
+
+export function fetchPolicy(id: string) {
+  return req<Policy>(`/governance/policies/${id}`);
+}
+
+export async function fetchAuditLog(params?: {
+  page?: number;
+  limit?: number;
+  resource_type?: string;
+  actor?: string;
+}) {
+  const qs = new URLSearchParams();
+  if (params?.page != null) qs.set('page', String(params.page));
+  if (params?.limit != null) qs.set('limit', String(params.limit));
+  if (params?.resource_type) qs.set('resource_type', params.resource_type);
+  if (params?.actor) qs.set('actor', params.actor);
+  const q = qs.toString();
+  const res = await req<unknown>(`/governance/audit${q ? `?${q}` : ''}`);
+  return asArray<Record<string, unknown>>(res).map(
+    (e): AuditLog => ({
+      id: String(e.id ?? ''),
+      agent_id: String(e.resource_id ?? e.agent_id ?? ''),
+      agent_name: String(e.actor ?? e.resource_type ?? 'system'),
+      action: String(e.action ?? ''),
+      outcome: 'allowed',
+      timestamp: String(e.created_at ?? e.timestamp ?? new Date().toISOString()),
+      details: e.details != null ? String(e.details) : undefined,
+    }),
+  );
+}
+
+export async function fetchProposals() {
+  const res = await req<unknown>('/governance/proposals');
+  return asArray<Record<string, unknown>>(res);
+}
+
+export interface GovernanceTrustResponse {
+  agent_id: string;
+  trust_score: number;
+  total_actions: number;
+  violations: number;
+  tier: string;
+  computed_at?: string;
+}
+
+export function fetchTrustScore(agentId: string) {
+  return req<GovernanceTrustResponse>(`/governance/trust/${agentId}`);
+}
+
+export interface GovernanceEvaluateResult {
+  allowed: boolean;
+  outcome: string;
+  matched_policies?: string[];
+  reason?: string;
+}
+
+export function evaluateGovernance(agentId: string, action: string, context?: Record<string, unknown>) {
+  return req<GovernanceEvaluateResult>('/governance/evaluate', {
+    method: 'POST',
+    body: JSON.stringify({ agent_id: agentId, action, context }),
+  });
+}
+
+export function fetchPrismStatus() {
+  return req<Record<string, unknown>>('/system/prism');
+}
+
 // ── Channels ───────────────────────────────────────────────────────────────
 export interface Channel {
   id: string;
@@ -396,7 +824,17 @@ export function updateChannel(id: string, data: Partial<Channel> & { enabled?: b
   });
 }
 export function testChannel(id: string) {
-  return req<{ success: boolean; message: string }>(`/channels/${id}/test`, { method: 'POST' });
+  return req<{ success: boolean; message: string; id?: string }>(`/channels/${id}/test`, {
+    method: 'POST',
+  });
+}
+
+export function fetchChannel(id: string) {
+  return req<Channel>(`/channels/${id}`);
+}
+
+export function deleteChannel(id: string) {
+  return req<void>(`/channels/${id}`, { method: 'DELETE' });
 }
 
 // ── Tools ──────────────────────────────────────────────────────────────────
@@ -611,6 +1049,82 @@ export function clearAuthToken() {
   }
 }
 
+// ── System ─────────────────────────────────────────────────────────────────
+
+export interface SystemHealth {
+  status: string;
+  uptime_secs?: number;
+  version?: string;
+  raw?: string;
+}
+
+/** Root liveness probe at `GET /health` (plain text OK). */
+export async function fetchSystemHealth(): Promise<SystemHealth> {
+  const res = await fetch(`${gatewayOrigin()}/health`, { headers: authHeaders() });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Health ${res.status}: ${text.slice(0, 200)}`);
+  }
+  const trimmed = text.trim();
+  if (trimmed === 'OK') {
+    return { status: 'healthy', raw: trimmed };
+  }
+  try {
+    const json = JSON.parse(trimmed) as Record<string, unknown>;
+    return {
+      status: String(json.status ?? 'unknown'),
+      uptime_secs: json.uptime_secs != null ? Number(json.uptime_secs) : undefined,
+      version: json.version != null ? String(json.version) : undefined,
+      raw: trimmed,
+    };
+  } catch {
+    return { status: trimmed || 'unknown', raw: trimmed };
+  }
+}
+
+/** JSON health at `GET /api/v1/system/health`. */
+export function fetchSystemHealthDetailed() {
+  return req<{ status: string; uptime_secs: number; version: string }>('/system/health');
+}
+
+export interface SystemInfo {
+  name: string;
+  version: string;
+  uptime_secs: number;
+  stats: { agents: number; fleet_nodes: number };
+  started_at?: string;
+}
+
+export function fetchSystemInfo() {
+  return req<SystemInfo>('/system/info');
+}
+
+export interface SystemConfig {
+  log_level: string;
+  max_agents: number;
+  enable_audit: boolean;
+  gateway_version?: string;
+}
+
+export function fetchSystemConfig() {
+  return req<SystemConfig>('/system/config');
+}
+
+export function resetSystemConfig() {
+  return req<{ reset: boolean; config: SystemConfig }>('/system/config/reset', {
+    method: 'POST',
+  });
+}
+
+export async function fetchSystemMetrics(): Promise<string> {
+  const res = await fetch(`${API_BASE}/system/metrics`, { headers: authHeaders() });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Metrics ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return text;
+}
+
 // ── Config / Providers ─────────────────────────────────────────────────────
 export interface Provider {
   id: string;
@@ -761,6 +1275,106 @@ export async function connectSaas(_id: string) {
 
 export async function disconnectSaas(_id: string) {
   throw new Error('Unset CLAWZ_CONNECTOR_<NAME>_CONNECTED on the gateway host.');
+}
+
+// ── Conversations ────────────────────────────────────────────────────────────
+
+export interface Conversation {
+  id: string;
+  agent_id: string;
+  room_id?: string;
+  title?: string;
+  archived?: boolean;
+  message_count: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ConversationMessage {
+  id?: string;
+  role: string;
+  content: string;
+  created_at?: string;
+}
+
+function normalizeConversation(raw: Record<string, unknown>): Conversation {
+  return {
+    id: String(raw.id ?? ''),
+    agent_id: String(raw.agent_id ?? ''),
+    room_id: raw.room_id != null ? String(raw.room_id) : undefined,
+    title: raw.title != null ? String(raw.title) : undefined,
+    archived: raw.archived != null ? Boolean(raw.archived) : undefined,
+    message_count: Number(raw.message_count ?? 0),
+    created_at: raw.created_at != null ? String(raw.created_at) : undefined,
+    updated_at: raw.updated_at != null ? String(raw.updated_at) : undefined,
+  };
+}
+
+export async function listConversations(params?: {
+  agent_id?: string;
+  page?: number;
+  limit?: number;
+}) {
+  const qs = new URLSearchParams();
+  if (params?.agent_id) qs.set('agent_id', params.agent_id);
+  if (params?.page != null) qs.set('page', String(params.page));
+  if (params?.limit != null) qs.set('limit', String(params.limit));
+  const q = qs.toString();
+  const res = await req<unknown>(`/conversations${q ? `?${q}` : ''}`);
+  return asArray<Record<string, unknown>>(res).map(normalizeConversation);
+}
+
+export function fetchConversations(params?: {
+  agent_id?: string;
+  page?: number;
+  limit?: number;
+}) {
+  return listConversations(params);
+}
+
+export function fetchConversation(id: string) {
+  return req<Conversation>(`/conversations/${id}`).then((c) =>
+    normalizeConversation(asRecord(c)),
+  );
+}
+
+export function createConversation(agentId: string, title?: string) {
+  return req<Conversation>('/conversations', {
+    method: 'POST',
+    body: JSON.stringify({ agent_id: agentId, title }),
+  }).then((c) => normalizeConversation(asRecord(c)));
+}
+
+export function deleteConversation(id: string) {
+  return req<void>(`/conversations/${id}`, { method: 'DELETE' });
+}
+
+export async function fetchConversationMessages(conversationId: string) {
+  const res = await req<Record<string, unknown>>(`/conversations/${conversationId}/messages`);
+  const messages = asArray<Record<string, unknown>>(res.messages ?? res.data).map(
+    (m): ConversationMessage => ({
+      id: m.id != null ? String(m.id) : undefined,
+      role: String(m.role ?? 'user'),
+      content: String(m.content ?? ''),
+      created_at: m.created_at != null ? String(m.created_at) : undefined,
+    }),
+  );
+  return { messages, total: Number(res.total ?? messages.length) };
+}
+
+export function sendConversationMessage(
+  conversationId: string,
+  content: string,
+  role = 'user',
+) {
+  return req<Record<string, unknown>>(`/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ content, role }),
+  });
+}
+
+export function archiveConversation(id: string) {
+  return req<Record<string, unknown>>(`/conversations/${id}/archive`, { method: 'POST' });
 }
 
 // ── Rooms ────────────────────────────────────────────────────────────────────

@@ -5,65 +5,99 @@ import { FleetTable } from '../components/widgets/FleetTable';
 import { Badge, statusVariant } from '../components/shared/Badge';
 import { Modal } from '../components/shared/Modal';
 import { EmptyState } from '../components/shared/EmptyState';
-import { fetchFleet, deployAgent, fetchAgents, type FleetNode, type Deployment } from '../lib/api';
+import {
+  fetchFleet,
+  fetchFleetMesh,
+  fetchFleetMetrics,
+  deployAgent,
+  fetchAgents,
+  type Deployment,
+  type FleetMesh,
+} from '../lib/api';
 
 const PROVIDERS = ['anthropic', 'openai', 'google', 'local'];
 
-function MeshTopology({ nodes }: { nodes: FleetNode[] }) {
+function MeshTopology({ mesh, loading }: { mesh?: FleetMesh; loading?: boolean }) {
   const W = 400;
-  const H = 200;
+  const H = 220;
   const cx = W / 2;
   const cy = H / 2;
+  const nodes = mesh?.nodes ?? [];
+  const connections = mesh?.connections ?? [];
   const r = Math.min(cx, cy) - 30;
 
-  const positions = nodes.map((_, i) => ({
-    x: cx + r * Math.cos((2 * Math.PI * i) / nodes.length - Math.PI / 2),
-    y: cy + r * Math.sin((2 * Math.PI * i) / nodes.length - Math.PI / 2),
-  }));
+  const positions = new Map<string, { x: number; y: number }>();
+  nodes.forEach((node, i) => {
+    const angle = nodes.length > 0 ? (2 * Math.PI * i) / nodes.length - Math.PI / 2 : 0;
+    positions.set(node.id, {
+      x: cx + r * Math.cos(angle),
+      y: cy + r * Math.sin(angle),
+    });
+  });
+
+  if (loading) {
+    return (
+      <div className="h-44 flex items-center justify-center text-zinc-500 text-sm">
+        Loading mesh…
+      </div>
+    );
+  }
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '180px' }}>
-      {/* Connections between all nodes */}
-      {nodes.map((_, i) =>
-        nodes.slice(i + 1).map((__, j) => (
-          <line
-            key={`${i}-${i + 1 + j}`}
-            x1={positions[i].x}
-            y1={positions[i].y}
-            x2={positions[i + 1 + j].x}
-            y2={positions[i + 1 + j].y}
-            stroke="#27272a"
-            strokeWidth="1"
-          />
-        )),
-      )}
-      {/* Nodes */}
-      {nodes.map((node, i) => (
-        <g key={node.id}>
-          <circle
-            cx={positions[i].x}
-            cy={positions[i].y}
-            r={10}
-            fill={
-              node.status === 'online' ? '#16a34a' :
-              node.status === 'busy' ? '#ca8a04' : '#dc2626'
-            }
-            opacity={0.8}
-          />
-          <text
-            x={positions[i].x}
-            y={positions[i].y + 20}
-            textAnchor="middle"
-            fill="#71717a"
-            fontSize="9"
-          >
-            {(node.hostname ?? node.id).split('.')[0].slice(0, 10)}
-          </text>
-        </g>
-      ))}
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: '220px' }}>
+      {connections.map((conn, i) => {
+        const from = positions.get(conn.from);
+        const to = positions.get(conn.to);
+        if (!from || !to) return null;
+        return (
+          <g key={`${conn.from}-${conn.to}-${i}`}>
+            <line
+              x1={from.x}
+              y1={from.y}
+              x2={to.x}
+              y2={to.y}
+              stroke="#3f3f46"
+              strokeWidth="1"
+            />
+            <text
+              x={(from.x + to.x) / 2}
+              y={(from.y + to.y) / 2 - 4}
+              textAnchor="middle"
+              fill="#52525b"
+              fontSize="8"
+            >
+              {conn.latency_ms}ms
+            </text>
+          </g>
+        );
+      })}
+      {nodes.map((node) => {
+        const pos = positions.get(node.id);
+        if (!pos) return null;
+        return (
+          <g key={node.id}>
+            <circle
+              cx={pos.x}
+              cy={pos.y}
+              r={10}
+              fill={node.status === 'online' ? '#16a34a' : '#dc2626'}
+              opacity={0.85}
+            />
+            <text
+              x={pos.x}
+              y={pos.y + 20}
+              textAnchor="middle"
+              fill="#71717a"
+              fontSize="9"
+            >
+              {(node.name ?? node.id).slice(0, 12)}
+            </text>
+          </g>
+        );
+      })}
       {nodes.length === 0 && (
         <text x={cx} y={cy} textAnchor="middle" fill="#52525b" fontSize="12">
-          No nodes
+          No online nodes
         </text>
       )}
     </svg>
@@ -149,11 +183,24 @@ export function Fleet() {
     refetchInterval: 15_000,
   });
 
+  const { data: mesh, isLoading: meshLoading } = useQuery({
+    queryKey: ['fleet-mesh'],
+    queryFn: fetchFleetMesh,
+    refetchInterval: 15_000,
+    enabled: tab === 'mesh',
+  });
+
+  const { data: fleetMetrics, isLoading: metricsLoading } = useQuery({
+    queryKey: ['fleet-metrics'],
+    queryFn: fetchFleetMetrics,
+    refetchInterval: 15_000,
+  });
+
   const nodes = data?.nodes ?? [];
   const deployments = data?.deployments ?? [];
 
-  const online = nodes.filter((n) => n.status === 'online').length;
-  const offline = nodes.filter((n) => n.status === 'offline').length;
+  const online = fleetMetrics?.nodes.online ?? nodes.filter((n) => n.status === 'online').length;
+  const offline = fleetMetrics?.nodes.offline ?? nodes.filter((n) => n.status === 'offline').length;
   const avgCpu = nodes.length
     ? Math.round(nodes.reduce((s, n) => s + n.cpu_pct, 0) / nodes.length)
     : 0;
@@ -171,10 +218,30 @@ export function Fleet() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-4 gap-3">
-        <StatCard label="Total Nodes" value={nodes.length} loading={isLoading} />
-        <StatCard label="Online" value={online} loading={isLoading} variant="success" />
-        <StatCard label="Offline" value={offline} loading={isLoading} variant={offline > 0 ? 'error' : 'default'} />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <StatCard
+          label="Total Nodes"
+          value={fleetMetrics?.nodes.total ?? nodes.length}
+          loading={isLoading || metricsLoading}
+        />
+        <StatCard label="Online" value={online} loading={isLoading || metricsLoading} variant="success" />
+        <StatCard
+          label="Offline"
+          value={offline}
+          loading={isLoading || metricsLoading}
+          variant={offline > 0 ? 'error' : 'default'}
+        />
+        <StatCard
+          label="Degraded"
+          value={fleetMetrics?.nodes.degraded ?? 0}
+          loading={metricsLoading}
+          variant={(fleetMetrics?.nodes.degraded ?? 0) > 0 ? 'warning' : 'default'}
+        />
+        <StatCard
+          label="Active Deployments"
+          value={fleetMetrics?.deployments.active ?? deployments.filter((d) => d.status === 'running').length}
+          loading={isLoading || metricsLoading}
+        />
         <StatCard label="Avg CPU" value={avgCpu} unit="%" loading={isLoading} variant={avgCpu > 80 ? 'warning' : 'default'} />
       </div>
 
@@ -206,13 +273,15 @@ export function Fleet() {
           {tab === 'mesh' && (
             <div>
               <p className="text-zinc-500 text-xs mb-4">
-                Mesh topology — {nodes.length} node{nodes.length !== 1 ? 's' : ''}
+                Mesh topology — {mesh?.online_nodes ?? 0} online / {mesh?.total_nodes ?? nodes.length} total
+                {mesh && mesh.connections.length > 0 && (
+                  <span className="ml-2">· {mesh.connections.length} links</span>
+                )}
               </p>
-              <MeshTopology nodes={nodes} />
-              {nodes.length > 0 && (
+              <MeshTopology mesh={mesh} loading={meshLoading} />
+              {(mesh?.nodes.length ?? 0) > 0 && (
                 <div className="mt-4 flex gap-4 text-xs text-zinc-500">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-600 inline-block" /> Online</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-600 inline-block" /> Busy</span>
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-600 inline-block" /> Offline</span>
                 </div>
               )}
