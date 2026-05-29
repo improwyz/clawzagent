@@ -115,6 +115,24 @@ curl http://localhost:3000/api/v1/system/health
 
 Open **http://localhost:3000** in a browser for the gateway API (and dashboard if built).
 
+## First run (after install)
+
+**Routine VPS updates:** do not use `docker compose ... --build` on every `git pull` — that recompiles the full Rust workspace and can take 10–20+ minutes. Use **`./scripts/deploy.sh`** instead (pull prebuilt images or rebuild only what changed). See [docs/deployment-build-strategy.md](docs/deployment-build-strategy.md) for fast vs slow paths.
+
+1. **Health** — confirm the gateway is up:
+   ```bash
+   curl -sf http://localhost:3000/health
+   curl -sf http://localhost:3000/api/v1/system/health
+   ```
+2. **Web dashboard (optional)** — if you installed with `--with-web` or built `web/dist`, serve the UI on the VPS:
+   ```bash
+   ./scripts/serve-web-dashboard.sh
+   ```
+   Open **http://your-server:4173** (replace with your VPS hostname or IP; override port with `CLAWZ_WEB_PORT`). Log in when auth is enabled; with dev `.env`, `CLAWZ_DISABLE_AUTH=1` skips login.
+3. **Operator UI** — use the **Monitoring** page in the sidebar for fleet health, metrics, and alerts. Configure API keys and production settings under **Config** after disabling dev auth.
+
+**Gateway TUI:** the in-binary terminal UI is **development-only** and is not wired to production compose or auth. For installs and day-two ops on a VPS, use **`./scripts/install.sh`** (first boot) and the **web dashboard** (ongoing).
+
 **Fleet smoke test** (agent containers via worker Docker socket):
 
 ```bash

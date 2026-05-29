@@ -1,0 +1,16 @@
+# Stage 1: Build React dashboard (same-origin /api and /ws via nginx proxy)
+FROM node:20-alpine AS builder
+WORKDIR /app/web
+
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+
+COPY web/ ./
+RUN npm run build
+
+# Stage 2: Serve static assets behind nginx
+FROM nginx:alpine
+COPY deploy/nginx-dashboard.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/web/dist /usr/share/nginx/html
+
+EXPOSE 80

@@ -187,6 +187,8 @@ After install, open **http://localhost:3000** and run:
 curl http://localhost:3000/api/v1/system/health
 ```
 
+For **routine VPS updates** after the first install, use **`./scripts/deploy.sh`** (pull prebuilt images or rebuild only what changed). Avoid `docker compose ... --build` on every `git pull`. Run **`./scripts/deploy.sh --doctor`** for a quick health check. See [INSTALL.md](INSTALL.md) (“First run”) and [docs/deployment-build-strategy.md](docs/deployment-build-strategy.md).
+
 **Stop / logs**
 
 ```bash

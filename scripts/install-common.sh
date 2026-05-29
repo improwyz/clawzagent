@@ -106,6 +106,20 @@ wait_for_gateway() {
 
 print_success() {
   local mode="$1"
+  local web_port="${CLAWZ_WEB_PORT:-4173}"
+  local web_host
+  web_host="$(printf '%s' "${GATEWAY_URL}" | sed -E 's#https?://([^:/]+).*#\1#')"
+  if [[ "$web_host" == "127.0.0.1" || "$web_host" == "localhost" ]]; then
+    if command -v hostname >/dev/null 2>&1; then
+      web_host="$(hostname -f 2>/dev/null || hostname 2>/dev/null || echo "$web_host")"
+    fi
+  fi
+  local dashboard_url="http://${web_host}:${web_port}"
+  local auth_line=""
+  if [[ "${CLAWZ_DISABLE_AUTH:-}" == "1" ]] \
+    || { [[ -f .env ]] && grep -qE '^CLAWZ_DISABLE_AUTH=1' .env; }; then
+    auth_line=$'║  Dev auth:     CLAWZ_DISABLE_AUTH=1 (login bypassed)\n'
+  fi
   cat <<EOF
 
 ╔══════════════════════════════════════════════════════════════╗
@@ -116,13 +130,16 @@ print_success() {
 ║  OpenAPI        $GATEWAY_URL/api/v1/system/openapi
 ║  Rooms API      $GATEWAY_URL/api/v1/rooms
 ║  WebSocket      ws://127.0.0.1:3000/ws/rooms/{room_id}
-╠══════════════════════════════════════════════════════════════╣
+║  Dashboard      $dashboard_url  (./scripts/serve-web-dashboard.sh)
+${auth_line}╠══════════════════════════════════════════════════════════════╣
 ║  Quick test:
 ║    curl $GATEWAY_URL/api/v1/system/health
+║  Updates:  ./scripts/deploy.sh
+║  Doctor:    ./scripts/deploy.sh --doctor
 ║
 ║  Stop:    $COMPOSE down
 ║  Logs:    $COMPOSE logs -f gateway worker
-║  Docs:    README.md — "New features setup"
+║  Docs:    INSTALL.md — "First run"; docs/deployment-build-strategy.md
 ╚══════════════════════════════════════════════════════════════╝
 
 EOF
@@ -189,14 +206,27 @@ ensure_registry_auth() {
   fi
 }
 
+compose_has_service() {
+  local svc="$1"
+  shift
+  # shellcheck disable=SC2086
+  $COMPOSE $(compose_args prebuilt) "$@" config --services 2>/dev/null | grep -qxF "$svc"
+}
+
 pull_prebuilt_images() {
-  local pull_log
+  local pull_log pull_services="gateway worker" compose_profile_args=()
   pull_log="$(mktemp)"
   trap 'rm -f "$pull_log"' RETURN
 
-  log "Pulling ${CLAWZ_REGISTRY}/clawz-gateway:${CLAWZ_IMAGE_TAG} and clawz-worker:${CLAWZ_IMAGE_TAG} ..."
+  if [[ "${WITH_WEB:-0}" == "1" ]] && compose_has_service dashboard --profile web; then
+    pull_services="gateway worker dashboard"
+    compose_profile_args=(--profile web)
+    log "Pulling ${CLAWZ_REGISTRY}/clawz-gateway:${CLAWZ_IMAGE_TAG}, clawz-worker:${CLAWZ_IMAGE_TAG}, and clawz-dashboard:${CLAWZ_IMAGE_TAG} ..."
+  else
+    log "Pulling ${CLAWZ_REGISTRY}/clawz-gateway:${CLAWZ_IMAGE_TAG} and clawz-worker:${CLAWZ_IMAGE_TAG} ..."
+  fi
   # shellcheck disable=SC2086
-  if $COMPOSE $(compose_args prebuilt) pull gateway worker 2>"$pull_log"; then
+  if $COMPOSE $(compose_args prebuilt) "${compose_profile_args[@]}" pull $pull_services 2>"$pull_log"; then
     return 0
   fi
 
