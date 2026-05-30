@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AuthedLayout } from './components/auth/AuthedLayout';
+import { SetupGuard } from './components/setup/SetupGuard';
 import { RouteError } from './components/RouteError';
 import { Dashboard } from './pages/Dashboard';
 import { Agents } from './pages/Agents';
@@ -10,6 +11,7 @@ import { Config } from './pages/Config';
 import { Monitoring } from './pages/Monitoring';
 import { Cron } from './pages/Cron';
 import { Login } from './pages/Login';
+import { Setup } from './pages/Setup';
 
 export const router = createBrowserRouter([
   {
@@ -18,19 +20,29 @@ export const router = createBrowserRouter([
     errorElement: <RouteError />,
   },
   {
+    path: '/setup',
+    element: <Setup />,
+    errorElement: <RouteError />,
+  },
+  {
     path: '/',
     element: <AuthedLayout />,
     errorElement: <RouteError />,
     children: [
-      { index: true, element: <Dashboard /> },
-      { path: 'dashboard', element: <Dashboard /> },
-      { path: 'agents', element: <Agents /> },
-      { path: 'governance', element: <Governance /> },
-      { path: 'fleet', element: <Fleet /> },
-      { path: 'tools', element: <Tools /> },
-      { path: 'config', element: <Config /> },
-      { path: 'monitoring', element: <Monitoring /> },
-      { path: 'cron', element: <Cron /> },
+      {
+        element: <SetupGuard />,
+        children: [
+          { index: true, element: <Dashboard /> },
+          { path: 'dashboard', element: <Dashboard /> },
+          { path: 'agents', element: <Agents /> },
+          { path: 'governance', element: <Governance /> },
+          { path: 'fleet', element: <Fleet /> },
+          { path: 'tools', element: <Tools /> },
+          { path: 'config', element: <Config /> },
+          { path: 'monitoring', element: <Monitoring /> },
+          { path: 'cron', element: <Cron /> },
+        ],
+      },
     ],
   },
 ]);
