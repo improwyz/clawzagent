@@ -95,6 +95,7 @@ const PUBLIC_PATHS: &[&str] = &[
     "/api/v1/system/openapi",
     "/webhooks/twilio",
     "/webhooks/google-voice",
+    "/api/v1/setup",
 ];
 
 /// Axum middleware that enforces JWT or API-key authentication.

@@ -80,3 +80,6 @@ pub mod sessions;
 
 /// Workspace skills (`skills/*/SKILL.md`).
 pub mod skills;
+
+/// Install onboarding wizard (`/api/v1/setup/*`).
+pub mod setup;

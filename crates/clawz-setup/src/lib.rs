@@ -37,6 +37,7 @@ pub use tools::{
     ConfirmGate, InitWorkspaceTool, SetupTool, SetupToolRegistry, SpecCheckTool, ToolContext,
     ToolInput, ToolResult, WriteEnvTool,
 };
+pub use tools::{init_workspace_at, workspace_root};
 pub use types::{
     DeploymentChoice, InstallStrategy, SetupArtifact, SetupEvent, SetupPlatform, SetupSession,
     SetupStep,

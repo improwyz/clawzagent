@@ -1,13 +1,13 @@
 //! Allowlisted setup tools (no arbitrary shell).
 
-mod init_workspace;
+pub mod init_workspace;
 mod spec_check;
 mod write_env;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub use init_workspace::InitWorkspaceTool;
+pub use init_workspace::{InitWorkspaceTool, init_workspace_at, workspace_root};
 pub use spec_check::SpecCheckTool;
 pub use write_env::WriteEnvTool;
 

@@ -11,6 +11,7 @@ clawz-platform = { path = "../clawz-platform", version = "1.0.0" }
 clawz-services = { path = "../clawz-services", version = "1.0.0" }
 clawz-worker = { path = "../clawz-worker", version = "1.0.0" }
 clawz-tui = { path = "../clawz-tui", version = "1.0.0" }
+clawz-setup = { path = "../clawz-setup" }
 sqlx = { workspace = true }
 
 # HTTP server

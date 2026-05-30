@@ -573,6 +573,8 @@ pub struct AppState {
     pub approval_workflow: Arc<clawz_worker::governance::approval::ApprovalWorkflow>,
     /// Runtime UI settings (survives until gateway restart).
     pub ui_settings: Arc<RwLock<UiSettings>>,
+    /// Setup-only OAuth tokens (not promoted to providers until apply).
+    pub setup_oauth_vault: Arc<RwLock<HashMap<String, String>>>,
 }
 
 /// Personality preferences stored per agent.
@@ -655,6 +657,7 @@ impl AppState {
             personality: Arc::new(RwLock::new(HashMap::new())),
             approval_workflow,
             ui_settings: Arc::new(RwLock::new(UiSettings::from_env())),
+            setup_oauth_vault: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 

@@ -125,6 +125,7 @@ impl GatewayServer {
             .nest("/fleet", crate::routes::fleet::routes())
             .nest("/cloud", crate::routes::cloud_deploy::routes())
             .nest("/system", crate::routes::system::routes())
+            .nest("/setup", crate::routes::setup::routes())
             .nest("/dashboard", crate::routes::dashboard::routes())
             .route("/mcp", post(crate::mcp::handle_mcp_request))
             .layer(middleware::from_fn(crate::auth::auth_middleware))

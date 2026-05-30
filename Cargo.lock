@@ -902,6 +902,7 @@ dependencies = [
  "clawz-core",
  "clawz-platform",
  "clawz-services",
+ "clawz-setup",
  "clawz-tui",
  "clawz-worker",
  "futures",
