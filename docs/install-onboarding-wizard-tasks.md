@@ -23,58 +23,58 @@ Use this file to track progress. Mark items `[x]` when done.
 
 ### 1.1 Crate scaffold
 
-- [ ] Add `crates/clawz-setup/` to workspace `Cargo.toml`
-- [ ] Define `SetupSession`, `SetupStep`, `SetupPlatform`, `DeploymentChoice`
-- [ ] Define `SetupEvent`, `SetupArtifact`, `SetupError`
-- [ ] Session persistence: read/write `~/.clawz/setup/session.json`
-- [ ] `setup_complete` flag in `~/.clawz/config.json`
-- [ ] Unit tests: session save/load, step transitions
+- [x] Add `crates/clawz-setup/` to workspace `Cargo.toml`
+- [x] Define `SetupSession`, `SetupStep`, `SetupPlatform`, `DeploymentChoice`
+- [x] Define `SetupEvent`, `SetupArtifact`, `SetupError`
+- [x] Session persistence: read/write `~/.clawz/setup/session.json`
+- [x] `setup_complete` flag in `~/.clawz/config.json`
+- [x] Unit tests: session save/load, step transitions
 
 ### 1.2 State machine
 
-- [ ] Implement `SetupStateMachine` with phases 0–10
-- [ ] Allow resume from last incomplete step
-- [ ] `reset()` and `abort()` handlers
-- [ ] Validate transitions (no skip secrets before deploy mode)
+- [x] Implement `SetupStateMachine` with phases 0–10
+- [x] Allow resume from last incomplete step
+- [x] `reset()` and `abort()` handlers
+- [x] Validate transitions (no skip secrets before deploy mode)
 - [ ] Export JSON schema for web/CLI hosts
 
 ### 1.3 Host spec checker
 
-- [ ] `HostSpecChecker::collect()` — OS, arch, RAM, disk, CPU count
-- [ ] Check Docker / compose v2 availability
-- [ ] Check Rust ≥ 1.87, optional Node for `--with-web`
-- [ ] GHCR / `GITHUB_TOKEN` probe when prebuilt selected
-- [ ] Threshold warnings per mode (standalone / micro / elastic)
-- [ ] Human-readable report struct (shared with doctor)
+- [x] `HostSpecChecker::collect()` — OS, arch, RAM, disk, CPU count
+- [x] Check Docker / compose v2 availability
+- [x] Check Rust ≥ 1.87, optional Node for `--with-web`
+- [x] GHCR / `GITHUB_TOKEN` probe when prebuilt selected
+- [x] Threshold warnings per mode (standalone / micro / elastic)
+- [x] Human-readable report struct (shared with doctor)
 
 ### 1.4 Setup tools (allowlisted)
 
-- [ ] `SetupTools` trait + registry (no arbitrary shell)
-- [ ] `tool:spec_check` → HostSpecChecker
+- [x] `SetupTools` trait + registry (no arbitrary shell)
+- [x] `tool:spec_check` → HostSpecChecker
 - [ ] `tool:doctor_run` → wrap existing doctor checks
-- [ ] `tool:write_env` → patch `.env` with confirm token
-- [ ] `tool:init_workspace` → invoke `init-workspace.sh` logic in Rust
+- [x] `tool:write_env` → patch `.env` with confirm token
+- [x] `tool:init_workspace` → invoke `init-workspace.sh` logic in Rust
 - [ ] `tool:compose_up` / `compose_down` → install-common patterns
 - [ ] `tool:migrate_db` → call migrate-db.sh or SQL embed
 - [ ] `tool:create_agent` → build `AgentConfig` payload
 - [ ] `tool:set_provider` → provider config DTO for gateway
 - [ ] `tool:smoke_execute` → test agent turn
-- [ ] Confirm-gate wrapper for destructive tools
+- [x] Confirm-gate wrapper for destructive tools
 
 ### 1.5 Deploy planner
 
-- [ ] `DeployPlanner`: prebuilt vs build decision
-- [ ] Map to `CLAWZ_IMAGE_TAG`, compose file overlays
-- [ ] Source-run path for `CLAWZ_MODE=standalone` without Docker
-- [ ] Return actionable errors (GHCR auth, port in use)
+- [x] `DeployPlanner`: prebuilt vs build decision
+- [x] Map to `CLAWZ_IMAGE_TAG`, compose file overlays
+- [x] Source-run path for `CLAWZ_MODE=standalone` without Docker
+- [x] Return actionable errors (GHCR auth, port in use)
 
 ### 1.6 Agent bootstrap
 
-- [ ] `AgentBootstrap::build_identity` — name, who_am_i, role → `AGENTS.md` + system_prompt
-- [ ] Skill selection → workspace `skills/*/SKILL.md`
-- [ ] Standalone: single `AgentConfig`
+- [x] `AgentBootstrap::build_identity` — name, who_am_i, role → `AGENTS.md` + system_prompt
+- [x] Skill selection → workspace `skills/*/SKILL.md` (via init_workspace seed)
+- [x] Standalone: single `AgentConfig`
 - [ ] Call gateway client or local API to `POST /agents`
-- [ ] Wire `WorkspaceLoader` path (`CLAWZ_WORKSPACE` / `~/.clawz/workspace`)
+- [x] Wire `WorkspaceLoader` path (`CLAWZ_WORKSPACE` / `~/.clawz/workspace`)
 
 ---
 
@@ -82,17 +82,17 @@ Use this file to track progress. Mark items `[x]` when done.
 
 ### 2.1 Shared doctor
 
-- [ ] Move/duplicate doctor checks into `clawz-setup::doctor`
-- [ ] `clawz doctor` calls shared module (thin wrapper in CLI)
-- [ ] JSON output includes remediation hints
-- [ ] `doctor --fix` stub (lists suggested tools only, P3 executes)
+- [x] Move/duplicate doctor checks into `clawz-setup::doctor`
+- [x] `clawz doctor` calls shared module (thin wrapper in CLI)
+- [x] JSON output includes remediation hints
+- [x] `doctor --fix` stub (lists suggested tools only, P3 executes)
 
 ### 2.2 `clawz onboard` rewrite
 
-- [ ] `onboard.rs` drives `SetupStateMachine` instead of print-only TUI
-- [ ] Flags: `--resume`, `--step <n>`, `--json`, `--non-interactive` (scripted)
-- [ ] `--install-daemon` → compose up after phase 3
-- [ ] On success: print dashboard URL + `setup_complete`
+- [x] `onboard.rs` drives `SetupStateMachine` instead of print-only TUI
+- [x] Flags: `--resume`, `--step <n>`, `--json`, `--non-interactive` (scripted)
+- [x] `--install-daemon` → compose up after phase 3
+- [x] On success: print dashboard URL + `setup_complete`
 
 ### 2.3 Dependency installer
 
@@ -107,36 +107,36 @@ Use this file to track progress. Mark items `[x]` when done.
 
 ### 3.1 Ratatui wizard UI
 
-- [ ] Add `ratatui` + `crossterm` to `clawz-tui`
-- [ ] Multi-screen flow: welcome → mode → deploy → … → complete
-- [ ] Progress bar / step indicator (0–10)
-- [ ] Summary screen before apply
-- [ ] Stdin fallback when `CLAWZ_TUI=plain` or non-TTY
+- [x] Add `ratatui` + `crossterm` to `clawz-tui`
+- [x] Multi-screen flow: welcome → mode → deploy → … → complete
+- [x] Progress bar / step indicator (0–10)
+- [x] Summary screen before apply
+- [x] Stdin fallback when `CLAWZ_TUI=plain` or non-TTY
 
 ### 3.2 TUI screens per phase
 
-- [ ] Phase 0–1: spec summary + mode picker
-- [ ] Phase 2: prebuilt vs build + GHCR token prompt
-- [ ] Phase 4: show generated secrets (masked) + confirm write `.env`
-- [ ] Phase 5: LLM provider + API key (manual path P1)
-- [ ] Phase 6–7: identity + skills (text inputs)
-- [ ] Phase 8: topology (standalone auto / micro template stub)
-- [ ] Phase 9: doctor results inline (green/red)
-- [ ] Phase 10: completion + next steps
+- [x] Phase 0–1: spec summary + mode picker
+- [x] Phase 2: prebuilt vs build + GHCR token prompt
+- [x] Phase 4: show generated secrets (masked) + confirm write `.env`
+- [x] Phase 5: LLM provider + API key (manual path P1)
+- [x] Phase 6–7: identity + skills (text inputs)
+- [x] Phase 8: topology (standalone auto / micro template stub)
+- [x] Phase 9: doctor results inline (green/red)
+- [x] Phase 10: completion + next steps
 
 ### 3.3 TUI tests
 
-- [ ] Snapshot or integration test with `CLAWZ_TUI=plain` + piped answers
-- [ ] Mask secrets in test output
+- [x] Snapshot or integration test with `CLAWZ_TUI=plain` + piped answers
+- [x] Mask secrets in test output
 
 ---
 
 ## 4. Install script fallback (P1)
 
-- [ ] `install.sh --wizard` flag
-- [ ] After clone/deps: exec `clawz onboard --json` or cargo run CLI
-- [ ] Pass `--install-daemon` when docker mode
-- [ ] Document in `install.sh` header comment
+- [x] `install.sh --wizard` flag
+- [x] After clone/deps: exec `clawz onboard --json` or cargo run CLI
+- [x] Pass `--install-daemon` when docker mode
+- [x] Document in `install.sh` header comment
 - [ ] `install.ps1 --wizard` stub (message: use web on Windows until P4)
 
 ---
@@ -292,10 +292,10 @@ Use this file to track progress. Mark items `[x]` when done.
 | Phase | Total tasks | Done |
 |-------|-------------|------|
 | 0. Docs | 5 | 5 |
-| 1. clawz-setup | 35 | 0 |
-| 2. CLI/doctor | 12 | 0 |
-| 3. Linux TUI | 14 | 0 |
-| 4. install.sh | 5 | 0 |
+| 1. clawz-setup | 35 | 28 |
+| 2. CLI/doctor | 12 | 8 |
+| 3. Linux TUI | 14 | 14 |
+| 4. install.sh | 5 | 4 |
 | 5. Gateway API | 18 | 0 |
 | 6. Web wizard | 17 | 0 |
 | 7. OAuth/MSP | 7 | 0 |
@@ -303,6 +303,6 @@ Use this file to track progress. Mark items `[x]` when done.
 | 9. Multi-agent | 6 | 0 |
 | 10. Mobile | 6 | 0 |
 | 11. Verification | 6 | 0 |
-| **Approx. total** | **~147** | **5** |
+| **Approx. total** | **~147** | **~59** |
 
 _Update the table counts when checking off items._
