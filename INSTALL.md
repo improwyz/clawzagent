@@ -614,6 +614,9 @@ Or run: `powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1`
 ## Related docs
 
 - [README.md](README.md) — features, architecture, configuration
+- [docs/user-manual.md](docs/user-manual.md) — end-user manual (23 sections)
+- [docs/administration-manual.md](docs/administration-manual.md) — operations, security, governance
+- [docs/api-reference.md](docs/api-reference.md) — REST API with code samples
 - [CONTRIBUTING.md](CONTRIBUTING.md) — building and testing from source
 - [TELEPHONY.md](TELEPHONY.md) — Twilio & Google Voice (requires `CLAWZ_PUBLIC_URL`)
 - [AGENTS.md](AGENTS.md) — architecture reference for contributors

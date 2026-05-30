@@ -34,6 +34,12 @@ Thumbs.db
 !/docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md
 !/docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md
 !/docs/install-onboarding-wizard-tasks.md
+!/docs/clawz-product-brochure.md
+!/docs/user-manual.md
+!/docs/administration-manual.md
+!/docs/api-reference.md
+!/docs/USER-MANUAL.md
+!/docs/ADMINISTRATION-MANUAL.md
 
 # Node
 node_modules/

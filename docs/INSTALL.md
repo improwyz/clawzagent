@@ -10,10 +10,14 @@
 |----------|----------|
 | [../INSTALL.md](../INSTALL.md) | Full install guide (prerequisites, options, wizard, troubleshooting) |
 | [../README.md](../README.md) | Quick start, features, configuration |
+| [user-manual.md](user-manual.md) | End-user manual (install through operations) |
+| [administration-manual.md](administration-manual.md) | Security, deployment, governance for admins |
+| [api-reference.md](api-reference.md) | HTTP API with curl, Python, and JavaScript samples |
 | [private-registry.md](private-registry.md) | GHCR login and `GITHUB_TOKEN` |
 | [deployment-build-strategy.md](deployment-build-strategy.md) | Updates via `scripts/deploy.sh` (avoid rebuild every pull) |
 | [install-onboarding-wizard-tasks.md](install-onboarding-wizard-tasks.md) | Wizard implementation tracker |
 | [superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md](superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md) | Host bootstrap + Compose architecture |
+| [clawz-product-brochure.md](clawz-product-brochure.md) | USP, positioning, and sales/brochure copy |
 
 ---
 

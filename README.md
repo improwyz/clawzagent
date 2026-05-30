@@ -230,6 +230,15 @@ Prebuilt images: `docker login ghcr.io` then install — see [docs/private-regis
 
 Full install guide: **[INSTALL.md](INSTALL.md)** (all platforms, production checklist, troubleshooting).
 
+**Documentation:**
+
+| Document | Audience |
+|----------|----------|
+| [docs/user-manual.md](docs/user-manual.md) | Day-to-day operators and AI engineers |
+| [docs/administration-manual.md](docs/administration-manual.md) | Platform admins, SRE, security, compliance |
+| [docs/api-reference.md](docs/api-reference.md) | REST/WebSocket integration developers |
+| [docs/clawz-product-brochure.md](docs/clawz-product-brochure.md) | USP, differentiators, brochure-ready copy |
+
 ---
 
 ### Manual setup (developers)
