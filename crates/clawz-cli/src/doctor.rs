@@ -3,7 +3,6 @@
 use anyhow::Result;
 use serde::Serialize;
 
-use crate::client::{worker_health, GatewayClient};
 use crate::config::{self, CliConfig};
 
 #[derive(Debug, Serialize)]
@@ -39,7 +38,7 @@ impl DoctorReport {
 
 pub async fn run(json: bool) -> Result<()> {
     let cfg = config::resolve();
-    let report = collect(&cfg).await;
+    let report = collect(&cfg);
     if json {
         println!("{}", serde_json::to_string_pretty(&report.checks)?);
     } else {
@@ -51,27 +50,23 @@ pub async fn run(json: bool) -> Result<()> {
     Ok(())
 }
 
-async fn collect(cfg: &CliConfig) -> DoctorReport {
-    let mut checks = Vec::new();
+fn collect(cfg: &CliConfig) -> DoctorReport {
+    let setup = clawz_setup::run_doctor(&clawz_setup::DoctorConfig {
+        gateway_url: cfg.gateway_url.clone(),
+        worker_url: cfg.worker_url.clone(),
+        check_docker: true,
+    });
 
-    checks.push(env_check(
-        "CLAWZ_MODE",
-        std::env::var("CLAWZ_MODE").ok(),
-        false,
-    ));
-    checks.push(env_check(
-        "VALID_API_KEYS or CLAWZ_DISABLE_AUTH",
-        std::env::var("VALID_API_KEYS")
-            .ok()
-            .or_else(|| {
-                if std::env::var("CLAWZ_DISABLE_AUTH").ok().as_deref() == Some("1") {
-                    Some("auth disabled".to_string())
-                } else {
-                    None
-                }
-            }),
-        false,
-    ));
+    let mut checks: Vec<Check> = setup
+        .checks
+        .into_iter()
+        .map(|c| Check {
+            name: c.name,
+            ok: c.ok,
+            detail: c.detail,
+        })
+        .collect();
+
     checks.push(env_check(
         "CLAWZ_JWT_SECRET",
         std::env::var("CLAWZ_JWT_SECRET").ok(),
@@ -89,47 +84,6 @@ async fn collect(cfg: &CliConfig) -> DoctorReport {
         },
     });
 
-    let gw = GatewayClient::new(cfg);
-    match gw.system_health().await {
-        Ok(v) => {
-            let status = v
-                .get("status")
-                .and_then(|s| s.as_str())
-                .unwrap_or("unknown");
-            checks.push(Check {
-                name: "gateway".into(),
-                ok: true,
-                detail: format!("{} — {}", cfg.gateway_url, status),
-            });
-        }
-        Err(e) => checks.push(Check {
-            name: "gateway".into(),
-            ok: false,
-            detail: format!("{} — {e}", cfg.gateway_url),
-        }),
-    }
-
-    match worker_health(&cfg.worker_url).await {
-        Ok(v) => {
-            let svc = v
-                .get("service")
-                .and_then(|s| s.as_str())
-                .unwrap_or("worker");
-            checks.push(Check {
-                name: "worker".into(),
-                ok: true,
-                detail: format!("{} — {svc}", cfg.worker_url),
-            });
-        }
-        Err(e) => checks.push(Check {
-            name: "worker".into(),
-            ok: false,
-            detail: format!("{} — {e}", cfg.worker_url),
-        }),
-    }
-
-    checks.push(docker_check().await);
-
     DoctorReport { checks }
 }
 
@@ -145,37 +99,5 @@ fn env_check(name: &str, value: Option<String>, required: bool) -> Check {
                 "optional — not set".into()
             }
         }),
-    }
-}
-
-async fn docker_check() -> Check {
-    let output = tokio::process::Command::new("docker")
-        .args(["compose", "ps", "--format", "json"])
-        .output()
-        .await;
-
-    match output {
-        Ok(out) if out.status.success() => {
-            let n = String::from_utf8_lossy(&out.stdout).lines().count();
-            Check {
-                name: "docker compose".into(),
-                ok: true,
-                detail: format!("{n} service line(s) reported"),
-            }
-        }
-        Ok(out) => Check {
-            name: "docker compose".into(),
-            ok: false,
-            detail: format!(
-                "exit {} — {}",
-                out.status,
-                String::from_utf8_lossy(&out.stderr).trim()
-            ),
-        },
-        Err(e) => Check {
-            name: "docker compose".into(),
-            ok: true,
-            detail: format!("skipped ({e})"),
-        },
     }
 }

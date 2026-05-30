@@ -29,6 +29,15 @@ enum Commands {
         /// Start Docker Compose stack after the wizard.
         #[arg(long)]
         install_daemon: bool,
+        /// Resume from `~/.clawz/setup/session.json`.
+        #[arg(long)]
+        resume: bool,
+        /// Machine-readable session / host-spec output.
+        #[arg(long)]
+        json: bool,
+        /// Jump to setup phase 0–10 (see clawz-setup `SetupStep`).
+        #[arg(long)]
+        step: Option<u8>,
     },
     /// Same as onboard configuration menu.
     Setup,
@@ -81,7 +90,20 @@ enum TuiAction {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::Onboard { install_daemon } => onboard::run(install_daemon).await?,
+        Commands::Onboard {
+            install_daemon,
+            resume,
+            json,
+            step,
+        } => {
+            onboard::run(onboard::OnboardOptions {
+                resume,
+                json,
+                step,
+                install_daemon,
+            })
+            .await?
+        }
         Commands::Setup => {
             clawz_tui::run_config();
         }

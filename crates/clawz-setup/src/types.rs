@@ -102,7 +102,7 @@ pub enum SetupEvent {
 }
 
 /// Artifacts produced by setup tools (`.env` patches, agent payloads, etc.).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SetupArtifact {
     EnvPatch { keys: Vec<String> },

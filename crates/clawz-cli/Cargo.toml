@@ -11,6 +11,7 @@ name = "clawz"
 path = "src/main.rs"
 
 [dependencies]
+clawz-setup = { path = "../clawz-setup", version = "1.0.0" }
 clawz-tui = { path = "../clawz-tui", version = "1.0.0" }
 clap = { version = "4", features = ["derive"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
