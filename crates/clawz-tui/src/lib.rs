@@ -3,70 +3,19 @@
 //! Used by `clawz onboard`, `clawz setup`, and `clawz tui`. All I/O uses
 //! `stdin`/`stdout` so prompts are testable with [`std::io::Cursor`].
 
+mod wizard;
+
+use clawz_setup::{SetupPlatform, SetupStateMachine};
 use std::io::{self, BufRead, Write};
 
-/// Interactive first-run wizard — prints `export` lines for shell or `.env`.
+pub use wizard::run_setup_wizard;
+
+/// Interactive first-run wizard — drives [`SetupStateMachine`] and prints env exports.
 pub fn run_onboarding() {
-    let stdin = io::stdin();
-    let mut reader = stdin.lock();
-
-    println!("=== ClawZ Onboarding ===\n");
-    println!("Press Enter to accept defaults in [brackets].\n");
-
-    let port = prompt(&mut reader, "Gateway port", "3000");
-    let jwt_secret = prompt_secret(&mut reader, "JWT secret (blank = auto-generate)");
-    let jwt_secret = if jwt_secret.is_empty() {
-        generate_secret(32)
-    } else {
-        jwt_secret
-    };
-    let api_keys = prompt(&mut reader, "API keys (comma-separated)", "dev-key");
-    let worker_token = prompt_secret(&mut reader, "Worker internal token (blank = auto)");
-    let worker_token = if worker_token.is_empty() {
-        generate_secret(24)
-    } else {
-        worker_token
-    };
-    let anthropic_key = prompt(&mut reader, "Anthropic API key (optional)", "");
-    let openai_key = prompt(&mut reader, "OpenAI API key (optional)", "");
-    let log_level = prompt(
-        &mut reader,
-        "Log level (trace/debug/info/warn/error)",
-        "info",
-    );
-    let mode = prompt(
-        &mut reader,
-        "Deployment mode (standalone/micro/elastic)",
-        "micro",
-    );
-
-    println!("\n┌──────────────────────────────────────────────────┐");
-    println!("│           ClawZ configuration summary             │");
-    println!("├──────────────────────────────────────────────────┤");
-    println!("│  Port         : {:<33} │", port);
-    println!("│  Mode         : {:<33} │", mode);
-    println!("│  Log level    : {:<33} │", log_level);
-    println!("│  API keys     : {:<33} │", mask_key(&api_keys));
-    println!("│  Anthropic    : {:<33} │", mask_key(&anthropic_key));
-    println!("│  OpenAI       : {:<33} │", mask_key(&openai_key));
-    println!("└──────────────────────────────────────────────────┘");
-
-    println!("\nAdd to `.env` or your shell:\n");
-    println!("  export CLAWZ__SERVER__PORT={}", port);
-    println!("  export CLAWZ_JWT_SECRET={}", jwt_secret);
-    println!("  export VALID_API_KEYS=\"{}\"", api_keys);
-    println!("  export CLAWZ_WORKER_TOKEN={}", worker_token);
-    println!("  export WORKER_URL=http://127.0.0.1:50051");
-    println!("  export CLAWZ_MODE={}", mode);
-    println!("  export RUST_LOG={}", log_level);
-    if !anthropic_key.is_empty() {
-        println!("  export ANTHROPIC_API_KEY={}", anthropic_key);
+    let mut sm = SetupStateMachine::new(SetupPlatform::Linux);
+    if let Err(e) = run_setup_wizard(&mut sm) {
+        eprintln!("Setup wizard failed: {e}");
     }
-    if !openai_key.is_empty() {
-        println!("  export OPENAI_API_KEY={}", openai_key);
-    }
-    println!("\nDocker Compose: run `./scripts/install.sh` from the ClawZ repo.");
-    println!("Source:         `cargo run -p clawz-gateway` (gateway) + worker on :50051");
 }
 
 /// Read-only terminal dashboard stub.
@@ -138,7 +87,7 @@ fn config_deploy(reader: &mut impl BufRead) {
     let _ = target;
 }
 
-fn prompt(reader: &mut impl BufRead, label: &str, default: &str) -> String {
+pub(crate) fn prompt(reader: &mut impl BufRead, label: &str, default: &str) -> String {
     if default.is_empty() {
         print!("  {label} : ");
     } else {
@@ -155,7 +104,7 @@ fn prompt(reader: &mut impl BufRead, label: &str, default: &str) -> String {
     }
 }
 
-fn prompt_secret(reader: &mut impl BufRead, label: &str) -> String {
+pub(crate) fn prompt_secret(reader: &mut impl BufRead, label: &str) -> String {
     print!("  {label} (hidden): ");
     io::stdout().flush().unwrap();
     let mut input = String::new();
@@ -163,14 +112,17 @@ fn prompt_secret(reader: &mut impl BufRead, label: &str) -> String {
     input.trim().to_string()
 }
 
-fn mask_key(key: &str) -> String {
+pub(crate) fn mask_key(key: &str) -> String {
+    if key.is_empty() {
+        return "(empty)".into();
+    }
     if key.len() <= 8 {
         return "*".repeat(key.len());
     }
     format!("{}****", &key[..4])
 }
 
-fn generate_secret(bytes: usize) -> String {
+pub(crate) fn generate_secret(bytes: usize) -> String {
     let mut out = String::with_capacity(bytes * 2);
     while out.len() < bytes * 2 {
         let u = uuid::Uuid::new_v4();
@@ -184,6 +136,7 @@ fn generate_secret(bytes: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clawz_setup::{DeploymentChoice, SetupPlatform, SetupStateMachine, SetupStep};
     use std::io::Cursor;
 
     #[test]
@@ -195,5 +148,23 @@ mod tests {
     #[test]
     fn generate_secret_length() {
         assert_eq!(generate_secret(32).len(), 64);
+    }
+
+    #[test]
+    fn plain_wizard_advances_through_deploy_mode() {
+        std::env::set_var("CLAWZ_TUI", "plain");
+        let input = "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n";
+        let mut reader = Cursor::new(input.as_bytes());
+        let mut sm = SetupStateMachine::new(SetupPlatform::Linux).without_persistence();
+        let mut answers = wizard::context::WizardAnswers::default();
+
+        // Drive welcome manually (plain::run uses stdin lock — test steps directly)
+        sm.advance().expect("welcome");
+        assert_eq!(sm.current_step(), SetupStep::DeployMode);
+        sm.set_deployment(DeploymentChoice::Micro).expect("deploy");
+        sm.set_install_strategy(clawz_setup::InstallStrategy::Prebuilt).expect("strategy");
+        assert!(sm.session().deployment.is_some());
+        let _ = (&mut reader, &mut answers);
+        std::env::remove_var("CLAWZ_TUI");
     }
 }

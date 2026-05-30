@@ -1,13 +1,83 @@
-//! `clawz onboard` — first-run wizard + optional Docker stack.
+//! `clawz onboard` — setup wizard via [`clawz_setup::SetupStateMachine`].
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
+use clawz_setup::{
+    ensure_setup_dir, prompts, HostSpecChecker, SetupError, SetupPlatform, SetupStateMachine,
+    SetupStep,
+};
 
 use crate::config::{self, CliConfig};
 use crate::gateway;
 
-pub async fn run(install_daemon: bool) -> Result<()> {
-    clawz_tui::run_onboarding();
+#[derive(Debug, Clone, Copy)]
+pub struct OnboardOptions {
+    pub resume: bool,
+    pub json: bool,
+    pub step: Option<u8>,
+    pub install_daemon: bool,
+}
 
+pub async fn run(opts: OnboardOptions) -> Result<()> {
+    ensure_setup_dir().map_err(setup_err)?;
+
+    let platform = detect_platform();
+    let mut sm = if opts.resume {
+        SetupStateMachine::resume(platform)
+            .map_err(setup_err)?
+            .ok_or_else(|| anyhow!("no saved setup session — run without --resume"))?
+    } else {
+        SetupStateMachine::new(platform)
+    };
+
+    if let Some(phase) = opts.step {
+        let step = SetupStep::from_phase(phase)
+            .ok_or_else(|| anyhow!("invalid setup step {phase} (expected 0–10)"))?;
+        sm.go_to(step).map_err(setup_err)?;
+    }
+
+    if opts.json {
+        return run_json_onboard(&mut sm, opts).await;
+    }
+
+    clawz_tui::run_setup_wizard(&mut sm).map_err(setup_err)?;
+
+    finish_cli_config(opts.install_daemon).await
+}
+
+async fn run_json_onboard(sm: &mut SetupStateMachine, opts: OnboardOptions) -> Result<()> {
+    let report = HostSpecChecker::collect();
+    match sm.current_step() {
+        SetupStep::Welcome => {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            sm.advance().map_err(setup_err)?;
+        }
+        SetupStep::DeployMode if sm.session().deployment.is_none() => {
+            return Err(anyhow!(
+                "deployment not set — run interactively or resume a session with choices"
+            ));
+        }
+        SetupStep::InstallStrategy if sm.session().install_strategy.is_none() => {
+            return Err(anyhow!(
+                "install strategy not set — run interactively or resume a saved session"
+            ));
+        }
+        SetupStep::Complete => {}
+        _ => {}
+    }
+
+    if sm.current_step() != SetupStep::Complete {
+        if let Some(deployment) = sm.session().deployment {
+            let rec = prompts::EnvRecommendations::from_session(deployment, None);
+            println!("{}", serde_json::to_string_pretty(&rec)?);
+            sm.complete().map_err(setup_err)?;
+        }
+    }
+
+    println!("{}", sm.export_json().map_err(setup_err)?);
+    finish_cli_config(opts.install_daemon).await
+}
+
+async fn finish_cli_config(install_daemon: bool) -> Result<()> {
     let mut cfg = CliConfig::default();
     if let Ok(port) = std::env::var("CLAWZ__SERVER__PORT") {
         if let Ok(p) = port.parse::<u16>() {
@@ -24,4 +94,27 @@ pub async fn run(install_daemon: bool) -> Result<()> {
         println!("Then: `clawz doctor`");
     }
     Ok(())
+}
+
+fn detect_platform() -> SetupPlatform {
+    #[cfg(target_os = "linux")]
+    {
+        return SetupPlatform::Linux;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return SetupPlatform::MacOs;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        return SetupPlatform::Windows;
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        SetupPlatform::Unknown
+    }
+}
+
+fn setup_err(e: SetupError) -> anyhow::Error {
+    anyhow!("{e}")
 }

@@ -6,4 +6,7 @@ license = "Elastic-2.0"
 description = "Interactive terminal wizards for ClawZ setup and configuration"
 
 [dependencies]
+clawz-setup = { path = "../clawz-setup", version = "1.0.0" }
 uuid = { version = "1", features = ["v4"] }
+ratatui = "0.29"
+crossterm = "0.28"

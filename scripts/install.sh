@@ -17,6 +17,7 @@
 #   --source      Build and run from source with cargo (no Docker)
 #   --with-web    Build the React dashboard in web/
 #   --dir PATH    Install/clone location (default: ~/clawz)
+#   --wizard      After install, run interactive `clawz onboard --install-daemon`
 #   --help        Show usage
 
 set -euo pipefail
@@ -74,6 +75,7 @@ source "${SCRIPT_DIR}/install-common.sh"
 MODE="auto"
 WITH_WEB=0
 CLAWZ_INSTALL_BUILD=0
+RUN_WIZARD=0
 
 usage() {
   sed -n '2,17p' "$0"
@@ -98,6 +100,7 @@ while [[ $# -gt 0 ]]; do
       CLAWZ_INSTALL_DIR="$2"
       shift 2
       ;;
+    --wizard) RUN_WIZARD=1; shift ;;
     --help|-h) usage ;;
     *)
       err "Unknown option: $1"
@@ -147,3 +150,14 @@ if [[ "$WITH_WEB" -eq 1 ]]; then
 fi
 
 log "Install complete."
+
+if [[ "$RUN_WIZARD" -eq 1 ]]; then
+  log "Launching setup wizard (clawz onboard --install-daemon) ..."
+  if command -v clawz >/dev/null 2>&1; then
+    clawz onboard --install-daemon
+  elif command -v cargo >/dev/null 2>&1 && [[ -f "${ROOT}/Cargo.toml" ]]; then
+    (cd "${ROOT}" && cargo run -p clawz-cli -- onboard --install-daemon)
+  else
+    warn "Wizard skipped: install clawz CLI (./scripts/install.sh --source) or add clawz to PATH"
+  fi
+fi
