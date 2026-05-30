@@ -1,0 +1,22 @@
+[package]
+name = "clawz-cli"
+version = "1.0.0"
+edition = "2021"
+license = "Elastic-2.0"
+description = "ClawZ operator CLI — onboard, doctor, gateway control, agent turns"
+rust-version = "1.75"
+
+[[bin]]
+name = "clawz"
+path = "src/main.rs"
+
+[dependencies]
+clawz-tui = { path = "../clawz-tui", version = "1.0.0" }
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+anyhow = "1"
+dirs = "6"

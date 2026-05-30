@@ -2,6 +2,8 @@
 # Shared helpers for ClawZ install scripts (Linux & macOS).
 set -euo pipefail
 
+SCRIPT_DIR="${SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+
 CLAWZ_REPO_URL="${CLAWZ_REPO_URL:-https://github.com/improwyz/clawz.git}"
 CLAWZ_BRANCH="${CLAWZ_BRANCH:-main}"
 CLAWZ_INSTALL_DIR="${CLAWZ_INSTALL_DIR:-${HOME}/clawz}"
@@ -274,6 +276,14 @@ install_with_docker() {
   log "Starting Postgres..."
   # shellcheck disable=SC2086
   $COMPOSE $(compose_args "$compose_mode") up -d db
+  if [[ -x "${SCRIPT_DIR}/migrate-db.sh" ]]; then
+    log "Applying SQL migrations..."
+    COMPOSE="$COMPOSE" COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}" \
+      "${SCRIPT_DIR}/migrate-db.sh" || {
+      err "Database migrations failed (see above)."
+      exit 1
+    }
+  fi
   log "Starting worker and gateway (CLAWZ_MODE=micro, fleet orchestration)..."
   # shellcheck disable=SC2086
   $COMPOSE $(compose_args "$compose_mode") up -d worker gateway

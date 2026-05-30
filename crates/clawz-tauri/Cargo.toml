@@ -35,6 +35,9 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 thiserror = "2"
 anyhow = "1"
 
+# OS credential store (API keys, gateway URL)
+keyring = "3"
+
 # Logging
 log = "0.4"
 tracing = "0.1"

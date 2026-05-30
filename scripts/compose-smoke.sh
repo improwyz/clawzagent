@@ -36,6 +36,11 @@ for i in $(seq 1 30); do
   fi
 done
 
+if [[ -x "${ROOT}/scripts/migrate-db.sh" ]]; then
+  echo "Applying SQL migrations..."
+  COMPOSE="$COMPOSE" COMPOSE_FILE="${COMPOSE_FILE}" "${ROOT}/scripts/migrate-db.sh"
+fi
+
 $COMPOSE up -d worker
 echo "Waiting for worker control API..."
 for i in $(seq 1 30); do

@@ -108,6 +108,16 @@ pub struct RuntimeDependencies {
     pub idempotency_store: Option<Arc<dyn clawz_core::traits::IdempotencyStore>>,
     /// MBTI drift detector — checks if observed behaviour no longer matches the seeded type.
     pub mbti_drift_detector: Option<Arc<crate::runtime::mbti_drift_detector::MBTIDriftDetector>>,
+    /// Tool registry (source of truth); pipeline uses [`pipeline_tools`] snapshot.
+    pub tool_registry: Option<Arc<crate::tools::registry::ToolRegistry>>,
+    /// Tools copied from the registry when the runtime was constructed (sync pipeline build).
+    pub pipeline_tools: Vec<Arc<dyn clawz_core::traits::Tool>>,
+    /// JSON schemas passed to the provider on each turn.
+    pub tool_schemas: Vec<clawz_core::types::tool::ToolSchema>,
+    /// Optional broadcast bus for turn lifecycle events.
+    pub turn_event_bus: Option<Arc<crate::runtime::turn_events::TurnEventBus>>,
+    /// Operator workspace loader (`AGENTS.md`, skills).
+    pub workspace_loader: Option<Arc<crate::workspace::WorkspaceLoader>>,
 }
 
 impl RuntimeDependencies {
@@ -143,7 +153,36 @@ impl RuntimeDependencies {
             identity_store: None,
             idempotency_store: None,
             mbti_drift_detector: None,
+            tool_registry: None,
+            pipeline_tools: Vec::new(),
+            tool_schemas: Vec::new(),
+            turn_event_bus: None,
+            workspace_loader: None,
         }
+    }
+
+    /// Attach a tool registry snapshot for pipeline execution and provider schemas.
+    pub fn with_tooling(
+        mut self,
+        registry: Arc<crate::tools::registry::ToolRegistry>,
+        pipeline_tools: Vec<Arc<dyn clawz_core::traits::Tool>>,
+        tool_schemas: Vec<clawz_core::types::tool::ToolSchema>,
+    ) -> Self {
+        self.tool_registry = Some(registry);
+        self.pipeline_tools = pipeline_tools;
+        self.tool_schemas = tool_schemas;
+        self
+    }
+
+    /// Attach a turn event bus for streaming tool/provider events.
+    pub fn with_turn_event_bus(mut self, bus: Arc<crate::runtime::turn_events::TurnEventBus>) -> Self {
+        self.turn_event_bus = Some(bus);
+        self
+    }
+
+    pub fn with_workspace_loader(mut self, loader: Arc<crate::workspace::WorkspaceLoader>) -> Self {
+        self.workspace_loader = Some(loader);
+        self
     }
 
     /// Builder-style method to set provider_router
@@ -351,9 +390,20 @@ impl AgentRuntime {
     /// 5. **ApplyGovernance** — policy check; may substitute a safe decline message.
     /// 6. **PersistState** — save messages and agent state to memory backend.
     /// 7. **StreamResponse** — yield the final response to the caller.
-    fn build_pipeline(&self) -> Pipeline {
-        let retrieve =
+    fn seed_tool_schemas(&self, ctx: &mut PipelineContext) {
+        if !self.deps.tool_schemas.is_empty() {
+            if let Ok(value) = serde_json::to_value(&self.deps.tool_schemas) {
+                ctx.insert_meta("tool_schemas", value);
+            }
+        }
+    }
+
+    fn build_pipeline(&self, conversation_id: &str) -> Pipeline {
+        let mut retrieve =
             RetrieveContextStep::new(self.deps.memory.clone(), self.config.system_prompt.clone());
+        if let Some(ws) = &self.deps.workspace_loader {
+            retrieve = retrieve.with_workspace(ws.clone());
+        }
 
         let provider = crate::runtime::steps::provider::SelectProviderStep::new(
             self.deps.provider_router.clone(),
@@ -361,10 +411,13 @@ impl AgentRuntime {
             self.config.model.clone(),
         );
 
-        let tools_step = ExecuteToolsStep::new(
-            self.config.id.to_string(),
-            "conv-placeholder", // replaced at runtime by ctx.conversation_id
-        );
+        let mut tools_step = ExecuteToolsStep::new(self.config.id.to_string(), conversation_id);
+        for tool in &self.deps.pipeline_tools {
+            tools_step.register_tool(tool.clone());
+        }
+        if let Some(bus) = &self.deps.turn_event_bus {
+            tools_step = tools_step.with_turn_event_bus(bus.clone());
+        }
 
         let governance = ApplyGovernanceStep::new(self.deps.governance.clone(), "agent_chat");
 
@@ -388,8 +441,9 @@ impl AgentRuntime {
     /// `message` is appended to `ctx.messages` before running.
     /// This is the inner primitive used by both `run` and `run_multi_turn`.
     async fn run_turn(&self, ctx: &mut PipelineContext, message: Message) -> Result<StepOutcome> {
+        self.seed_tool_schemas(ctx);
         ctx.messages.push(message);
-        let pipeline = self.build_pipeline();
+        let pipeline = self.build_pipeline(&ctx.conversation_id);
         let result = pipeline.execute(ctx).await?;
 
         // Record outcome for the self-improvement loop.
@@ -456,6 +510,7 @@ impl AgentRuntime {
             }
         }
 
+        self.seed_tool_schemas(&mut ctx);
         self.run_turn(&mut ctx, message).await?;
 
         // Return the last assistant message.
@@ -484,7 +539,19 @@ impl AgentRuntime {
     /// 4. Before every turn, enforce the cost budget and max-turn guards.
     pub async fn run_multi_turn(&self, initial_messages: Vec<Message>) -> Result<Vec<Message>> {
         let conversation_id = uuid::Uuid::new_v4().to_string();
+        self.run_multi_turn_in_conversation(initial_messages, conversation_id)
+            .await
+    }
+
+    /// Multi-turn loop scoped to a stable conversation id (sessions, channels, REST).
+    pub async fn run_multi_turn_in_conversation(
+        &self,
+        initial_messages: Vec<Message>,
+        conversation_id: impl Into<String>,
+    ) -> Result<Vec<Message>> {
+        let conversation_id = conversation_id.into();
         let mut ctx = PipelineContext::new(self.config.id.to_string(), conversation_id.clone());
+        self.seed_tool_schemas(&mut ctx);
         ctx.agent_state = AgentState::running("multi-turn conversation");
 
         let mut turns = 0;
@@ -894,6 +961,11 @@ mod tests {
             identity_store: None,
             idempotency_store: None,
             mbti_drift_detector: None,
+            tool_registry: None,
+            pipeline_tools: vec![],
+            tool_schemas: vec![],
+            turn_event_bus: None,
+            workspace_loader: None,
         };
         let rt = AgentRuntime::new(config, deps);
         assert_eq!(rt.max_turns, DEFAULT_MAX_TURNS);
@@ -933,6 +1005,11 @@ mod tests {
             identity_store: None,
             idempotency_store: None,
             mbti_drift_detector: None,
+            tool_registry: None,
+            pipeline_tools: vec![],
+            tool_schemas: vec![],
+            turn_event_bus: None,
+            workspace_loader: None,
         };
         let rt = AgentRuntime::new(config, deps);
 

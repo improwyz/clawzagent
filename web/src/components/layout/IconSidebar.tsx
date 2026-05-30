@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { to: '/fleet', label: 'Fleet', icon: '⬡⬡' },
   { to: '/monitoring', label: 'Monitoring', icon: '◉' },
   { to: '/tools', label: 'Tools', icon: '⚙' },
+  { to: '/cron', label: 'Cron', icon: '⏱' },
   { to: '/config', label: 'Config', icon: '≡' },
 ];
 

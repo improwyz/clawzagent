@@ -1,10 +1,35 @@
+import { getShellConfig, isTauriShell, loadGatewayApiKey } from './shell';
+
 /** Default: same-origin `/api/v1` (Vite dev/preview proxy). Override at build: VITE_API_BASE=http://host:3000/api/v1 */
-const API_BASE =
+const DEFAULT_API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '/api/v1';
+
+let runtimeApiBase: string | null = null;
+
+export function normalizeGatewayToApiBase(origin: string): string {
+  const u = origin.replace(/\/$/, '');
+  return u.endsWith('/api/v1') ? u : `${u}/api/v1`;
+}
+
+/** Resolved API base (Tauri shell config overrides build-time default). */
+export function getApiBase(): string {
+  return runtimeApiBase ?? DEFAULT_API_BASE;
+}
+
+/** Load gateway URL + keyring API key when running inside the Tauri desktop shell. */
+export async function initShellApi(): Promise<void> {
+  if (!isTauriShell()) return;
+  const cfg = await getShellConfig();
+  if (cfg.gateway_url) {
+    runtimeApiBase = normalizeGatewayToApiBase(cfg.gateway_url);
+  }
+  const key = await loadGatewayApiKey();
+  if (key) setStoredApiKey(key);
+}
 
 /** Gateway origin without `/api/v1` (for `/health` and other root routes). */
 function gatewayOrigin(): string {
-  const base = API_BASE.replace(/\/$/, '');
+  const base = getApiBase().replace(/\/$/, '');
   if (base.endsWith('/api/v1')) {
     return base.slice(0, -'/api/v1'.length) || '';
   }
@@ -48,7 +73,7 @@ export function setAuthFailureHandler(handler: (() => void) | null) {
 }
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${getApiBase()}${path}`, {
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...init?.headers },
     ...init,
   });
@@ -997,7 +1022,7 @@ export interface AuthStatus {
 }
 
 export async function fetchAuthStatus(): Promise<AuthStatus> {
-  const res = await fetch(`${API_BASE}/system/auth/status`);
+  const res = await fetch(`${getApiBase()}/system/auth/status`);
   if (!res.ok) {
     return { auth_disabled: false };
   }
@@ -1005,7 +1030,7 @@ export async function fetchAuthStatus(): Promise<AuthStatus> {
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
-  const res = await fetch(`${API_BASE}/system/auth/login`, {
+  const res = await fetch(`${getApiBase()}/system/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
@@ -1026,7 +1051,7 @@ export async function register(
   password: string,
   role?: string,
 ): Promise<AuthResponse & { api_key?: string }> {
-  const res = await fetch(`${API_BASE}/system/auth/register`, {
+  const res = await fetch(`${getApiBase()}/system/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, role }),
@@ -1117,7 +1142,7 @@ export function resetSystemConfig() {
 }
 
 export async function fetchSystemMetrics(): Promise<string> {
-  const res = await fetch(`${API_BASE}/system/metrics`, { headers: authHeaders() });
+  const res = await fetch(`${getApiBase()}/system/metrics`, { headers: authHeaders() });
   const text = await res.text();
   if (!res.ok) {
     throw new Error(`Metrics ${res.status}: ${text.slice(0, 200)}`);
@@ -1554,5 +1579,131 @@ export function orchestrateRoom(roomId: string, data?: OrchestrateRoomRequest) {
   return req<{ run_id: string }>(`/rooms/${roomId}/orchestrate`, {
     method: 'POST',
     body: JSON.stringify(data ?? {}),
+  });
+}
+
+// ── Sessions ─────────────────────────────────────────────────────────────────
+
+export interface SessionSummary {
+  session_id: string;
+  message_count: number;
+  estimated_tokens: number;
+}
+
+export async function listSessions(): Promise<SessionSummary[]> {
+  const payload = await req<{ data?: SessionSummary[] }>('/sessions');
+  return asArray<SessionSummary>(payload);
+}
+
+/** Subscribe to SSE turn events for a single agent run (requires gateway auth headers). */
+export function subscribeRunEvents(
+  agentId: string,
+  runId: string,
+  onEvent: (data: unknown) => void,
+  onError?: (err: Event) => void,
+): () => void {
+  const base = gatewayOrigin() || window.location.origin;
+  const url = new URL(
+    `${base}/api/v1/agents/${encodeURIComponent(agentId)}/runs/${encodeURIComponent(runId)}/events`,
+  );
+  const key = getStoredApiKey();
+  if (key) url.searchParams.set('api_key', key);
+
+  const es = new EventSource(url.toString());
+  es.onmessage = (e) => {
+    try {
+      onEvent(JSON.parse(e.data));
+    } catch {
+      onEvent(e.data);
+    }
+  };
+  es.onerror = (ev) => onError?.(ev);
+  return () => es.close();
+}
+
+export async function compactSession(sessionId: string, keepLast = 40) {
+  return req<{
+    session_id: string;
+    removed: number;
+    message_count: number;
+    estimated_tokens: number;
+  }>(`/sessions/${encodeURIComponent(sessionId)}/compact`, {
+    method: 'POST',
+    body: JSON.stringify({ keep_last: keepLast }),
+  });
+}
+
+// ── Workspace skills ──────────────────────────────────────────────────────────
+
+export interface WorkspaceSkill {
+  name: string;
+  description?: string;
+  path?: string;
+  content?: string;
+}
+
+export async function fetchWorkspaceSkills(): Promise<{
+  root?: string;
+  skills: WorkspaceSkill[];
+}> {
+  const payload = await req<{ data?: WorkspaceSkill[]; root?: string }>('/skills');
+  return { root: payload.root, skills: asArray<WorkspaceSkill>(payload) };
+}
+
+export async function createWorkspaceSkill(body: {
+  name: string;
+  content: string;
+  description?: string;
+}): Promise<WorkspaceSkill> {
+  return req<WorkspaceSkill>('/skills', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// ── Cron & background ───────────────────────────────────────────────────────
+
+export interface CronJob {
+  id: string;
+  cron_expr: string;
+  prompt: string;
+  agent_id: string;
+  enabled: boolean;
+  name?: string | null;
+  last_run_at?: string | null;
+}
+
+export async function fetchCronJobs(): Promise<CronJob[]> {
+  const payload = await req<{ data?: CronJob[] }>('/cron/jobs');
+  return asArray<CronJob>(payload);
+}
+
+export async function createCronJob(body: {
+  cron_expr: string;
+  prompt: string;
+  agent_id?: string;
+  name?: string;
+  enabled?: boolean;
+}): Promise<CronJob> {
+  return req<CronJob>('/cron/jobs', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function deleteCronJob(id: string): Promise<void> {
+  await req<void>(`/cron/jobs/${id}`, { method: 'DELETE' });
+}
+
+export async function runCronJob(id: string): Promise<{ content: string }> {
+  return req<{ content: string }>(`/cron/jobs/${id}/run`, { method: 'POST', body: '{}' });
+}
+
+export async function runSubconsciousTick(agentId?: string): Promise<{
+  agent_id: string;
+  conversation_id: string;
+  content: string;
+  chunks_reviewed: number;
+}> {
+  return req('/background/subconscious', {
+    method: 'POST',
+    body: JSON.stringify({ agent_id: agentId ?? null }),
   });
 }

@@ -53,6 +53,52 @@ pub struct VersionedSkillRepository {
 }
 
 impl VersionedSkillRepository {
+    /// Empty in-memory repository (no filesystem provisioning).
+    pub fn in_memory() -> Self {
+        Self {
+            base_path: Path::new(".").to_path_buf(),
+            file_provisions: HashMap::new(),
+            agent_updates: RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Enterprise workspace root — loads bundles from `AGENTS.md` / `SOUL.md` / `skills/` on demand.
+    pub fn from_enterprise_workspace(root: impl AsRef<Path>) -> Self {
+        Self {
+            base_path: root.as_ref().to_path_buf(),
+            file_provisions: HashMap::new(),
+            agent_updates: RwLock::new(HashMap::new()),
+        }
+    }
+
+    fn bundle_from_workspace(&self, agent_id: &str) -> Result<Option<SkillBundle>> {
+        let loader = crate::workspace::WorkspaceLoader::new(self.base_path.clone());
+        let snap = loader.load_snapshot().map_err(|e| ClawzError::Internal(e.to_string()))?;
+        let skill_md = snap
+            .skills
+            .iter()
+            .map(|s| format!("### {}\n{}\n", s.name, s.content))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if skill_md.is_empty()
+            && snap.agents_md.is_none()
+            && snap.soul_md.is_none()
+        {
+            return Ok(None);
+        }
+        Ok(Some(SkillBundle {
+            skill_md: if skill_md.is_empty() {
+                format!("<!-- agentskills.io -->\n# Agent {agent_id}\n")
+            } else {
+                format!("<!-- agentskills.io -->\n{skill_md}")
+            },
+            soul_md: snap.soul_md.unwrap_or_default(),
+            agents_md: snap.agents_md.unwrap_or_default(),
+            version: 1,
+            source: SkillSource::File,
+        }))
+    }
+
     /// Provision a new agent from its container's filesystem layout.
     ///
     /// Looks for `skill.md`, `soul.md`, and `agents.md` alongside `base_path`.
@@ -90,7 +136,10 @@ impl SkillRepository for VersionedSkillRepository {
         if let Some(bundle) = agent_update {
             return Ok(Some(bundle));
         }
-        Ok(self.file_provisions.get(agent_id).cloned())
+        if let Some(bundle) = self.file_provisions.get(agent_id).cloned() {
+            return Ok(Some(bundle));
+        }
+        self.bundle_from_workspace(agent_id)
     }
 
     async fn update_skill(&self, agent_id: &str, bundle: SkillBundle) -> Result<()> {

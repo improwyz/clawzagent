@@ -31,6 +31,7 @@ pub mod licensing;
 pub mod metrics;
 pub mod prism;
 pub mod runtime_backend;
+pub mod session;
 pub mod traits;
 pub mod types;
 

@@ -46,6 +46,18 @@
 /// of additional channel backends at runtime.
 pub mod channels;
 
+/// Scheduled unattended agent jobs (cron expressions + delivery).
+pub mod cron;
+
+/// Connector ingest and subconscious background ticks.
+pub mod background;
+
+/// Shell/file sandboxes: local, Docker, or SSH backends.
+pub mod terminal;
+
+/// Outcome tracking, self-improvement, skills, and identity wiring.
+pub mod learning;
+
 // ── Security & governance ───────────────────────────────────────────────────
 // These modules enforce security boundaries: policy evaluation, audit trails,
 // trust scoring, and multi-party approval for sensitive operations.
@@ -191,6 +203,7 @@ pub mod tools;
 ///
 /// The selector automatically picks the best path based on health probes.
 pub mod transport;
+pub mod workspace;
 
 // ── Self-healing & supervision ────────────────────────────────────────────────
 // Self-healing patterns for resilient agent execution across all deployment tiers.

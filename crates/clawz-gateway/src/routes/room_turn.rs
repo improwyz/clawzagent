@@ -88,6 +88,7 @@ pub async fn spawn_room_agent_turn(state: AppState, params: RoomTurnParams) {
                     room_snapshot: Some(room_snapshot),
                     orchestration_run_id,
                     room_lock_held: true,
+                    ..Default::default()
                 },
             )
             .await;

@@ -455,8 +455,12 @@ async fn handle_voice(mut socket: WebSocket) {
 /// Task 25 in the autonomous-activity plan. Once the worker exposes a
 /// per-session event sender, the canned sequence below will be replaced with
 /// `tokio::sync::broadcast::Receiver<WsEvent>` polling.
-pub async fn autonomous_stream(Path(agent_id): Path<String>, ws: WebSocketUpgrade) -> Response {
-    ws.on_upgrade(move |socket| handle_autonomous_stream(socket, agent_id))
+pub async fn autonomous_stream(
+    State(state): State<crate::AppState>,
+    Path(agent_id): Path<String>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    ws.on_upgrade(move |socket| handle_autonomous_stream(socket, agent_id, state))
 }
 
 /// Send a [`WsEvent`] as a text-frame JSON message.
@@ -477,7 +481,11 @@ async fn send_event(socket: &mut WebSocket, event: &WsEvent) -> bool {
 /// small delay between events so dashboards can wire up against a real
 /// `WsEvent` stream today. The actual event source will be wired in a
 /// follow-up commit once `run_multi_turn` exposes an event channel.
-async fn handle_autonomous_stream(mut socket: WebSocket, agent_id: String) {
+async fn handle_autonomous_stream(
+    mut socket: WebSocket,
+    agent_id: String,
+    state: crate::AppState,
+) {
     // Greet the client so it knows the upgrade succeeded and which agent this
     // session is bound to. This is a plain JSON envelope, not a WsEvent, so
     // it never clashes with the typed event stream.
@@ -540,28 +548,144 @@ async fn handle_autonomous_stream(mut socket: WebSocket, agent_id: String) {
         }
     }
 
-    // Canned three-turn demo sequence. Replace with real event-channel polling
-    // once `run_multi_turn` exposes an event sender keyed by agent_id.
-    let canned_turns = [
-        ("Planning the next step.", 0.012f64),
-        ("Executing the planned action.", 0.018),
-        ("Reviewing results and consolidating output.", 0.011),
-    ];
-    let mut total_cost = 0.0f64;
+    let mut events_rx = state.subscribe_events();
+    let mut turn_idx = 0usize;
 
-    for (turn_idx, (output, cost)) in canned_turns.iter().enumerate() {
-        // Why: select! lets us emit ticks while still reacting to a client
-        // {"type":"stop"} mid-session.
+    loop {
         let stopped = tokio::select! {
             stop = wait_for_stop(&mut socket) => stop,
-            _ = tokio::time::sleep(Duration::from_millis(100)) => false,
+            msg = events_rx.recv() => {
+                match msg {
+                    Ok(raw) => {
+                        let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {
+                            continue;
+                        };
+                        let event_type = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                        let data = v.get("data").cloned().unwrap_or(v.clone());
+                        let agent_match = data
+                            .get("agent_id")
+                            .and_then(|a| a.as_str())
+                            .map(|a| a == agent_id)
+                            .unwrap_or(true);
+
+                        match event_type {
+                            "agent.turn.tool_start" if agent_match => {
+                                let ev = WsEvent::ToolStart {
+                                    tool_name: data
+                                        .get("tool_name")
+                                        .and_then(|x| x.as_str())
+                                        .unwrap_or("tool")
+                                        .to_string(),
+                                    tool_call_id: data
+                                        .get("tool_call_id")
+                                        .and_then(|x| x.as_str())
+                                        .unwrap_or("")
+                                        .to_string(),
+                                    run_id: data
+                                        .get("run_id")
+                                        .and_then(|x| x.as_str())
+                                        .map(str::to_string),
+                                };
+                                let _ = send_event(&mut socket, &ev).await;
+                            }
+                            "agent.turn.tool_end" if agent_match => {
+                                let ev = WsEvent::ToolEnd {
+                                    tool_name: data
+                                        .get("tool_name")
+                                        .and_then(|x| x.as_str())
+                                        .unwrap_or("tool")
+                                        .to_string(),
+                                    tool_call_id: data
+                                        .get("tool_call_id")
+                                        .and_then(|x| x.as_str())
+                                        .unwrap_or("")
+                                        .to_string(),
+                                    success: data
+                                        .get("success")
+                                        .and_then(|x| x.as_bool())
+                                        .unwrap_or(true),
+                                    output_preview: data
+                                        .get("output_preview")
+                                        .and_then(|x| x.as_str())
+                                        .unwrap_or("")
+                                        .to_string(),
+                                    run_id: data
+                                        .get("run_id")
+                                        .and_then(|x| x.as_str())
+                                        .map(str::to_string),
+                                };
+                                let _ = send_event(&mut socket, &ev).await;
+                            }
+                            "agent.turn.complete" | "agent.autonomous.turn" if agent_match => {
+                                let output = data
+                                    .get("content")
+                                    .and_then(|x| x.as_str())
+                                    .map(str::to_string)
+                                    .unwrap_or_default();
+                                let _ = send_event(
+                                    &mut socket,
+                                    &WsEvent::TurnStart { turn: turn_idx },
+                                )
+                                .await;
+                                let _ = send_event(
+                                    &mut socket,
+                                    &WsEvent::TurnComplete {
+                                        turn: turn_idx,
+                                        output,
+                                    },
+                                )
+                                .await;
+                                turn_idx += 1;
+                            }
+                            "agent.autonomous.end" if agent_match => {
+                                let total = data
+                                    .get("total_turns")
+                                    .and_then(|x| x.as_u64())
+                                    .unwrap_or(turn_idx as u64) as usize;
+                                let _ = send_event(
+                                    &mut socket,
+                                    &WsEvent::SessionEnd {
+                                        total_turns: total,
+                                        total_cost_usd: 0.0,
+                                    },
+                                )
+                                .await;
+                                let _ = socket
+                                    .send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                                        code: axum::extract::ws::close_code::NORMAL,
+                                        reason: "session complete".into(),
+                                    })))
+                                    .await;
+                                return;
+                            }
+                            "agent.autonomous.error" if agent_match => {
+                                let err = data
+                                    .get("error")
+                                    .and_then(|x| x.as_str())
+                                    .unwrap_or("autonomous error");
+                                let _ = send_event(
+                                    &mut socket,
+                                    &WsEvent::Error {
+                                        error: err.to_string(),
+                                    },
+                                )
+                                .await;
+                                return;
+                            }
+                            _ => {}
+                        }
+                    }
+                    Err(_) => break,
+                }
+                false
+            }
         };
         if stopped {
             let _ = send_event(
                 &mut socket,
                 &WsEvent::SessionEnd {
                     total_turns: turn_idx,
-                    total_cost_usd: total_cost,
+                    total_cost_usd: 0.0,
                 },
             )
             .await;
@@ -573,38 +697,7 @@ async fn handle_autonomous_stream(mut socket: WebSocket, agent_id: String) {
                 .await;
             return;
         }
-
-        if !send_event(&mut socket, &WsEvent::TurnStart { turn: turn_idx }).await {
-            return;
-        }
-        total_cost += cost;
-        if !send_event(
-            &mut socket,
-            &WsEvent::TurnComplete {
-                turn: turn_idx,
-                output: output.to_string(),
-            },
-        )
-        .await
-        {
-            return;
-        }
     }
-
-    let _ = send_event(
-        &mut socket,
-        &WsEvent::SessionEnd {
-            total_turns: canned_turns.len(),
-            total_cost_usd: total_cost,
-        },
-    )
-    .await;
-    let _ = socket
-        .send(Message::Close(Some(axum::extract::ws::CloseFrame {
-            code: axum::extract::ws::close_code::NORMAL,
-            reason: "session complete".into(),
-        })))
-        .await;
 }
 
 /// Drain pending inbound frames non-blockingly; return `true` if a `stop`

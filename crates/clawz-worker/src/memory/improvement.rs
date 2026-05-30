@@ -129,6 +129,7 @@ pub struct SelfImprovementLoop {
     generator: Arc<BasicImprovementGenerator>,
     gatekeeper: Arc<crate::governance::proposal_gate::ProposalGatekeeper>,
     adaptor: Arc<super::behavioral_adaptor::BehavioralAdaptor>,
+    audit_logger: Arc<crate::governance::audit::AuditLogger>,
 }
 
 impl SelfImprovementLoop {
@@ -140,6 +141,7 @@ impl SelfImprovementLoop {
         generator: Arc<BasicImprovementGenerator>,
         gatekeeper: Arc<crate::governance::proposal_gate::ProposalGatekeeper>,
         adaptor: Arc<super::behavioral_adaptor::BehavioralAdaptor>,
+        audit_logger: Arc<crate::governance::audit::AuditLogger>,
     ) -> Self {
         Self {
             outcome_tracker,
@@ -148,6 +150,7 @@ impl SelfImprovementLoop {
             generator,
             gatekeeper,
             adaptor,
+            audit_logger,
         }
     }
 
@@ -169,7 +172,8 @@ impl SelfImprovementLoop {
         let proposals = self.generator.generate(&patterns);
         let mut all_changes = Vec::new();
         for proposal in proposals {
-            let approved = self.gatekeeper.route(proposal.clone()).await?.is_approved();
+            let decision = self.gatekeeper.route(proposal.clone()).await?;
+            let approved = decision.is_approved();
             if approved {
                 let mut proposal_to_apply = proposal.clone();
                 // Wire identity_modification into suggested_changes so parse_and_apply can consume it.
@@ -179,6 +183,18 @@ impl SelfImprovementLoop {
                     proposal_to_apply.suggested_changes.push(suggestion);
                 }
                 let changes = self.adaptor.apply(&proposal_to_apply).await?;
+                for change in &changes {
+                    self.audit_logger.append(
+                        "self-improvement",
+                        "improvement:apply",
+                        crate::governance::audit::AuditResult::Allow,
+                        serde_json::json!({
+                            "proposal_id": change.proposal_id,
+                            "target": change.target,
+                            "change_type": format!("{:?}", change.change_type),
+                        }),
+                    );
+                }
                 all_changes.extend(changes);
             }
         }
@@ -268,8 +284,9 @@ mod tests {
             Arc::new(DummySkillRepo),
         ));
 
+        let audit = Arc::new(crate::governance::audit::AuditLogger::new());
         let loop_ = SelfImprovementLoop::new(
-            tracker, evaluator, recognizer, generator, gatekeeper, adaptor,
+            tracker, evaluator, recognizer, generator, gatekeeper, adaptor, audit,
         );
         // With no thresholds, no gaps → empty result, no panic.
         let result = loop_.run_once().await;

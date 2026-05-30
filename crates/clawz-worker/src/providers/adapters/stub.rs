@@ -6,10 +6,11 @@ use std::pin::Pin;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use clawz_core::{error::ClawzError, types::message::*};
+use clawz_core::{error::ClawzError, types::message::*, types::tool::ToolCall};
 use futures_core::Stream;
 use futures_util::stream;
 use reqwest::Client;
+use serde_json::json;
 use uuid::Uuid;
 
 use super::{AdapterConfig, ProviderAdapter};
@@ -32,8 +33,44 @@ impl StubAdapter {
             .unwrap_or_else(|| "ready".to_string())
     }
 
+    fn test_tool_loop_triggered(request: &ChatRequest) -> bool {
+        request.messages.iter().any(|m| {
+            m.role == Role::User
+                && m
+                    .content
+                    .as_text()
+                    .is_some_and(|t| t.contains("CLAWZ_TEST_TOOL_LOOP"))
+        })
+    }
+
     fn build_response(request: &ChatRequest) -> ChatResponse {
-        let reply = format!("stub: {}", Self::last_user_text(request));
+        let user_text = Self::last_user_text(request);
+
+        if !request.tools.is_empty() && Self::test_tool_loop_triggered(request) {
+            if let Some(tool_output) = request.messages.iter().find_map(|m| {
+                if m.role == Role::Tool {
+                    if let MessageContent::ToolResult(tr) = &m.content {
+                        Some(tr.output.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            }) {
+                let reply = format!("tool_loop_ok:{tool_output}");
+                return Self::assistant_text_response(request, reply);
+            }
+
+            let call = ToolCall::new(
+                "stub-calc-1",
+                "calculator",
+                json!({ "expression": "2+2" }),
+            );
+            return Self::assistant_tool_calls_response(request, vec![call]);
+        }
+
+        let reply = format!("stub: {user_text}");
         let prompt_tokens = request
             .messages
             .iter()
@@ -49,6 +86,49 @@ impl StubAdapter {
                 index: 0,
                 message: Message::new(Role::Assistant, MessageContent::text(reply)),
                 finish_reason: Some("stop".to_string()),
+            }],
+            usage: Usage::new(prompt_tokens, completion_tokens),
+            object: "chat.completion".to_string(),
+            created: Utc::now().timestamp() as u64,
+            created_at: Utc::now(),
+        }
+    }
+
+    fn assistant_text_response(request: &ChatRequest, reply: String) -> ChatResponse {
+        let prompt_tokens = request
+            .messages
+            .iter()
+            .filter_map(|m| m.content.as_text().map(str::len))
+            .sum::<usize>()
+            .max(1);
+        let completion_tokens = reply.len().max(1);
+
+        ChatResponse {
+            id: format!("stub-{}", Uuid::new_v4()),
+            model: request.model.clone(),
+            choices: vec![ChatChoice {
+                index: 0,
+                message: Message::new(Role::Assistant, MessageContent::text(reply)),
+                finish_reason: Some("stop".to_string()),
+            }],
+            usage: Usage::new(prompt_tokens, completion_tokens),
+            object: "chat.completion".to_string(),
+            created: Utc::now().timestamp() as u64,
+            created_at: Utc::now(),
+        }
+    }
+
+    fn assistant_tool_calls_response(request: &ChatRequest, calls: Vec<ToolCall>) -> ChatResponse {
+        let prompt_tokens = request.messages.len().max(1);
+        let completion_tokens = 1;
+
+        ChatResponse {
+            id: format!("stub-{}", Uuid::new_v4()),
+            model: request.model.clone(),
+            choices: vec![ChatChoice {
+                index: 0,
+                message: Message::new(Role::Assistant, MessageContent::ToolCalls(calls)),
+                finish_reason: Some("tool_calls".to_string()),
             }],
             usage: Usage::new(prompt_tokens, completion_tokens),
             object: "chat.completion".to_string(),

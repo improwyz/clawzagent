@@ -4,4 +4,5 @@
 //! This replaces the HTTP gateway for local/desktop deployments.
 
 pub mod commands;
+pub mod shell;
 pub mod tray;

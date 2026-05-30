@@ -1,8 +1,15 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { MessageBubble, roomMessageToBubble, type Message } from './MessageBubble';
-import { connectAgentStream, connectRoomStream } from '../../lib/ws';
+import {
+  connectAgentStream,
+  connectRoomStream,
+  connectTurnEvents,
+  parseAgentStreamEvent,
+  parseToolTimelineEvent,
+} from '../../lib/ws';
 import {
   runAgent,
+  subscribeRunEvents,
   getRoom,
   listRoomMessages,
   sendRoomMessage,
@@ -53,6 +60,9 @@ export function ChatPanel({
   const [mentionIndex, setMentionIndex] = useState(0);
   const [sideThreadLoading, setSideThreadLoading] = useState(false);
   const [activeSideThread, setActiveSideThread] = useState<SideThread | null>(null);
+  const [toolEvents, setToolEvents] = useState<
+    { id: string; tool: string; status: 'running' | 'done' | 'error'; preview?: string }[]
+  >([]);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -252,6 +262,7 @@ export function ChatPanel({
       senderType: 'user',
     };
     setMessages((m) => [...m, userMsg]);
+    setToolEvents([]);
 
     const asstId = (Date.now() + 1).toString();
     streamMsgIdRef.current = asstId;
@@ -266,28 +277,90 @@ export function ChatPanel({
     };
     setMessages((m) => [...m, streamMsg]);
 
+    let runEventsClose: (() => void) | null = null;
+
+    const eventsWs = connectTurnEvents((data) => {
+      const tool = parseToolTimelineEvent(data);
+      if (!tool) return;
+      if (tool.kind === 'tool_start') {
+        setToolEvents((prev) => [
+          ...prev,
+          { id: `${Date.now()}-${tool.tool}`, tool: tool.tool, status: 'running' },
+        ]);
+      } else {
+        setToolEvents((prev) =>
+          prev.map((e) =>
+            e.tool === tool.tool && e.status === 'running'
+              ? {
+                  ...e,
+                  status: tool.success ? 'done' : 'error',
+                  preview: tool.preview,
+                }
+              : e,
+          ),
+        );
+      }
+    });
+
+    if (wsRef.current) wsRef.current.close();
+    wsRef.current = connectAgentStream(agentId, (data) => {
+      const parsed = parseAgentStreamEvent(data);
+      if (parsed.token) {
+        setMessages((m) =>
+          m.map((msg) =>
+            msg.id === asstId
+              ? { ...msg, content: msg.content + parsed.token! }
+              : msg,
+          ),
+        );
+      }
+      if (parsed.done) {
+        setMessages((m) =>
+          m.map((msg) =>
+            msg.id === asstId ? { ...msg, streaming: false } : msg,
+          ),
+        );
+        setSending(false);
+        wsRef.current?.close();
+      }
+    });
+
     try {
-      await runAgent(agentId, text);
-      if (wsRef.current) wsRef.current.close();
-      wsRef.current = connectAgentStream(agentId, (data) => {
-        const d = data as { token?: string; done?: boolean };
-        if (d.token) {
-          setMessages((m) =>
-            m.map((msg) =>
-              msg.id === asstId ? { ...msg, content: msg.content + d.token! } : msg,
-            ),
-          );
-        }
-        if (d.done) {
-          setMessages((m) =>
-            m.map((msg) =>
-              msg.id === asstId ? { ...msg, streaming: false } : msg,
-            ),
-          );
-          setSending(false);
-          wsRef.current?.close();
-        }
-      });
+      const result = await runAgent(agentId, text);
+      if (result.run_id) {
+        runEventsClose = subscribeRunEvents(agentId, result.run_id, (data) => {
+          const tool = parseToolTimelineEvent(data);
+          if (!tool) return;
+          if (tool.kind === 'tool_start') {
+            setToolEvents((prev) => [
+              ...prev,
+              { id: `${Date.now()}-${tool.tool}`, tool: tool.tool, status: 'running' },
+            ]);
+          } else {
+            setToolEvents((prev) =>
+              prev.map((e) =>
+                e.tool === tool.tool && e.status === 'running'
+                  ? {
+                      ...e,
+                      status: tool.success ? 'done' : 'error',
+                      preview: tool.preview,
+                    }
+                  : e,
+              ),
+            );
+          }
+        });
+      }
+      if (result.content) {
+        setMessages((m) =>
+          m.map((msg) =>
+            msg.id === asstId
+              ? { ...msg, content: result.content ?? msg.content, streaming: false }
+              : msg,
+          ),
+        );
+        setSending(false);
+      }
     } catch (err) {
       setMessages((m) =>
         m.map((msg) =>
@@ -297,6 +370,9 @@ export function ChatPanel({
         ),
       );
       setSending(false);
+    } finally {
+      eventsWs.close();
+      runEventsClose?.();
     }
   };
 
@@ -499,6 +575,34 @@ export function ChatPanel({
           </div>
         )}
       </div>
+
+      {!isRoomMode && toolEvents.length > 0 && (
+        <div className="border-b border-zinc-800 px-3 py-2 max-h-28 overflow-y-auto space-y-1">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-500">Tools</div>
+          {toolEvents.map((ev) => (
+            <div
+              key={ev.id}
+              className="flex items-center gap-2 text-xs text-zinc-400 font-mono"
+            >
+              <span
+                className={
+                  ev.status === 'running'
+                    ? 'text-blue-400'
+                    : ev.status === 'error'
+                      ? 'text-red-400'
+                      : 'text-emerald-400'
+                }
+              >
+                {ev.status === 'running' ? '▶' : ev.status === 'error' ? '✕' : '✓'}
+              </span>
+              <span className="truncate">{ev.tool}</span>
+              {ev.preview && (
+                <span className="truncate text-zinc-600">{ev.preview}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto p-3 min-h-0">
         {loading ? (

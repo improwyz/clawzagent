@@ -10,18 +10,20 @@ clawz-core = { path = "../clawz-core", version = "1.0.0" }
 clawz-platform = { path = "../clawz-platform", version = "1.0.0" }
 clawz-services = { path = "../clawz-services", version = "1.0.0" }
 clawz-worker = { path = "../clawz-worker", version = "1.0.0" }
+clawz-tui = { path = "../clawz-tui", version = "1.0.0" }
 sqlx = { workspace = true }
 
 # HTTP server
 axum = { version = "0.8", features = ["ws", "macros", "json"] }
 tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace"] }
+tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 async-trait = "0.1"
 futures = "0.3"
+tokio-stream = { version = "0.1", features = ["sync"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

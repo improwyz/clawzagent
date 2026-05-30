@@ -33,6 +33,9 @@
 pub mod identity_types;
 
 pub mod agent;
+pub mod session_commands;
+pub mod session_run;
+pub mod turn_events;
 pub mod complexity;
 pub mod fan_out;
 pub mod idempotency;

@@ -42,6 +42,8 @@ const MAX_RAG_SNIPPETS: usize = 5;
 pub const META_SYSTEM_PROMPT: &str = "system_prompt";
 /// Metadata key for the number of context snippets injected.
 pub const META_CONTEXT_SNIPPETS: &str = "context_snippets";
+/// Metadata key listing workspace skill names injected this turn.
+pub const META_WORKSPACE_SKILLS: &str = "workspace_skills";
 
 /// Pipeline step that retrieves conversation history and assembles the system prompt.
 ///
@@ -54,6 +56,8 @@ pub struct RetrieveContextStep {
     base_system_prompt: String,
     /// Maximum number of tokens for the assembled system prompt.
     budget_tokens: usize,
+    /// Optional operator workspace (`AGENTS.md`, skills).
+    workspace: Option<Arc<crate::workspace::WorkspaceLoader>>,
 }
 
 impl RetrieveContextStep {
@@ -63,7 +67,14 @@ impl RetrieveContextStep {
             memory,
             base_system_prompt: base_system_prompt.into(),
             budget_tokens: DEFAULT_SYSTEM_PROMPT_BUDGET_TOKENS,
+            workspace: None,
         }
+    }
+
+    /// Merge `AGENTS.md` and `skills/*/SKILL.md` from the operator workspace.
+    pub fn with_workspace(mut self, loader: Arc<crate::workspace::WorkspaceLoader>) -> Self {
+        self.workspace = Some(loader);
+        self
     }
 
     /// Override the token budget for the assembled system prompt.
@@ -113,7 +124,7 @@ impl PipelineStep for RetrieveContextStep {
     }
 
     async fn execute(&self, ctx: &mut PipelineContext) -> Result<StepOutcome> {
-        let _query = Self::extract_query(ctx).unwrap_or_default();
+        let query = Self::extract_query(ctx).unwrap_or_default();
 
         // Retrieve relevant history snippets from memory.
         // We use conversation history as a lightweight RAG source; a future
@@ -126,8 +137,26 @@ impl PipelineStep for RetrieveContextStep {
 
         // Build context block from recent history (exclude the very last message
         // which is already in ctx.messages).
-        let snippets_count = history.len();
-        let context_block = if history.is_empty() {
+        let mut fts_snippets = Vec::new();
+        if !query.is_empty() {
+            fts_snippets = self
+                .memory
+                .search_text(&ctx.agent_id, &query, MAX_RAG_SNIPPETS)
+                .await
+                .unwrap_or_default();
+        }
+
+        let mut tree_block = String::new();
+        if !query.is_empty() {
+            if let Ok(tree) = crate::memory::MemoryTree::global().await {
+                if let Ok(nodes) = tree.search(&ctx.agent_id, &query, MAX_RAG_SNIPPETS).await {
+                    tree_block = crate::memory::MemoryTree::format_context(&nodes);
+                }
+            }
+        }
+
+        let snippets_count = history.len() + fts_snippets.len();
+        let mut context_block = if history.is_empty() && fts_snippets.is_empty() {
             String::new()
         } else {
             let mut block = String::from("\n\n## Relevant Context\n");
@@ -142,14 +171,47 @@ impl PipelineStep for RetrieveContextStep {
                     block.push_str(&format!("**{role_label}**: {text}\n"));
                 }
             }
+            for entry in &fts_snippets {
+                let body = entry
+                    .value
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| entry.value.to_string());
+                block.push_str(&format!("**Memory ({})**: {body}\n", entry.key));
+            }
             block
+        };
+        context_block.push_str(&tree_block);
+
+        let workspace_block = if let Some(loader) = &self.workspace {
+            match loader.load_snapshot() {
+                Ok(snap) => {
+                    let names: Vec<_> = snap.skills.iter().map(|s| s.name.clone()).collect();
+                    ctx.insert_meta(
+                        META_WORKSPACE_SKILLS,
+                        serde_json::Value::Array(
+                            names.iter().map(|n| serde_json::Value::String(n.clone())).collect(),
+                        ),
+                    );
+                    crate::workspace::WorkspaceLoader::build_skills_prompt_snapshot(&snap)
+                }
+                Err(e) => {
+                    tracing::warn!("workspace load failed: {e}");
+                    String::new()
+                }
+            }
+        } else {
+            String::new()
         };
 
         // Assemble full system prompt.
-        let raw_prompt = if context_block.is_empty() {
+        let raw_prompt = if context_block.is_empty() && workspace_block.is_empty() {
             self.base_system_prompt.clone()
         } else {
-            format!("{}{}", self.base_system_prompt, context_block)
+            format!(
+                "{}{}{}",
+                self.base_system_prompt, workspace_block, context_block
+            )
         };
 
         // Trim to budget so we never exceed the reserved system-prompt window.
@@ -233,5 +295,26 @@ mod tests {
         // 40 ascii chars + "…" (3 UTF-8 bytes) = 43 bytes
         assert!(trimmed.len() <= 44);
         assert!(trimmed.ends_with('…'));
+    }
+
+    #[tokio::test]
+    async fn test_workspace_in_system_prompt() {
+        let dir = std::env::temp_dir().join(format!("clawz-ctx-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("skills/ws-skill")).unwrap();
+        std::fs::write(dir.join("AGENTS.md"), "Workspace rules apply.").unwrap();
+        std::fs::write(dir.join("skills/ws-skill/SKILL.md"), "# S\n\nDo X.").unwrap();
+
+        let memory = Arc::new(NullMemory);
+        let step = RetrieveContextStep::new(memory, "Base prompt.")
+            .with_workspace(Arc::new(crate::workspace::WorkspaceLoader::new(&dir)));
+        let mut ctx = PipelineContext::new("agent-1", "conv-1");
+        ctx.messages.push(Message::user("Hi"));
+
+        step.execute(&mut ctx).await.unwrap();
+        let prompt = ctx.get_meta(META_SYSTEM_PROMPT).unwrap().as_str().unwrap();
+        assert!(prompt.contains("Base prompt"));
+        assert!(prompt.contains("Workspace rules"));
+        assert!(prompt.contains("ws-skill"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

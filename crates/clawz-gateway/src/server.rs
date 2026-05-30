@@ -18,7 +18,9 @@ use axum::{
     routing::{get, post},
 };
 use std::net::SocketAddr;
+use std::path::Path;
 use tower_http::cors::CorsLayer;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 // Dependency: AppState is defined in the crate root and shared across all routes.
@@ -64,15 +66,44 @@ impl GatewayServer {
         // In production this should be tightened to the exact allowed origins.
         let cors = CorsLayer::permissive();
 
-        Router::new()
+        let webhooks = Router::new()
+            .merge(crate::routes::telephony::routes())
+            .merge(crate::routes::webhooks::routes());
+
+        let mut router = Router::new()
             .route("/health", get(health))
             .route("/api/docs", get(swagger_ui))
-            .nest("/webhooks", crate::routes::telephony::routes())
+            .nest("/webhooks", webhooks)
             .nest("/api/v1", Self::api_routes())
-            .nest("/ws", crate::ws::ws_routes())
+            .nest("/ws", crate::ws::ws_routes());
+
+        if let Some(dist) = Self::web_dist_path() {
+            tracing::info!("serving dashboard from {}", dist.display());
+            router = router.fallback_service(
+                ServeDir::new(&dist)
+                    .not_found_service(ServeFile::new(dist.join("index.html"))),
+            );
+        }
+
+        router
             .layer(TraceLayer::new_for_http())
             .layer(cors)
             .with_state(state)
+    }
+
+    /// Resolve SPA static files from `CLAWZ_WEB_DIST` or `web/dist` when present.
+    fn web_dist_path() -> Option<std::path::PathBuf> {
+        if let Ok(dist) = std::env::var("CLAWZ_WEB_DIST") {
+            let p = Path::new(&dist);
+            if p.join("index.html").exists() {
+                return Some(p.to_path_buf());
+            }
+        }
+        let rel = Path::new("web/dist");
+        if rel.join("index.html").exists() {
+            return Some(rel.to_path_buf());
+        }
+        None
     }
 
     /// Assemble the `/api/v1/*` REST route tree.
@@ -82,8 +113,12 @@ impl GatewayServer {
         Router::new()
             .nest("/agents", crate::routes::agents::routes())
             .nest("/conversations", crate::routes::conversations::routes())
+            .nest("/sessions", crate::routes::sessions::routes())
+            .nest("/skills", crate::routes::skills::routes())
             .nest("/rooms", crate::routes::rooms::routes())
             .nest("/channels", crate::routes::channels::routes())
+            .nest("/cron", crate::routes::cron::routes())
+            .nest("/background", crate::routes::background::routes())
             .nest("/providers", crate::routes::providers::routes())
             .nest("/tools", crate::routes::tools::routes())
             .nest("/governance", crate::routes::governance::routes())

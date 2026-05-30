@@ -841,6 +841,7 @@ Need to deploy ClawZ?
 - [INSTALL.md](../INSTALL.md) — installation guide  
 - [ARCHITECTURE.md](ARCHITECTURE.md) — system design  
 - [private-registry.md](private-registry.md) — GHCR authentication  
+- [agent-runtime-parity-plan.md](agent-runtime-parity-plan.md) — OpenClaw/Hermes parity roadmap (tool loop, sessions, channels, cron, CLI)  
 - [AGENTS.md](../AGENTS.md) — development reference  
 
 ---

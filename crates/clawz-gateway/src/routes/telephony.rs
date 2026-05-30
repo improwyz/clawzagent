@@ -13,11 +13,10 @@ use axum::{
     response::{IntoResponse, Response},
     routing::post,
 };
-use base64::Engine;
-use clawz_services::dto::{ChannelSendRequest, ChannelWebhookRequest, RunTurnRequest};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
+use crate::routes::channel_inbound::{load_channel, process_webhook_body, send_reply};
 use crate::telephony::{twiml_empty, twiml_say_and_gather, verify_twilio_signature};
 use crate::{AppState, ChannelRecord, GatewayError};
 
@@ -42,7 +41,7 @@ async fn twilio_sms(
         &format_twilio_url(&state, &channel_id, "sms"),
     )?;
 
-    let replies = dispatch_inbound(&state, &record, &body, &headers, "twilio").await?;
+    let replies = process_webhook_body(&state, &record, "twilio", &body, &headers).await?;
 
     for reply in replies {
         send_reply(&state, &record, &reply.0, &reply.1).await?;
@@ -75,7 +74,7 @@ async fn twilio_voice(
     let is_gather = speech.is_some();
 
     let replies = if is_gather {
-        dispatch_inbound(&state, &record, &body, &headers, "twilio").await?
+        process_webhook_body(&state, &record, "twilio", &body, &headers).await?
     } else {
         vec![(
             form.get("From").cloned().unwrap_or_default(),
@@ -127,122 +126,13 @@ async fn google_voice(
         .map_err(|e| GatewayError::Unauthorized(e.to_string()))?;
     }
 
-    let replies = dispatch_inbound(&state, &record, &body, &headers, "google_voice").await?;
+    let replies = process_webhook_body(&state, &record, "google_voice", &body, &headers).await?;
     let count = replies.len();
     for reply in replies {
         send_reply(&state, &record, &reply.0, &reply.1).await?;
     }
 
     Ok(axum::Json(json!({ "ok": true, "replies": count })))
-}
-
-async fn load_channel(state: &AppState, channel_id: &str) -> Result<ChannelRecord, GatewayError> {
-    let channels = state.channels.read().await;
-    let record = channels
-        .iter()
-        .find(|c| c.id == channel_id)
-        .cloned()
-        .ok_or_else(|| GatewayError::not_found("Channel", channel_id))?;
-    if !record.enabled {
-        return Err(GatewayError::Unprocessable("channel is disabled".into()));
-    }
-    Ok(record)
-}
-
-fn agent_id_from_config(config: &Value) -> Option<String> {
-    config
-        .get("agent_id")
-        .and_then(|v| v.as_str())
-        .map(str::to_string)
-}
-
-async fn dispatch_inbound(
-    state: &AppState,
-    record: &ChannelRecord,
-    body: &[u8],
-    headers: &HeaderMap,
-    platform: &str,
-) -> Result<Vec<(String, String)>, GatewayError> {
-    let platform_exec = state
-        .platform
-        .as_ref()
-        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
-
-    let mut header_map = std::collections::HashMap::new();
-    for (k, v) in headers.iter() {
-        if let (Ok(name), Ok(val)) = (k.as_str().parse::<String>(), v.to_str()) {
-            header_map.insert(name, val.to_string());
-        }
-    }
-
-    let parsed = platform_exec
-        .execution
-        .process_channel_webhook(ChannelWebhookRequest {
-            channel_type: platform.to_string(),
-            config: record.config.clone(),
-            agent_id: agent_id_from_config(&record.config),
-            body_base64: base64::engine::general_purpose::STANDARD.encode(body),
-            content_type: headers
-                .get(header::CONTENT_TYPE)
-                .and_then(|v| v.to_str().ok())
-                .map(str::to_string),
-            headers: header_map,
-        })
-        .await
-        .map_err(|e| GatewayError::Internal(e.to_string()))?;
-
-    let agent_id = agent_id_from_config(&record.config)
-        .ok_or_else(|| GatewayError::Unprocessable("channel config missing agent_id".into()))?;
-
-    let mut replies = Vec::new();
-    for msg in parsed.messages {
-        if msg.content.trim().is_empty() {
-            continue;
-        }
-        let turn = platform_exec
-            .execution
-            .run_turn(
-                &agent_id,
-                RunTurnRequest {
-                    message: msg.content.clone(),
-                    model: None,
-                    system_prompt: None,
-                    conversation_id: None,
-                    ..Default::default()
-                },
-            )
-            .await
-            .map_err(|e| GatewayError::Internal(e.to_string()))?;
-
-        replies.push((msg.from, turn.content));
-    }
-    Ok(replies)
-}
-
-async fn send_reply(
-    state: &AppState,
-    record: &ChannelRecord,
-    to: &str,
-    content: &str,
-) -> Result<(), GatewayError> {
-    let platform = state
-        .platform
-        .as_ref()
-        .ok_or_else(|| GatewayError::Internal("worker platform not configured".into()))?;
-
-    let metadata = json!({ "to": to });
-    platform
-        .execution
-        .send_channel_message(ChannelSendRequest {
-            channel_type: record.channel_type.clone(),
-            config: record.config.clone(),
-            content: content.to_string(),
-            metadata,
-            agent_id: agent_id_from_config(&record.config),
-        })
-        .await
-        .map_err(|e| GatewayError::Internal(e.to_string()))?;
-    Ok(())
 }
 
 fn verify_twilio(

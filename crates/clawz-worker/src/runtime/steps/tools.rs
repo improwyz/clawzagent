@@ -55,6 +55,9 @@ pub struct ExecuteToolsStep {
     approval_required: Vec<String>,
     /// Shared context passed to every tool handler (agent_id, conversation_id).
     tool_context: ToolContext,
+    /// Optional bus for streaming tool start/end to subscribers.
+    turn_event_bus: Option<Arc<crate::runtime::turn_events::TurnEventBus>>,
+    run_id: Option<String>,
 }
 
 impl ExecuteToolsStep {
@@ -67,7 +70,23 @@ impl ExecuteToolsStep {
             max_iterations: DEFAULT_MAX_ITERATIONS,
             approval_required: Vec::new(),
             tool_context: ToolContext::new(agent_id, conv_id),
+            turn_event_bus: None,
+            run_id: None,
         }
+    }
+
+    /// Attach turn event bus for gateway/dashboard streaming.
+    pub fn with_turn_event_bus(
+        mut self,
+        bus: Arc<crate::runtime::turn_events::TurnEventBus>,
+    ) -> Self {
+        self.turn_event_bus = Some(bus);
+        self
+    }
+
+    pub fn with_run_id(mut self, run_id: impl Into<String>) -> Self {
+        self.run_id = Some(run_id.into());
+        self
     }
 
     /// Override the maximum iteration limit.
@@ -149,8 +168,24 @@ impl PipelineStep for ExecuteToolsStep {
         // Errors in individual tools are captured as `ToolResult::err` rather
         // than bubbling up, so the pipeline can continue and the model sees
         // the failure explanation in the next turn.
+        let run_id = self
+            .run_id
+            .clone()
+            .unwrap_or_else(crate::runtime::turn_events::TurnEventBus::new_run_id);
+        let mut tool_ctx = self.tool_context.clone();
+        tool_ctx.conversation_id = ctx.conversation_id.clone();
+
         let mut results: Vec<ToolResult> = Vec::new();
         for call in &calls {
+            if let Some(bus) = &self.turn_event_bus {
+                bus.emit(crate::runtime::turn_events::TurnEvent::ToolStart {
+                    run_id: run_id.clone(),
+                    conversation_id: tool_ctx.conversation_id.clone(),
+                    tool_name: call.name.clone(),
+                    tool_call_id: call.id.clone(),
+                });
+            }
+
             let result = match self.tools.get(&call.name) {
                 Some(tool) => {
                     log::debug!(
@@ -159,7 +194,7 @@ impl PipelineStep for ExecuteToolsStep {
                         call.id
                     );
                     match tool
-                        .execute(&self.tool_context, call.arguments.clone())
+                        .execute(&tool_ctx, call.arguments.clone())
                         .await
                     {
                         Ok(r) => r,
@@ -174,6 +209,19 @@ impl PipelineStep for ExecuteToolsStep {
                     ToolResult::err(&call.id, format!("tool '{}' not found", call.name))
                 }
             };
+
+            if let Some(bus) = &self.turn_event_bus {
+                let output_preview: String = result.output.chars().take(200).collect();
+                bus.emit(crate::runtime::turn_events::TurnEvent::ToolEnd {
+                    run_id: run_id.clone(),
+                    conversation_id: tool_ctx.conversation_id.clone(),
+                    tool_name: call.name.clone(),
+                    tool_call_id: call.id.clone(),
+                    success: !result.is_error,
+                    output_preview,
+                });
+            }
+
             results.push(result);
         }
 

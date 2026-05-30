@@ -5,6 +5,7 @@ import { ClawzLogo } from '../shared/ClawzLogo';
 import { ThemeToggle } from '../shared/ThemeToggle';
 import { useLocation } from 'react-router-dom';
 import { useAppStore } from '../../lib/store';
+import { MobileNav } from './MobileNav';
 
 const PAGE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
@@ -25,11 +26,13 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const title = PAGE_TITLES[location.pathname] ?? 'ClawZ';
 
   return (
-    <div className="flex h-screen bg-zinc-950 text-zinc-100">
-      <IconSidebar
-        collapsed={sidebarCollapsed}
-        onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
+    <div className="flex h-screen bg-zinc-950 text-zinc-100 pb-14 md:pb-0">
+      <div className="hidden md:flex">
+        <IconSidebar
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
+      </div>
 
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top bar */}
@@ -86,8 +89,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
       </div>
 
       {chatVisible && (
-        <ChatSidebar width={chatWidth} onResize={setChatWidth} />
+        <div className="hidden lg:flex">
+          <ChatSidebar width={chatWidth} onResize={setChatWidth} />
+        </div>
       )}
+      <MobileNav />
     </div>
   );
 }

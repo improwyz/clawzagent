@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/clawz-core", "crates/clawz-services", "crates/clawz-worker", "crates/clawz-gateway", "crates/clawz-platform", "crates/clawz-runtime", "crates/clawz-embedded", "crates/clawz-tauri"]
+members = ["crates/clawz-core", "crates/clawz-services", "crates/clawz-worker", "crates/clawz-gateway", "crates/clawz-platform", "crates/clawz-runtime", "crates/clawz-embedded", "crates/clawz-tauri", "crates/clawz-tui", "crates/clawz-cli"]
 resolver = "2"
 
 [workspace.package]
@@ -45,6 +45,8 @@ clawz-platform = { path = "crates/clawz-platform", version = "1.0.0" }
 clawz-runtime = { path = "crates/clawz-runtime", version = "1.0.0" }
 clawz-embedded = { path = "crates/clawz-embedded", version = "1.0.0" }
 clawz-tauri = { path = "crates/clawz-tauri", version = "1.0.0" }
+clawz-tui = { path = "crates/clawz-tui", version = "1.0.0" }
+clawz-cli = { path = "crates/clawz-cli", version = "1.0.0" }
 clawz-services = { path = "crates/clawz-services", version = "1.0.0" }
 
 # =============================================================================

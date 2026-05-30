@@ -42,7 +42,6 @@ async fn main() -> anyhow::Result<()> {
 
     let db = maybe_init_database().await?;
     let (platform, approval_workflow) = build_platform_with_approval().await?;
-    let platform = Arc::new(platform);
     let platform_store = db.as_ref().map(|pool| {
         PostgresPlatformStore::new(pool.clone()) as Arc<dyn clawz_services::PlatformStore>
     });
@@ -162,7 +161,11 @@ async fn main() -> anyhow::Result<()> {
     } else {
         clawz_gateway::tool_catalog::ensure_default_tools(&state).await;
     }
-    let server = GatewayServer::new(state);
+    let state = std::sync::Arc::new(state);
+    clawz_gateway::channel_supervisor::spawn(state.clone());
+    clawz_gateway::connector_scheduler::spawn(state.clone());
+
+    let server = GatewayServer::new((*state).clone());
 
     tracing::info!("clawz-gateway starting on {}", listen_addr);
     server.serve(listen_addr).await

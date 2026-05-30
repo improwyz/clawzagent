@@ -1,0 +1,30 @@
+{
+  "$schema": "https://v2.tauri.app/schemas/config.schema.json",
+  "productName": "ClawZ Mobile",
+  "version": "1.0.0",
+  "identifier": "com.clawz.app.mobile",
+  "build": {
+    "beforeDevCommand": "npm run dev --prefix ../../web",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build --prefix ../../web",
+    "frontendDist": "../../web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ClawZ",
+        "width": 390,
+        "height": 844,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["android", "ios"]
+  }
+}

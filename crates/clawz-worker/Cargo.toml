@@ -59,6 +59,10 @@ hex = "0.4"
 
 # Database
 sqlx = { workspace = true }
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Cron scheduling
+cron = "0.12"
 
 # Transport layer
 quinn = "0.11"

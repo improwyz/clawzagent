@@ -23,6 +23,7 @@ use uuid::Uuid;
 use clawz_services::dto::TestChannelRequest;
 
 use crate::auth::AuthContext;
+use crate::channel_pairing::PairingStore;
 use crate::{AppState, ChannelRecord, GatewayError};
 
 /// Assemble the channel sub-router.
@@ -36,6 +37,9 @@ pub fn routes() -> Router<AppState> {
             get(get_channel).put(update_channel).delete(delete_channel),
         )
         .route("/{id}/test", post(test_channel))
+        .route("/pairing", post(create_pairing).get(list_pairing))
+        .route("/pairing/approve", post(approve_pairing))
+        .route("/pairing/{channel_id}/{peer_id}", axum::routing::delete(revoke_pairing))
 }
 
 fn caller_tenant(auth: Option<Extension<AuthContext>>) -> Result<String, GatewayError> {
@@ -267,4 +271,74 @@ async fn test_channel(
         "message": result.message,
         "tested_at": Utc::now(),
     })))
+}
+
+#[derive(Debug, Deserialize)]
+struct CreatePairingBody {
+    pub channel_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApprovePairingBody {
+    pub code: String,
+    pub peer_id: String,
+}
+
+/// `POST /channels/pairing` — issue a short-lived pairing code for a channel.
+async fn create_pairing(
+    auth: Option<Extension<AuthContext>>,
+    Json(body): Json<CreatePairingBody>,
+) -> Result<Json<Value>, GatewayError> {
+    let _tenant = caller_tenant(auth)?;
+    let store = PairingStore::global();
+    let code = store.create_code(&body.channel_id).await;
+    Ok(Json(json!({
+        "channel_id": body.channel_id,
+        "pairing_code": code,
+        "expires_in_minutes": 15,
+    })))
+}
+
+/// `POST /channels/pairing/approve` — approve a peer for a channel.
+async fn approve_pairing(
+    auth: Option<Extension<AuthContext>>,
+    Json(body): Json<ApprovePairingBody>,
+) -> Result<Json<Value>, GatewayError> {
+    let _tenant = caller_tenant(auth)?;
+    let store = PairingStore::global();
+    let channel_id = store
+        .approve(&body.code, &body.peer_id)
+        .await
+        .map_err(|e| GatewayError::Unprocessable(e))?;
+    Ok(Json(json!({
+        "ok": true,
+        "channel_id": channel_id,
+        "peer_id": body.peer_id,
+    })))
+}
+
+/// `GET /channels/pairing` — list approved peers (optional `?channel_id=`).
+async fn list_pairing(
+    auth: Option<Extension<AuthContext>>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<Value>, GatewayError> {
+    let _tenant = caller_tenant(auth)?;
+    let store = PairingStore::global();
+    let channel_id = params.get("channel_id").map(String::as_str);
+    let allowed = store.list_allowed(channel_id).await;
+    Ok(Json(json!({ "data": allowed, "total": allowed.len() })))
+}
+
+/// `DELETE /channels/pairing/{channel_id}/{peer_id}` — revoke an approved peer.
+async fn revoke_pairing(
+    auth: Option<Extension<AuthContext>>,
+    Path((channel_id, peer_id)): Path<(String, String)>,
+) -> Result<StatusCode, GatewayError> {
+    let _tenant = caller_tenant(auth)?;
+    let store = PairingStore::global();
+    if store.revoke(&channel_id, &peer_id).await {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(GatewayError::not_found("Pairing", &peer_id))
+    }
 }

@@ -26,6 +26,8 @@
 //! // Dependency: `clawz_core::types::ToolResult` for execution results.
 //! // Dependency: `Tool` is implemented by all modules in [`super`].
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
 use clawz_core::types::{ActionPrimitive, RiskLevel, ToolResult, ToolSchema};
@@ -73,6 +75,42 @@ impl Default for ToolConfig {
             timeout_secs: 30,
             max_retries: 3,
         }
+    }
+}
+
+/// Bridge a worker-local tool into [`clawz_core::traits::Tool`] for the runtime pipeline.
+pub fn bridge_to_core(tool: Arc<dyn Tool>) -> Arc<dyn clawz_core::traits::Tool> {
+    Arc::new(CoreToolBridge(tool))
+}
+
+struct CoreToolBridge(Arc<dyn Tool>);
+
+#[async_trait]
+impl clawz_core::traits::Tool for CoreToolBridge {
+    fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    fn description(&self) -> &str {
+        self.0.description()
+    }
+
+    fn schema(&self) -> ToolSchema {
+        self.0.schema()
+    }
+
+    async fn execute(
+        &self,
+        ctx: &clawz_core::traits::ToolContext,
+        args: serde_json::Value,
+    ) -> Result<ToolResult, ClawzError> {
+        let worker_ctx = ToolContext {
+            agent_id: ctx.agent_id.clone(),
+            conversation_id: ctx.conversation_id.clone(),
+            user_id: None,
+            config: ToolConfig::default(),
+        };
+        self.0.execute(&worker_ctx, args).await
     }
 }
 

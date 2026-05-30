@@ -51,6 +51,39 @@ export function parseAgentStreamEvent(data: unknown): { token?: string; done?: b
   return {};
 }
 
+/** Tool timeline events from gateway platform bus (normalized envelope). */
+export function parseToolTimelineEvent(
+  data: unknown,
+): { kind: 'tool_start' | 'tool_end'; tool: string; success?: boolean; preview?: string } | null {
+  const ev = normalizeWsEvent(data);
+  const t = ev.type as string | undefined;
+  if (t === 'agent.turn.tool_start' || t === 'ToolStart') {
+    return {
+      kind: 'tool_start',
+      tool: String(ev.tool_name ?? 'tool'),
+    };
+  }
+  if (t === 'agent.turn.tool_end' || t === 'ToolEnd') {
+    return {
+      kind: 'tool_end',
+      tool: String(ev.tool_name ?? 'tool'),
+      success: ev.success !== false,
+      preview: typeof ev.output_preview === 'string' ? ev.output_preview : undefined,
+    };
+  }
+  return null;
+}
+
+export function connectTurnEvents(onData: (data: unknown) => void): WebSocket {
+  const ws = new WebSocket(`${wsBaseUrl()}/ws/events`);
+  ws.onmessage = (e) => {
+    const parsed = parseWsPayload(e.data as string);
+    if (parsed != null) onData(normalizeWsEvent(parsed));
+  };
+  ws.onerror = () => { /* silently handle */ };
+  return ws;
+}
+
 export function connectMetrics(onData: (data: unknown) => void): WebSocket {
   const ws = new WebSocket(`${wsBaseUrl()}/ws/metrics`);
   ws.onmessage = (e) => {

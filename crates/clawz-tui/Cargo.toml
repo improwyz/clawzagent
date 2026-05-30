@@ -1,0 +1,9 @@
+[package]
+name = "clawz-tui"
+version = "1.0.0"
+edition = "2021"
+license = "Elastic-2.0"
+description = "Interactive terminal wizards for ClawZ setup and configuration"
+
+[dependencies]
+uuid = { version = "1", features = ["v4"] }

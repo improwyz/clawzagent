@@ -224,6 +224,71 @@ pub trait IdentityBackend: Send + Sync {
     async fn save(&self, identity: &AgentIdentity) -> Result<(), ClawzError>;
 }
 
+/// File-backed identity persistence under `{root}/{agent_id}.json`.
+#[derive(Clone)]
+pub struct FileIdentityBackend {
+    root: std::path::PathBuf,
+}
+
+impl FileIdentityBackend {
+    pub fn new(root: impl Into<std::path::PathBuf>) -> Self {
+        Self { root: root.into() }
+    }
+
+    pub fn default_home() -> Self {
+        let home = std::env::var("CLAWZ_HOME").map(std::path::PathBuf::from).unwrap_or_else(|_| {
+            std::env::var("HOME")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/clawz"))
+                .join(".clawz")
+        });
+        Self::new(home.join("identities"))
+    }
+
+    fn path_for(&self, agent_id: &str) -> std::path::PathBuf {
+        let safe: String = agent_id
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        self.root.join(format!("{safe}.json"))
+    }
+}
+
+#[async_trait]
+impl IdentityBackend for FileIdentityBackend {
+    async fn load(&self, agent_id: &str) -> Result<Option<AgentIdentity>, ClawzError> {
+        let path = self.path_for(agent_id);
+        if !path.exists() {
+            return Ok(None);
+        }
+        let data = tokio::fs::read_to_string(&path)
+            .await
+            .map_err(|e| ClawzError::Internal(format!("read identity: {e}")))?;
+        let identity: AgentIdentity = serde_json::from_str(&data)
+            .map_err(|e| ClawzError::Serialization(format!("identity json: {e}")))?;
+        Ok(Some(identity))
+    }
+
+    async fn save(&self, identity: &AgentIdentity) -> Result<(), ClawzError> {
+        tokio::fs::create_dir_all(&self.root)
+            .await
+            .map_err(|e| ClawzError::Internal(format!("create identities dir: {e}")))?;
+        let path = self.path_for(&identity.agent_id);
+        let body = serde_json::to_string_pretty(identity)
+            .map_err(|e| ClawzError::Serialization(e.to_string()))?;
+        tokio::fs::write(&path, body)
+            .await
+            .map_err(|e| ClawzError::Internal(format!("write identity: {e}")))?;
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 /// In-memory identity backend using a shared `HashMap`.
 pub struct InMemoryIdentityBackend {

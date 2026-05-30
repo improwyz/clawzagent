@@ -33,6 +33,48 @@ pub struct RunTurnRequest {
     /// When true, the caller already holds the per-room turn lock.
     #[serde(default)]
     pub room_lock_held: bool,
+    /// Cron runs disable interactive tools (shell, browser, etc.).
+    #[serde(default)]
+    pub cron_mode: bool,
+    /// Background / subconscious ticks disable interactive tools.
+    #[serde(default)]
+    pub background_mode: bool,
+    /// Tool names to omit from the pipeline (cron `disabled_toolsets`).
+    #[serde(default)]
+    pub disabled_tools: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryIngestChunk {
+    pub key: String,
+    pub text: String,
+    #[serde(default)]
+    pub source: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryIngestRequest {
+    pub agent_id: String,
+    pub chunks: Vec<MemoryIngestChunk>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryIngestResponse {
+    pub stored: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubconsciousTickRequest {
+    #[serde(default)]
+    pub agent_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SubconsciousTickResponse {
+    pub agent_id: String,
+    pub conversation_id: String,
+    pub content: String,
+    pub chunks_reviewed: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +91,15 @@ pub struct RunTurnResponse {
     pub sender_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delegation_events: Option<Vec<Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub session_id: String,
+    pub message_count: usize,
+    pub estimated_tokens: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -203,6 +254,86 @@ pub struct ChannelSendRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChannelSendResponse {
     pub success: bool,
+}
+
+/// Poll a channel adapter for new inbound messages (supervisor loop).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelPollRequest {
+    pub channel_type: String,
+    #[serde(default)]
+    pub config: Value,
+    #[serde(default)]
+    pub agent_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChannelPollResponse {
+    pub messages: Vec<ChannelWebhookMessage>,
+}
+
+/// Cron job delivery target (channel adapter + recipient).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CronDeliveryDto {
+    pub channel_type: String,
+    #[serde(default)]
+    pub config: Value,
+    pub to: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CronJobDto {
+    pub id: String,
+    pub name: String,
+    pub cron_expr: String,
+    pub prompt: String,
+    pub agent_id: String,
+    pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<CronDeliveryDto>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disabled_toolsets: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_run_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateCronJobRequest {
+    pub cron_expr: String,
+    pub prompt: String,
+    pub agent_id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub delivery: Option<CronDeliveryDto>,
+    #[serde(default)]
+    pub disabled_toolsets: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CronRunResultDto {
+    pub job_id: String,
+    pub agent_id: String,
+    pub conversation_id: String,
+    pub content: String,
+    pub delivered: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompactSessionRequest {
+    #[serde(default)]
+    pub keep_last: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CompactSessionResponse {
+    pub session_id: String,
+    pub removed: usize,
+    pub message_count: usize,
+    pub estimated_tokens: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -29,6 +29,8 @@ pub mod channels;
 /// Conversation routes — threaded chat history and message send / receive.
 // Dependency: crate::routes::conversations (reads/writes `AppState.conversations`, validates `AppState.agents`)
 pub mod conversations;
+pub mod cron;
+pub mod background;
 
 /// Multi-participant agent room routes.
 pub mod rooms;
@@ -68,4 +70,13 @@ pub mod cloud_deploy;
 pub mod tools;
 
 /// Telephony webhooks (Twilio, Google Voice) — public, signature-verified.
+pub mod channel_inbound;
 pub mod telephony;
+pub mod webhooks;
+
+/// Session transcript operations (compact).
+pub mod run_events;
+pub mod sessions;
+
+/// Workspace skills (`skills/*/SKILL.md`).
+pub mod skills;

@@ -13,8 +13,11 @@ import {
   fetchAgentHistory,
   createRoom,
   fetchRooms,
+  listSessions,
+  compactSession,
   type Agent,
   type Room,
+  type SessionSummary,
 } from '../lib/api';
 
 const MODELS = [
@@ -298,6 +301,48 @@ function AgentRow({
   );
 }
 
+function SessionsBar({
+  sessions,
+  onCompact,
+  compacting,
+}: {
+  sessions: SessionSummary[];
+  onCompact: (sessionId: string) => void;
+  compacting: boolean;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="text-[10px] uppercase tracking-wider text-zinc-500">Sessions</div>
+      <div className="flex flex-col gap-1 max-h-24 overflow-y-auto">
+        {sessions.slice(0, 8).map((s) => (
+          <div
+            key={s.session_id}
+            className="flex items-center justify-between gap-2 text-xs bg-zinc-800/80 rounded px-2 py-1"
+          >
+            <span className="font-mono text-zinc-400 truncate" title={s.session_id}>
+              {s.session_id.length > 20
+                ? `${s.session_id.slice(0, 10)}…${s.session_id.slice(-6)}`
+                : s.session_id}
+            </span>
+            <span className="text-zinc-600 flex-shrink-0">
+              {s.message_count} msgs · ~{s.estimated_tokens} tok
+            </span>
+            <button
+              type="button"
+              disabled={compacting}
+              onClick={() => onCompact(s.session_id)}
+              className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50 flex-shrink-0"
+              title="Compact transcript (keep recent messages)"
+            >
+              Compact
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Agents() {
   const qc = useQueryClient();
   const [createOpen, setCreateOpen] = useState(false);
@@ -316,6 +361,20 @@ export function Agents() {
     queryKey: ['rooms'],
     queryFn: fetchRooms,
     refetchInterval: 30_000,
+  });
+
+  const chatOpen = Boolean(chatAgent || chatRoom);
+
+  const { data: sessions = [], refetch: refetchSessions } = useQuery({
+    queryKey: ['sessions'],
+    queryFn: listSessions,
+    enabled: chatOpen,
+    refetchInterval: 30_000,
+  });
+
+  const compactMutation = useMutation({
+    mutationFn: (sessionId: string) => compactSession(sessionId),
+    onSuccess: () => refetchSessions(),
   });
 
   const deleteMutation = useMutation({
@@ -358,8 +417,6 @@ export function Agents() {
       setRoomLoading(false);
     }
   };
-
-  const chatOpen = Boolean(chatAgent || chatRoom);
 
   const idle = agents.filter((a) => a.status === 'idle').length;
   const running = agents.filter((a) => a.status === 'running').length;
@@ -483,21 +540,30 @@ export function Agents() {
       {/* Chat panel */}
       {chatOpen && (
         <div className="w-96 flex flex-col flex-shrink-0 bg-zinc-900">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-800">
-            <div className="text-zinc-200 text-sm font-medium truncate">
-              {chatRoom
-                ? (chatRoom.title ?? `Room ${chatRoom.id.slice(0, 8)}`)
-                : chatAgent?.name}
+          <div className="px-3 py-2.5 border-b border-zinc-800 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-zinc-200 text-sm font-medium truncate">
+                {chatRoom
+                  ? (chatRoom.title ?? `Room ${chatRoom.id.slice(0, 8)}`)
+                  : chatAgent?.name}
+              </div>
+              <button
+                onClick={() => {
+                  setChatAgent(null);
+                  setChatRoom(null);
+                }}
+                className="text-zinc-500 hover:text-zinc-300 text-xs flex-shrink-0"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              onClick={() => {
-                setChatAgent(null);
-                setChatRoom(null);
-              }}
-              className="text-zinc-500 hover:text-zinc-300 text-xs flex-shrink-0"
-            >
-              ✕
-            </button>
+            {chatAgent && sessions.length > 0 && (
+              <SessionsBar
+                sessions={sessions}
+                onCompact={(id) => compactMutation.mutate(id)}
+                compacting={compactMutation.isPending}
+              />
+            )}
           </div>
           <div className="flex-1 overflow-hidden">
             {roomLoading ? (

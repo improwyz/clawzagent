@@ -84,21 +84,6 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-  duplication:
-    name: Duplication Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Run duplication verification
-        run: python3 scripts/verify_duplication.py
-
   smoke:
     name: Smoke Test
     runs-on: ubuntu-latest

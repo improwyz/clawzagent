@@ -171,6 +171,7 @@ impl TurnCoordinator {
             message_id: Some(message_id),
             sender_id: req.sender_user_id.clone(),
             delegation_events: Some(delegation_events),
+            run_id: None,
         })
     }
 

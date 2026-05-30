@@ -83,6 +83,22 @@ pub enum WsEvent {
         /// Human-readable error description.
         error: String,
     },
+    /// A tool invocation started during a run.
+    ToolStart {
+        tool_name: String,
+        tool_call_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+    },
+    /// A tool invocation completed.
+    ToolEnd {
+        tool_name: String,
+        tool_call_id: String,
+        success: bool,
+        output_preview: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        run_id: Option<String>,
+    },
 
     // ── Multi-participant room events ───────────────────────────────────────
     /// A new message was appended to the room transcript.

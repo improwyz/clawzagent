@@ -12,12 +12,15 @@ use axum::{
     routing::{get, post},
 };
 use clawz_services::dto::{
-    A2aInvokeRequest, A2aInvokeResponse, ChannelSendRequest, ChannelSendResponse,
-    ChannelWebhookRequest, ChannelWebhookResponse, EvaluateGovernanceRequest,
-    EvaluateGovernanceResponse, ExecuteToolRequest, ExecuteToolResponse, FanOutRequest,
-    FanOutResponse, OrchestrateRequest, OrchestrateResponse, ProviderHealthRequest,
-    ProviderHealthResponse, RunTurnRequest, RunTurnResponse, TestChannelRequest,
-    TestChannelResponse,
+    A2aInvokeRequest, A2aInvokeResponse, ChannelPollRequest, ChannelPollResponse,
+    ChannelSendRequest, ChannelSendResponse, ChannelWebhookRequest, ChannelWebhookResponse,
+    CompactSessionRequest, CompactSessionResponse, CreateCronJobRequest, CronJobDto,
+    CronRunResultDto, EvaluateGovernanceRequest, EvaluateGovernanceResponse, ExecuteToolRequest,
+    ExecuteToolResponse, FanOutRequest, FanOutResponse, MemoryIngestRequest, MemoryIngestResponse,
+    OrchestrateRequest, OrchestrateResponse, ProviderHealthRequest, ProviderHealthResponse,
+    RunTurnRequest, RunTurnResponse, SessionSummary, SubconsciousTickRequest,
+    SubconsciousTickResponse,
+    TestChannelRequest, TestChannelResponse,
 };
 use clawz_core::traits::AgentScheduler;
 use clawz_core::types::orchestration::AgentSpec;
@@ -78,6 +81,8 @@ pub fn routes(state: ControlState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/v1/agents/{agent_id}/run", post(run_turn))
+        .route("/v1/sessions", get(list_sessions))
+        .route("/v1/sessions/{session_id}/compact", post(compact_session))
         .route("/v1/tools/execute", post(execute_tool))
         .route("/v1/governance/evaluate", post(evaluate_governance))
         .route("/v1/providers/health", post(test_provider))
@@ -87,6 +92,12 @@ pub fn routes(state: ControlState) -> Router {
         .route("/v1/channels/test", post(test_channel))
         .route("/v1/channels/webhook", post(channel_webhook))
         .route("/v1/channels/send", post(channel_send))
+        .route("/v1/channels/poll", post(channel_poll))
+        .route("/v1/cron/jobs", get(list_cron_jobs).post(create_cron_job))
+        .route("/v1/cron/jobs/{id}/run", post(run_cron_job))
+        .route("/v1/cron/jobs/{id}", axum::routing::delete(delete_cron_job))
+        .route("/v1/background/ingest", post(ingest_memory))
+        .route("/v1/background/subconscious", post(run_subconscious))
         .route("/v1/fleet/spawn", post(fleet_spawn))
         .route("/v1/fleet/agents", get(fleet_list_agents))
         .layer(middleware::from_fn(auth_middleware))
@@ -109,6 +120,38 @@ async fn run_turn(
         .await
         .map(Json)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn list_sessions(
+    State(state): State<ControlState>,
+) -> Result<Json<Vec<SessionSummary>>, (axum::http::StatusCode, String)> {
+    state
+        .service
+        .list_sessions()
+        .await
+        .map(Json)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn compact_session(
+    State(state): State<ControlState>,
+    Path(session_id): Path<String>,
+    Json(body): Json<CompactSessionRequest>,
+) -> Result<Json<CompactSessionResponse>, (axum::http::StatusCode, String)> {
+    let keep = body
+        .keep_last
+        .unwrap_or(crate::runtime::session_commands::DEFAULT_COMPACT_KEEP);
+    let (removed, usage) = state
+        .service
+        .compact_session(&session_id, keep)
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(Json(CompactSessionResponse {
+        session_id,
+        removed,
+        message_count: usage.message_count,
+        estimated_tokens: usage.estimated_tokens,
+    }))
 }
 
 async fn execute_tool(
@@ -217,6 +260,101 @@ async fn channel_send(
         .await
         .map(Json)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn channel_poll(
+    State(state): State<ControlState>,
+    Json(body): Json<ChannelPollRequest>,
+) -> Result<Json<ChannelPollResponse>, (axum::http::StatusCode, String)> {
+    state
+        .service
+        .poll_channel(body)
+        .await
+        .map(Json)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+async fn list_cron_jobs(
+    State(state): State<ControlState>,
+) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let jobs = state.service.list_cron_jobs().await.map_err(map_err)?;
+    let data: Vec<CronJobDto> = jobs
+        .into_iter()
+        .map(crate::cron::convert::job_to_dto)
+        .collect();
+    Ok(Json(json!({ "data": data, "total": data.len() })))
+}
+
+async fn create_cron_job(
+    State(state): State<ControlState>,
+    Json(body): Json<CreateCronJobRequest>,
+) -> Result<Json<CronJobDto>, (axum::http::StatusCode, String)> {
+    let job = state
+        .service
+        .create_cron_job(crate::cron::convert::create_from_dto(body))
+        .await
+        .map_err(map_err)?;
+    Ok(Json(crate::cron::convert::job_to_dto(job)))
+}
+
+async fn delete_cron_job(
+    State(state): State<ControlState>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, (axum::http::StatusCode, String)> {
+    state.service.delete_cron_job(&id).await.map_err(map_err)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn run_cron_job(
+    State(state): State<ControlState>,
+    Path(id): Path<String>,
+) -> Result<Json<CronRunResultDto>, (axum::http::StatusCode, String)> {
+    let result = state
+        .service
+        .execute_cron_job(&id)
+        .await
+        .map_err(map_err)?;
+    Ok(Json(crate::cron::convert::run_to_dto(result)))
+}
+
+async fn ingest_memory(
+    State(state): State<ControlState>,
+    Json(body): Json<MemoryIngestRequest>,
+) -> Result<Json<MemoryIngestResponse>, (axum::http::StatusCode, String)> {
+    let chunks = body
+        .chunks
+        .into_iter()
+        .map(|c| crate::background::MemoryIngestChunk {
+            key: c.key,
+            text: c.text,
+            source: c.source,
+        })
+        .collect();
+    let stored = state
+        .service
+        .ingest_memory(&body.agent_id, chunks)
+        .await
+        .map_err(map_err)?;
+    Ok(Json(MemoryIngestResponse { stored }))
+}
+
+async fn run_subconscious(
+    State(state): State<ControlState>,
+    Json(body): Json<SubconsciousTickRequest>,
+) -> Result<Json<SubconsciousTickResponse>, (axum::http::StatusCode, String)> {
+    state
+        .service
+        .run_subconscious_tick(body.agent_id.as_deref())
+        .await
+        .map(Json)
+        .map_err(map_err)
+}
+
+fn map_err(e: clawz_core::error::ClawzError) -> (axum::http::StatusCode, String) {
+    (
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        e.to_string(),
+    )
 }
 
 #[derive(Debug, Deserialize)]

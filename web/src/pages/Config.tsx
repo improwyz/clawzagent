@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Badge, statusVariant } from '../components/shared/Badge';
 import { Modal } from '../components/shared/Modal';
+import { DesktopShellSettings } from '../components/DesktopShellSettings';
 import {
   fetchConfig,
   fetchCloudProviders,
@@ -13,10 +14,13 @@ import {
   updateSystemConfig,
   exportConfig,
   login,
+  fetchWorkspaceSkills,
+  createWorkspaceSkill,
   type Provider,
+  type WorkspaceSkill,
 } from '../lib/api';
 
-type Tab = 'providers' | 'channels' | 'cloud' | 'cloudflare' | 'saas' | 'system';
+type Tab = 'providers' | 'channels' | 'skills' | 'cloud' | 'cloudflare' | 'saas' | 'system';
 
 function ProviderModal({
   open,
@@ -209,6 +213,26 @@ export function Config() {
     enabled: tab === 'cloud',
   });
 
+  const { data: skillsData, isLoading: skillsLoading, refetch: refetchSkills } = useQuery({
+    queryKey: ['workspace-skills'],
+    queryFn: fetchWorkspaceSkills,
+    enabled: tab === 'skills',
+  });
+
+  const [skillForm, setSkillForm] = useState({ name: '', content: '', description: '' });
+  const skillCreateMut = useMutation({
+    mutationFn: () =>
+      createWorkspaceSkill({
+        name: skillForm.name.trim(),
+        content: skillForm.content,
+        description: skillForm.description.trim() || undefined,
+      }),
+    onSuccess: () => {
+      setSkillForm({ name: '', content: '', description: '' });
+      refetchSkills();
+    },
+  });
+
   useEffect(() => {
     if (data?.system) {
       setSystemForm({
@@ -251,6 +275,7 @@ export function Config() {
   const tabs: { id: Tab; label: string }[] = [
     { id: 'providers', label: 'Providers' },
     { id: 'channels', label: 'Channels' },
+    { id: 'skills', label: 'Skills' },
     { id: 'cloud', label: 'Cloud' },
     { id: 'cloudflare', label: 'Cloudflare' },
     { id: 'saas', label: 'SaaS' },
@@ -331,6 +356,79 @@ export function Config() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {!isLoading && tab === 'skills' && (
+            <div className="space-y-4">
+              {skillsData?.root && (
+                <div className="text-xs text-zinc-500 font-mono truncate">
+                  Workspace: {skillsData.root}
+                </div>
+              )}
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-2">
+                  <div className="text-xs text-zinc-500 uppercase tracking-wider">
+                    Installed skills ({skillsData?.skills.length ?? 0})
+                  </div>
+                  {skillsLoading ? (
+                    <div className="text-zinc-500 text-sm">Loading…</div>
+                  ) : (skillsData?.skills ?? []).length === 0 ? (
+                    <div className="text-zinc-500 text-sm py-4">No skills in workspace yet.</div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {(skillsData?.skills ?? []).map((s: WorkspaceSkill) => (
+                        <div key={s.name} className="p-3 rounded-lg bg-zinc-800">
+                          <div className="text-zinc-100 text-sm font-medium">{s.name}</div>
+                          {s.description && (
+                            <div className="text-zinc-500 text-xs mt-1">{s.description}</div>
+                          )}
+                          {s.path && (
+                            <div className="text-zinc-600 text-[10px] font-mono mt-1 truncate">
+                              {s.path}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2 p-3 rounded-lg border border-zinc-800">
+                  <div className="text-xs text-zinc-500 uppercase tracking-wider">Add skill</div>
+                  <input
+                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2"
+                    placeholder="skill-name"
+                    value={skillForm.name}
+                    onChange={(e) => setSkillForm((f) => ({ ...f, name: e.target.value }))}
+                  />
+                  <input
+                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2"
+                    placeholder="Short description (optional)"
+                    value={skillForm.description}
+                    onChange={(e) =>
+                      setSkillForm((f) => ({ ...f, description: e.target.value }))
+                    }
+                  />
+                  <textarea
+                    className="w-full bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm rounded-lg px-3 py-2 min-h-[120px] font-mono"
+                    placeholder="# SKILL.md content"
+                    value={skillForm.content}
+                    onChange={(e) => setSkillForm((f) => ({ ...f, content: e.target.value }))}
+                  />
+                  <button
+                    type="button"
+                    disabled={
+                      skillCreateMut.isPending ||
+                      !skillForm.name.trim() ||
+                      !skillForm.content.trim()
+                    }
+                    onClick={() => skillCreateMut.mutate()}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-500 disabled:opacity-50"
+                  >
+                    {skillCreateMut.isPending ? 'Saving…' : 'Create skill'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -512,6 +610,7 @@ export function Config() {
 
           {!isLoading && tab === 'system' && (
             <div className="space-y-4">
+              <DesktopShellSettings />
               {!data?.system.auth_disabled && (
                 <div className="p-4 rounded-lg bg-zinc-800 border border-zinc-700 space-y-3">
                   <h3 className="text-zinc-200 text-sm font-medium">Sign in</h3>

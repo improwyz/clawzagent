@@ -1,40 +1,54 @@
-use crate::tools::tool_trait::{Tool, ToolContext};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use async_trait::async_trait;
+use serde_json::Value;
+
+use crate::terminal::{
+    create_terminal_backend, default_workdir, LocalBackend, TerminalBackend,
+};
+use crate::tools::tool_trait::{Tool, ToolContext};
 use clawz_core::error::ClawzError;
 use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
 use clawz_core::types::{ToolResult, ToolSchema};
-use serde_json::Value;
-use std::path::{Path, PathBuf};
 
 const MAX_READ_BYTES: usize = 5 * 1024 * 1024; // 5 MB
 const MAX_WRITE_BYTES: usize = 10 * 1024 * 1024; // 10 MB
 
 pub struct FileOpsTool {
-    /// Directories the tool is allowed to access. Empty = use $CLAWZ_SANDBOX_DIR or /tmp/clawz.
+    /// Directories the tool is allowed to access. Empty = terminal backend workdir.
     allowed_dirs: Vec<PathBuf>,
+    backend: Arc<dyn TerminalBackend>,
 }
 
 impl FileOpsTool {
     pub fn new() -> Self {
+        Self::with_backend(fallback_file_backend())
+    }
+
+    pub fn with_backend(backend: Arc<dyn TerminalBackend>) -> Self {
         Self {
             allowed_dirs: Vec::new(),
+            backend,
         }
     }
 
     pub fn with_allowed_dirs(dirs: Vec<PathBuf>) -> Self {
-        Self { allowed_dirs: dirs }
+        Self {
+            allowed_dirs: dirs,
+            backend: fallback_file_backend(),
+        }
     }
 
     fn resolve_sandbox_dirs(&self) -> Vec<PathBuf> {
         if !self.allowed_dirs.is_empty() {
             return self.allowed_dirs.clone();
         }
-        // Check env var
-        if let Ok(dir) = std::env::var("CLAWZ_SANDBOX_DIR") {
-            return vec![PathBuf::from(dir)];
-        }
-        // Default sandbox
-        vec![PathBuf::from("/tmp/clawz")]
+        vec![self.backend.workdir()]
+    }
+
+    fn uses_local_fs(&self) -> bool {
+        self.backend.backend_id() == "local"
     }
 
     fn validate_path(&self, path: &Path) -> Result<PathBuf, ClawzError> {
@@ -89,6 +103,13 @@ impl FileOpsTool {
     }
 }
 
+fn fallback_file_backend() -> Arc<dyn TerminalBackend> {
+    create_terminal_backend().unwrap_or_else(|e| {
+        tracing::warn!("terminal backend init failed ({e}), using local");
+        Arc::new(LocalBackend::new(default_workdir()))
+    })
+}
+
 impl Default for FileOpsTool {
     fn default() -> Self {
         Self::new()
@@ -102,7 +123,7 @@ impl Tool for FileOpsTool {
     }
 
     fn description(&self) -> &str {
-        "File system operations: read, write, list directory, create directory, delete file. Sandboxed to allowed directories."
+        "File system operations via the configured terminal backend (local, docker, or ssh). Sandboxed to allowed directories."
     }
 
     fn primitive(&self) -> ActionPrimitive {
@@ -163,9 +184,25 @@ impl Tool for FileOpsTool {
 
         let output = match operation {
             "read_file" => {
-                let metadata = std::fs::metadata(&safe_path).map_err(|e| {
-                    ClawzError::Tool(format!("cannot stat '{}': {e}", safe_path.display()))
-                })?;
+                let metadata = if self.uses_local_fs() {
+                    std::fs::metadata(&safe_path).map_err(|e| {
+                        ClawzError::Tool(format!("cannot stat '{}': {e}", safe_path.display()))
+                    })?
+                } else {
+                    let bytes = self.backend.read_file(&safe_path).await?;
+                    let content = String::from_utf8_lossy(&bytes);
+                    return Ok(ToolResult {
+                        tool_call_id: String::new(),
+                        output: serde_json::json!({
+                            "path": safe_path.to_string_lossy(),
+                            "size_bytes": bytes.len(),
+                            "content": content,
+                            "backend": self.backend.backend_id(),
+                        })
+                        .to_string(),
+                        is_error: false,
+                    });
+                };
 
                 if metadata.len() as usize > MAX_READ_BYTES {
                     return Err(ClawzError::Tool(format!(
@@ -176,8 +213,7 @@ impl Tool for FileOpsTool {
                     )));
                 }
 
-                let bytes = std::fs::read(&safe_path)
-                    .map_err(|e| ClawzError::Tool(format!("read failed: {e}")))?;
+                let bytes = self.backend.read_file(&safe_path).await?;
 
                 let encoding = args["encoding"].as_str().unwrap_or("utf8");
                 let content = if encoding == "base64" {
@@ -227,12 +263,22 @@ impl Tool for FileOpsTool {
                     content.as_bytes().to_vec()
                 };
 
-                std::fs::write(&safe_path, &bytes)
-                    .map_err(|e| ClawzError::Tool(format!("write failed: {e}")))?;
+                self.backend.write_file(&safe_path, &bytes).await?;
 
                 serde_json::json!({
                     "path": safe_path.to_string_lossy(),
-                    "bytes_written": bytes.len()
+                    "bytes_written": bytes.len(),
+                    "backend": self.backend.backend_id(),
+                })
+                .to_string()
+            }
+
+            "list_directory" if !self.uses_local_fs() => {
+                let listing = self.backend.list_directory(&safe_path).await?;
+                serde_json::json!({
+                    "path": safe_path.to_string_lossy(),
+                    "listing": listing,
+                    "backend": self.backend.backend_id(),
                 })
                 .to_string()
             }
@@ -264,6 +310,19 @@ impl Tool for FileOpsTool {
                 .to_string()
             }
 
+            "create_directory" if !self.uses_local_fs() => {
+                let recursive = args["recursive"].as_bool().unwrap_or(true);
+                self.backend
+                    .create_directory(&safe_path, recursive)
+                    .await?;
+                serde_json::json!({
+                    "path": safe_path.to_string_lossy(),
+                    "created": true,
+                    "backend": self.backend.backend_id(),
+                })
+                .to_string()
+            }
+
             "create_directory" => {
                 let recursive = args["recursive"].as_bool().unwrap_or(true);
                 if recursive {
@@ -276,6 +335,16 @@ impl Tool for FileOpsTool {
                 serde_json::json!({
                     "path": safe_path.to_string_lossy(),
                     "created": true
+                })
+                .to_string()
+            }
+
+            "delete_file" if !self.uses_local_fs() => {
+                self.backend.delete_path(&safe_path).await?;
+                serde_json::json!({
+                    "path": safe_path.to_string_lossy(),
+                    "deleted": true,
+                    "backend": self.backend.backend_id(),
                 })
                 .to_string()
             }
@@ -294,6 +363,27 @@ impl Tool for FileOpsTool {
                 serde_json::json!({
                     "path": safe_path.to_string_lossy(),
                     "deleted": true
+                })
+                .to_string()
+            }
+
+            "file_info" if !self.uses_local_fs() => {
+                let out = self
+                    .backend
+                    .exec(
+                        &format!(
+                            "stat -- {}",
+                            crate::terminal::shell_escape(safe_path.to_string_lossy().as_ref())
+                        ),
+                        None,
+                        30,
+                        &std::collections::HashMap::new(),
+                    )
+                    .await?;
+                serde_json::json!({
+                    "path": safe_path.to_string_lossy(),
+                    "stat": out.stdout,
+                    "backend": self.backend.backend_id(),
                 })
                 .to_string()
             }
@@ -335,7 +425,10 @@ mod tests {
     use tempfile::TempDir;
 
     fn make_tool_with_tmp(dir: &TempDir) -> FileOpsTool {
-        FileOpsTool::with_allowed_dirs(vec![dir.path().to_path_buf()])
+        FileOpsTool {
+            allowed_dirs: vec![dir.path().to_path_buf()],
+            backend: Arc::new(LocalBackend::new(dir.path().to_path_buf())),
+        }
     }
 
     fn make_ctx() -> ToolContext {

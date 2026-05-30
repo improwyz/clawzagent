@@ -107,7 +107,13 @@ impl PipelineStep for SelectProviderStep {
                 }
             }
         }
-        messages.extend(ctx.messages.clone());
+        let mut turn_messages = ctx.messages.clone();
+        if clawz_core::deployment::DeploymentMode::from_env()
+            == clawz_core::deployment::DeploymentMode::Standalone
+        {
+            crate::memory::compress::compress_messages(&mut turn_messages);
+        }
+        messages.extend(turn_messages);
 
         // Determine tools from metadata (tool schemas stored as JSON array).
         // Tool schemas are typically injected earlier in the pipeline by a

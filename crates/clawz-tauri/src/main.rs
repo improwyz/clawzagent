@@ -1,5 +1,7 @@
 //! ClawZ Tauri application entry point.
 
+use std::sync::Arc;
+
 use clawz_tauri::{commands, tray};
 use tauri::Manager;
 use tracing_subscriber::EnvFilter;
@@ -24,8 +26,10 @@ pub fn run() {
                 .enable_all()
                 .build()
                 .expect("tokio runtime for setup must succeed");
-            let state = rt.block_on(async { commands::AppState::new().await });
+            let state = Arc::new(rt.block_on(async { commands::AppState::new().await }));
+            commands::set_app_state(state.clone());
             app.manage(state);
+            tray::refresh_tray_tooltip(app.handle());
 
             tracing::info!("ClawZ Tauri shell started");
             Ok(())
@@ -34,6 +38,9 @@ pub fn run() {
             commands::agent_chat,
             commands::get_platform_tier,
             commands::health_check,
+            commands::get_shell_config,
+            commands::set_shell_config,
+            commands::load_gateway_api_key,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

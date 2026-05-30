@@ -1,0 +1,18 @@
+[Unit]
+Description=ClawZ API Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=clawz
+Group=clawz
+WorkingDirectory=/opt/clawz
+EnvironmentFile=-/etc/clawz/gateway.env
+ExecStart=/opt/clawz/bin/clawz-gateway
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

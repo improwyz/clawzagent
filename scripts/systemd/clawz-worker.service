@@ -1,0 +1,18 @@
+[Unit]
+Description=ClawZ Agent Worker
+After=network-online.target clawz-gateway.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=clawz
+Group=clawz
+WorkingDirectory=/opt/clawz
+EnvironmentFile=-/etc/clawz/worker.env
+ExecStart=/opt/clawz/bin/clawz-worker
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

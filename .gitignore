@@ -26,6 +26,10 @@ Thumbs.db
 !/docs/private-registry.md
 !/docs/install-dependencies.csv
 !/docs/deployment-build-strategy.md
+!/docs/agent-runtime-parity-plan.md
+!/docs/openhuman-comparison.md
+!/docs/CLAWZ_PHASE0_COMPLETE.md
+!/docs/PHASE0_COMPLETE_ANALYSIS.md
 
 # Node
 node_modules/

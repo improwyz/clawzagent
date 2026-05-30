@@ -23,6 +23,9 @@
 
 pub mod auth;
 pub mod bootstrap;
+pub mod channel_pairing;
+pub mod channel_supervisor;
+pub mod connector_scheduler;
 pub mod cloudflare;
 pub mod connectors;
 pub mod db_bootstrap;
@@ -39,7 +42,9 @@ pub mod secrets;
 pub mod server;
 pub mod shutdown;
 pub mod telephony;
-pub mod tui;
+pub mod turn_event_bridge;
+/// Interactive setup wizards (shared with `clawz-cli`).
+pub use clawz_tui as tui;
 pub mod voice_pipeline;
 pub mod worker_fleet;
 pub mod ws;

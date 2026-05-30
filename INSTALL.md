@@ -115,6 +115,129 @@ curl http://localhost:3000/api/v1/system/health
 
 Open **http://localhost:3000** in a browser for the gateway API (and dashboard if built).
 
+## Operator CLI (`clawz`)
+
+Build from the repo (or `cargo install --path crates/clawz-cli`):
+
+```bash
+cargo build -p clawz-cli --release
+export PATH="$PWD/target/release:$PATH"
+```
+
+| Command | Purpose |
+|---------|---------|
+| `clawz onboard` | Interactive first-run wizard; writes hints for `.env` and `~/.clawz/cli.toml` |
+| `clawz onboard --install-daemon` | Same, then `docker compose up -d` in the repo |
+| `clawz doctor` | Gateway, worker, env, and Docker checks |
+| `clawz gateway status` | Health for gateway + worker |
+| `clawz gateway start` / `stop` | Docker Compose in current repo (or `CLAWZ_REPO`) |
+| `clawz agent -m "Hello"` | One agent turn via `POST /api/v1/agents/{id}/run` |
+| `clawz cron list` | List scheduled jobs |
+| `clawz cron add "0 9 * * *" "Daily summary"` | Create a cron job (uses first agent if `--agent-id` omitted) |
+| `clawz cron run <job-id>` | Run a job immediately |
+| `clawz cron remove <job-id>` | Delete a job |
+| `clawz setup` / `clawz tui config` | Interactive config menu |
+
+Set `CLAWZ_API_KEY` or `VALID_API_KEYS` (first key used) and `CLAWZ_GATEWAY_URL` (default `http://127.0.0.1:3000`).
+
+## Channels and webhooks
+
+Register a channel via `POST /api/v1/channels` with `channel_type` (e.g. `webhook`, `slack`, `twilio`) and `config.agent_id`. Inbound webhooks:
+
+- Generic: `POST /webhooks/{channel_type}/{channel_id}`
+- Twilio SMS/voice: `POST /webhooks/twilio/sms/{id}`, `POST /webhooks/twilio/voice/{id}`
+
+For polling adapters, set `config.poll_interval_secs` (seconds). The gateway supervisor polls enabled channels automatically (disable with `CLAWZ_CHANNEL_SUPERVISOR=0`).
+
+**DM pairing** (optional): set `CLAWZ_CHANNEL_PAIRING=1` or `config.require_pairing: true`, then:
+
+```bash
+curl -X POST -H "Authorization: Bearer $CLAWZ_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"channel_id":"<uuid>"}' \
+  http://127.0.0.1:3000/api/v1/channels/pairing
+# Approve with pairing_code + peer_id:
+curl -X POST .../api/v1/channels/pairing/approve -d '{"code":"ABC12345","peer_id":"user-1"}'
+```
+
+Allowlist file: `~/.clawz/channel-pairing.json`. Systemd unit templates: `scripts/systemd/`.
+
+## Cron (scheduled agents)
+
+Jobs are stored at `~/.clawz/cron/jobs.json` (override with `CLAWZ_CRON_JOBS_FILE`). The worker scheduler ticks every 60 seconds (`CLAWZ_CRON_TICK_SECS`, default `60`). Disable with `CLAWZ_CRON_SCHEDULER=0`.
+
+```bash
+clawz cron add "0 9 * * *" "Summarize overnight email" --agent-id my-agent
+clawz cron list
+clawz cron run <job-id>
+```
+
+REST API (gateway): `GET/POST /api/v1/cron/jobs`, `DELETE /api/v1/cron/jobs/{id}`, `POST /api/v1/cron/jobs/{id}/run`. Cron runs use `cron_mode` (interactive tools disabled).
+
+Dashboard: **http://localhost:3000/cron** (when `web/dist` is built).
+
+## Background ingest (connectors + subconscious)
+
+**Connector sync** (default every 20 minutes, `CLAWZ_CONNECTOR_SYNC_INTERVAL_SECS`):
+
+- Disable with `CLAWZ_CONNECTOR_SYNC=0`
+- Config: `~/.clawz/connector-sync.json` (or auto when `GITHUB_TOKEN` / `CLAWZ_CONNECTOR_GITHUB_TOKEN` is set)
+- Ingests SaaS objects into agent memory as `sync:*` FTS chunks
+
+**Subconscious reflection** (opt-in):
+
+```bash
+export CLAWZ_SUBCONSCIOUS=1
+export CLAWZ_SUBCONSCIOUS_AGENT_ID=my-agent   # optional, default "default"
+```
+
+Ticks every 30 minutes (`CLAWZ_SUBCONSCIOUS_INTERVAL_SECS`). Manual trigger: `POST /api/v1/background/subconscious`.
+
+## Terminal backends (shell / file tools)
+
+`shell` and `file_ops` run through a pluggable terminal backend:
+
+| Backend | When | Env |
+|---------|------|-----|
+| `local` | `CLAWZ_MODE=standalone` (default) | `CLAWZ_TERMINAL_BACKEND=local` |
+| `docker` | `micro` / `elastic` (default) | `CLAWZ_TERMINAL_BACKEND=docker`, `CLAWZ_TERMINAL_DOCKER_IMAGE` |
+| `ssh` | Remote host | `CLAWZ_TERMINAL_BACKEND=ssh`, `CLAWZ_SSH_HOST`, `CLAWZ_SSH_USER` |
+
+Workspace directory: `CLAWZ_TERMINAL_WORKDIR` or `~/.clawz/workspace` (mounted at `/workspace` in Docker).
+
+## Local memory (standalone)
+
+In `CLAWZ_MODE=standalone` (default when `DATABASE_URL` is unset), conversation and agent memory persist to SQLite at `~/.clawz/memory.db`. Override with `CLAWZ_MEMORY_DB` or force SQLite in other modes with `CLAWZ_SQLITE_MEMORY=1`.
+
+## Self-improvement and learning loop
+
+Normal agent turns (not cron/background) attach outcome tracking, identity, skills, and a periodic self-improvement loop:
+
+| Env | Default | Purpose |
+|-----|---------|---------|
+| `CLAWZ_SELF_IMPROVEMENT` | on | Set `0` to disable learning stack on runtimes |
+| `CLAWZ_SELF_IMPROVEMENT_INTERVAL_TURNS` | `5` | Run improvement loop every N pipeline turns |
+| `CLAWZ_MEMORY_NUDGE` | on | Post-turn RAG ingest of assistant text (needs embedder) |
+| `CLAWZ_OLLAMA_EMBED` | off | Use Ollama for embeddings (`OLLAMA_HOST`, `CLAWZ_EMBED_MODEL`) |
+
+On-disk paths under `~/.clawz/`: `identities/`, `profiles/`, `transcript_fts.db`. Cross-session transcript search is indexed after each chat turn.
+
+Postgres (`DATABASE_URL`) is used when set (micro/elastic deployments).
+
+## Operator workspace (skills)
+
+Seed `AGENTS.md` and an example skill under `~/.clawz/workspace` (or set `CLAWZ_WORKSPACE`):
+
+```bash
+./scripts/init-workspace.sh
+```
+
+The worker merges `AGENTS.md`, optional `SOUL.md`, and `skills/*/SKILL.md` into the system prompt on each turn. List skills via the gateway:
+
+```bash
+curl -s -H "Authorization: Bearer $CLAWZ_API_KEY" http://127.0.0.1:3000/api/v1/skills
+```
+
 ## First run (after install)
 
 **Routine VPS updates:** do not use `docker compose ... --build` on every `git pull` — that recompiles the full Rust workspace and can take 10–20+ minutes. Use **`./scripts/deploy.sh`** instead (pull prebuilt images or rebuild only what changed). See [docs/deployment-build-strategy.md](docs/deployment-build-strategy.md) for fast vs slow paths.
@@ -245,6 +368,43 @@ cargo tauri dev    # requires Rust + Tauri system deps
 
 Regeneration commands are documented in [design-system.md](crates/clawz-tauri/design/design-system.md).
 
+### Mobile scaffold (experimental)
+
+`crates/clawz-tauri-mobile/` mirrors the desktop split (separate `tauri.conf.json`, shared `web/` build). It is **not** in the workspace `members` list so default `cargo build --workspace` stays desktop/server-only.
+
+```bash
+./scripts/build-mobile.sh   # builds web/, then `cargo tauri android/ios build` when SDKs exist
+```
+
+Requires [Tauri mobile prerequisites](https://v2.tauri.app/start/prerequisites/) (Android SDK, Xcode for iOS). Voice, CEF, and full mobile UX are deferred — see [agent-runtime-parity-plan.md](docs/agent-runtime-parity-plan.md) Phase DD.
+
+---
+
+## Database migrations
+
+The gateway applies **embedded** core schema on startup (`clawz-core::db::run_migrations`). Additional SQL files under [`migrations/`](migrations/) (sessions, cron jobs, etc.) must be applied with the helper script.
+
+**Docker Compose (default after `./scripts/install.sh`):** migrations run automatically once Postgres is healthy.
+
+**Manual / CI:**
+
+```bash
+# All migrations/*.sql in order (auto-detects compose service db or DATABASE_URL)
+./scripts/migrate-db.sh
+
+# One file
+./scripts/migrate-db.sh 008_sessions.sql
+
+# Another compose project name
+COMPOSE="docker compose -p infrastructure" ./scripts/migrate-db.sh
+
+# Bare Postgres on the host
+export DATABASE_URL="postgresql://postgres:password@127.0.0.1:5432/clawz"
+./scripts/migrate-db.sh
+```
+
+Requires `psql` on the host for `DATABASE_URL` mode, or Docker for compose/container mode. Idempotent migrations use `IF NOT EXISTS` where possible.
+
 ---
 
 ## Environment configuration
@@ -284,6 +444,7 @@ Before exposing ClawZ to the internet:
 - [ ] Set strong `CLAWZ_JWT_SECRET` and `CLAWZ_WORKER_TOKEN` (installer generates these for local dev only)
 - [ ] **Disable** `CLAWZ_DISABLE_AUTH` and configure real `VALID_API_KEYS`
 - [ ] **Disable** `CLAWZ_STUB_PROVIDER`; set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or your provider keys
+- [ ] Run `./scripts/migrate-db.sh` after upgrading (or rely on installer / compose-smoke)
 - [ ] Use managed Postgres with pgvector; do not expose the Compose `db` port publicly
 - [ ] Put TLS termination in front of the gateway (reverse proxy or load balancer)
 - [ ] Set `CLAWZ_PUBLIC_URL` to your public HTTPS origin (required for [telephony](TELEPHONY.md))

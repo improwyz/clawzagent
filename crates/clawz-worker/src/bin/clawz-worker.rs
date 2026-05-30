@@ -37,6 +37,8 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let service = Arc::new(WorkerService::new().await?);
+    clawz_worker::cron::spawn_cron_scheduler(service.clone());
+    clawz_worker::background::spawn_subconscious_scheduler(service.clone());
     let mode = DeploymentMode::from_env();
     let agent_scheduler = match mode {
         DeploymentMode::Standalone => None,

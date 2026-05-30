@@ -327,6 +327,28 @@ pub trait MemoryBackend: Send + Sync {
         limit: usize,
     ) -> Result<Vec<MemoryEntry>>;
 
+    /// Full-text search over stored memory chunks (standalone SQLite backends).
+    ///
+    /// Default implementation returns no results; override when FTS is available.
+    async fn search_text(
+        &self,
+        _agent_id: &str,
+        _query: &str,
+        _limit: usize,
+    ) -> Result<Vec<MemoryEntry>> {
+        Ok(vec![])
+    }
+
+    /// List `sync:*` chunk text updated after `since` (connector ingest / subconscious).
+    async fn list_sync_chunks_since(
+        &self,
+        _agent_id: &str,
+        _since: Option<&DateTime<Utc>>,
+        _limit: usize,
+    ) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
+
     /// Fetch conversation history ordered by time.
     async fn get_conversation_history(
         &self,

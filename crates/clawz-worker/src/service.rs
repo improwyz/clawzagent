@@ -6,6 +6,7 @@ use std::time::Instant;
 
 use clawz_core::deployment::DeploymentMode;
 use clawz_core::error::{ClawzError, Result};
+use clawz_core::session::SessionStore;
 use clawz_core::traits::{AgentScheduler, GovernanceEngine, ToolOrchestrator};
 use clawz_core::types::orchestration::{SpawnConfig, ToolType};
 use clawz_core::types::agent::AgentConfig;
@@ -14,21 +15,28 @@ use clawz_services::dto::{
     A2aInvokeRequest, A2aInvokeResponse, EvaluateGovernanceRequest, EvaluateGovernanceResponse,
     ExecuteToolRequest, ExecuteToolResponse, FanOutRequest, FanOutResponse, OrchestrateRequest,
     OrchestrateResponse, ProviderHealthRequest, ProviderHealthResponse, RunTurnRequest,
-    RunTurnResponse, TestChannelRequest, TestChannelResponse,
+    RunTurnResponse, SessionSummary, TestChannelRequest, TestChannelResponse,
 };
 use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::governance::engine::{ClawzGovernanceEngine, GovernanceEngineConfig};
-use crate::memory::store::{InMemoryBackend, PostgresMemoryBackend};
+use crate::memory::open_session_store;
+use crate::memory::create_memory_backend;
 use crate::providers::CostTracker;
 use crate::providers::router::{ProviderRouter, ProviderRouterConfig, ReliabilityConfig};
 use crate::runtime::agent::{AgentRuntime, RuntimeDependencies};
 use crate::runtime::fan_out::{AggregationStrategy, FanOut, FanOutConfig};
 use crate::runtime::team::{Task, Team, TeamRole};
 use crate::runtime::turn_coordinator::{RoomRuntimeProvider, TurnCoordinator};
+use crate::runtime::turn_events::TurnEventBus;
 use crate::orchestration::factory::{create_scheduler, create_tool_orchestrator, env_docker_network};
+use crate::cron::store::FileJobStore;
+use crate::cron::{CreateCronJobRequest, CronRunResult};
+use crate::learning::LearningStack;
+use crate::memory::transcript_search::TranscriptHit;
+use crate::memory::user_profile::UserProfile;
 use crate::tools::registry::ToolRegistry;
 use crate::tools::tool_trait::{ToolConfig, ToolContext};
 use std::time::Duration;
@@ -42,6 +50,10 @@ pub struct WorkerService {
     turn_coordinator: TurnCoordinator,
     agent_scheduler: Option<Arc<dyn AgentScheduler>>,
     tool_orchestrator: Option<Arc<dyn ToolOrchestrator>>,
+    turn_event_bus: Arc<TurnEventBus>,
+    session_store: Arc<dyn SessionStore>,
+    cron_store: Arc<FileJobStore>,
+    learning: Arc<LearningStack>,
 }
 
 fn isolated_tool_type(tool_name: &str) -> Option<ToolType> {
@@ -67,7 +79,7 @@ impl WorkerService {
         let provider_router = Arc::new(build_provider_router().await?);
         let governance = Arc::new(ClawzGovernanceEngine::new_with_approval(
             GovernanceEngineConfig::default(),
-            approval_workflow,
+            approval_workflow.clone(),
         ));
         let tools = Arc::new(ToolRegistry::new());
         tools.register_builtins().await;
@@ -79,6 +91,9 @@ impl WorkerService {
         };
         let tool_orchestrator = create_tool_orchestrator(mode).ok();
 
+        let cron_store = Arc::new(FileJobStore::open_default().await?);
+        let learning = Arc::new(LearningStack::from_env(approval_workflow).await?);
+        crate::memory::rollup::spawn_hourly_rollup_task();
         Ok(Self {
             governance,
             tools,
@@ -87,7 +102,123 @@ impl WorkerService {
             turn_coordinator: TurnCoordinator::new(),
             agent_scheduler,
             tool_orchestrator,
+            turn_event_bus: Arc::new(TurnEventBus::default()),
+            session_store: open_session_store().await?,
+            cron_store,
+            learning,
         })
+    }
+
+    pub fn cron_store(&self) -> Arc<FileJobStore> {
+        self.cron_store.clone()
+    }
+
+    pub fn turn_event_bus(&self) -> Arc<TurnEventBus> {
+        self.turn_event_bus.clone()
+    }
+
+    pub fn session_store(&self) -> Arc<dyn SessionStore> {
+        self.session_store.clone()
+    }
+
+    pub fn learning(&self) -> Arc<LearningStack> {
+        self.learning.clone()
+    }
+
+    /// Cross-session FTS search over indexed session transcripts.
+    pub async fn search_transcripts(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<TranscriptHit>> {
+        self.learning.transcript_search().search(query, limit).await
+    }
+
+    /// Load the persisted profile for a tenant (or default empty profile).
+    pub async fn user_profile(&self, tenant_id: &str) -> Result<UserProfile> {
+        self.learning.user_profiles().load(tenant_id).await
+    }
+
+    /// Persist an updated tenant profile.
+    pub async fn save_user_profile(&self, profile: &UserProfile) -> Result<()> {
+        self.learning.user_profiles().save(profile).await
+    }
+
+    /// Trim transcript to the last N messages (dashboard / API compact action).
+    pub async fn compact_session(
+        &self,
+        session_id: &str,
+        keep_last: usize,
+    ) -> Result<(usize, clawz_core::session::SessionUsage)> {
+        let removed = self.session_store.compact(session_id, keep_last).await?;
+        let usage = self.session_store.usage(session_id).await?;
+        Ok((removed, usage))
+    }
+
+    pub async fn list_sessions(&self) -> Result<Vec<SessionSummary>> {
+        let ids = self.session_store.list_sessions().await?;
+        let mut out = Vec::with_capacity(ids.len());
+        for session_id in ids {
+            let usage = self.session_store.usage(&session_id).await?;
+            out.push(SessionSummary {
+                session_id,
+                message_count: usage.message_count,
+                estimated_tokens: usage.estimated_tokens,
+            });
+        }
+        Ok(out)
+    }
+
+    async fn build_runtime_deps(
+        &self,
+        memory: Arc<dyn clawz_core::traits::MemoryBackend>,
+        restrict_tools: bool,
+        disabled_tools: &[String],
+    ) -> RuntimeDependencies {
+        let mut deps = RuntimeDependencies::new(
+            self.provider_router.clone(),
+            memory,
+            self.governance.clone(),
+            Arc::new(CostTracker::new()),
+        )
+        .with_turn_event_bus(self.turn_event_bus.clone())
+        .with_workspace_loader(Arc::new(
+            crate::workspace::WorkspaceLoader::default_home(),
+        ));
+
+        if !restrict_tools {
+            let names = self.tools.names().await;
+            let mut pipeline_tools = Vec::new();
+            for name in names {
+                if disabled_tools.iter().any(|d| d == &name) {
+                    continue;
+                }
+                if let Some(tool) = self.tools.get(&name).await {
+                    pipeline_tools.push(crate::tools::tool_trait::bridge_to_core(tool));
+                }
+            }
+            let schemas: Vec<_> = self
+                .tools
+                .list()
+                .await
+                .into_iter()
+                .filter(|s| !disabled_tools.iter().any(|d| d == &s.name))
+                .collect();
+            deps = deps.with_tooling(self.tools.clone(), pipeline_tools, schemas);
+
+            if self.learning.enabled() {
+                deps = deps
+                    .with_outcome_tracker(self.learning.outcome_tracker())
+                    .with_identity_store(self.learning.identity_store())
+                    .with_skill_repository(self.learning.skill_repository())
+                    .with_proposal_gatekeeper(self.learning.proposal_gatekeeper())
+                    .with_audit_logger(self.learning.audit_logger())
+                    .with_self_improvement_loop(self.learning.self_improvement_loop())
+                    .with_self_improvement_interval(self.learning.interval_turns());
+            }
+        }
+
+        deps
     }
 
     pub fn agent_scheduler(&self) -> Option<Arc<dyn AgentScheduler>> {
@@ -110,15 +241,19 @@ impl WorkerService {
         self.provider_router.clone()
     }
 
-    async fn runtime_for(
+    pub(crate) async fn runtime_for(
         &self,
         agent_id: &str,
         model: Option<&str>,
         system_prompt: Option<&str>,
+        restrict_tools: bool,
+        disabled_tools: &[String],
     ) -> Result<Arc<AgentRuntime>> {
-        if let Some(rt) = self.runtimes.read().await.get(agent_id).cloned() {
-            if model.is_none() && system_prompt.is_none() {
-                return Ok(rt);
+        if !restrict_tools {
+            if let Some(rt) = self.runtimes.read().await.get(agent_id).cloned() {
+                if model.is_none() && system_prompt.is_none() {
+                    return Ok(rt);
+                }
             }
         }
 
@@ -131,32 +266,102 @@ impl WorkerService {
             config = config.with_system_prompt(prompt);
         }
 
-        let memory: Arc<dyn clawz_core::traits::MemoryBackend> =
-            if let Ok(url) = std::env::var("DATABASE_URL") {
-                match PostgresMemoryBackend::new(&url).await {
-                    Ok(backend) => Arc::new(backend),
-                    Err(e) => {
-                        tracing::warn!("Postgres memory unavailable ({e}), using in-memory");
-                        Arc::new(InMemoryBackend::new())
-                    }
-                }
-            } else {
-                Arc::new(InMemoryBackend::new())
-            };
+        let memory: Arc<dyn clawz_core::traits::MemoryBackend> = create_memory_backend().await;
 
-        let deps = RuntimeDependencies::new(
-            self.provider_router.clone(),
-            memory,
-            self.governance.clone(),
-            Arc::new(CostTracker::new()),
-        );
+        let deps = self
+            .build_runtime_deps(memory, restrict_tools, disabled_tools)
+            .await;
 
         let runtime = Arc::new(AgentRuntime::new(config, deps));
-        self.runtimes
-            .write()
-            .await
-            .insert(agent_id.to_string(), runtime.clone());
+        if !restrict_tools {
+            self.runtimes
+                .write()
+                .await
+                .insert(agent_id.to_string(), runtime.clone());
+        }
         Ok(runtime)
+    }
+
+    pub async fn list_cron_jobs(&self) -> Result<Vec<crate::cron::CronJob>> {
+        self.cron_store.list().await
+    }
+
+    pub async fn create_cron_job(
+        &self,
+        req: CreateCronJobRequest,
+    ) -> Result<crate::cron::CronJob> {
+        self.cron_store.create(req).await
+    }
+
+    pub async fn delete_cron_job(&self, id: &str) -> Result<()> {
+        self.cron_store.delete(id).await
+    }
+
+    pub async fn execute_cron_job(&self, job_id: &str) -> Result<CronRunResult> {
+        let job = self.cron_store.get(job_id).await?;
+        let conversation_id = format!("cron-{}", job.id);
+
+        let partial_tools = !job.disabled_toolsets.is_empty();
+        let turn = crate::runtime::session_run::execute_agent_turn(
+            self,
+            &job.agent_id,
+            RunTurnRequest {
+                message: job.prompt.clone(),
+                conversation_id: Some(conversation_id.clone()),
+                cron_mode: !partial_tools,
+                disabled_tools: job.disabled_toolsets.clone(),
+                ..Default::default()
+            },
+        )
+        .await?;
+
+        let mut delivered = false;
+        if let Some(delivery) = &job.delivery {
+            self.send_channel_message(clawz_services::dto::ChannelSendRequest {
+                channel_type: delivery.channel_type.clone(),
+                config: delivery.config.clone(),
+                content: turn.content.clone(),
+                metadata: json!({ "to": delivery.to }),
+                agent_id: Some(job.agent_id.clone()),
+            })
+            .await?;
+            delivered = true;
+        }
+
+        self.cron_store.mark_run(job_id).await?;
+
+        Ok(CronRunResult {
+            job_id: job.id,
+            agent_id: job.agent_id,
+            conversation_id,
+            content: turn.content,
+            delivered,
+        })
+    }
+
+    pub async fn ingest_memory(
+        &self,
+        agent_id: &str,
+        chunks: Vec<crate::background::MemoryIngestChunk>,
+    ) -> Result<usize> {
+        let _ = self;
+        crate::background::ingest_memory_chunks(agent_id, chunks).await
+    }
+
+    pub async fn run_subconscious_tick(
+        &self,
+        agent_id: Option<&str>,
+    ) -> Result<clawz_services::dto::SubconsciousTickResponse> {
+        let (conversation_id, content, chunks_reviewed) =
+            crate::background::subconscious::run_subconscious_tick(self, agent_id).await?;
+        Ok(clawz_services::dto::SubconsciousTickResponse {
+            agent_id: agent_id.map(str::to_string).unwrap_or_else(|| {
+                std::env::var("CLAWZ_SUBCONSCIOUS_AGENT_ID").unwrap_or_else(|_| "default".into())
+            }),
+            conversation_id,
+            content,
+            chunks_reviewed,
+        })
     }
 
     pub async fn run_turn(&self, agent_id: &str, req: RunTurnRequest) -> Result<RunTurnResponse> {
@@ -164,26 +369,7 @@ impl WorkerService {
             return self.turn_coordinator.run_turn(agent_id, req, self).await;
         }
 
-        let runtime = self
-            .runtime_for(agent_id, req.model.as_deref(), req.system_prompt.as_deref())
-            .await?;
-
-        let reply = runtime.run(Message::user(req.message)).await?;
-        let content = reply.content.as_text().unwrap_or_default().to_string();
-        let conversation_id = req
-            .conversation_id
-            .unwrap_or_else(|| Uuid::new_v4().to_string());
-
-        Ok(RunTurnResponse {
-            agent_id: agent_id.to_string(),
-            conversation_id,
-            content,
-            role: "assistant".to_string(),
-            room_id: None,
-            message_id: None,
-            sender_id: req.sender_user_id,
-            delegation_events: None,
-        })
+        crate::runtime::session_run::execute_agent_turn(self, agent_id, req).await
     }
 
     pub async fn execute_tool(&self, req: ExecuteToolRequest) -> Result<ExecuteToolResponse> {
@@ -556,6 +742,33 @@ impl WorkerService {
         Ok(ChannelWebhookResponse { messages })
     }
 
+    pub async fn poll_channel(
+        &self,
+        req: clawz_services::dto::ChannelPollRequest,
+    ) -> Result<clawz_services::dto::ChannelPollResponse> {
+        use clawz_services::dto::{ChannelPollResponse, ChannelWebhookMessage};
+
+        let platform = req.channel_type.to_lowercase();
+        let agent_id = req.agent_id.unwrap_or_else(|| "system".to_string());
+        let ctx = Self::channel_context(&platform, req.config, agent_id);
+
+        let plugin = crate::channels::resolve::plugin_for_platform(&platform).ok_or_else(|| {
+            clawz_core::error::ClawzError::Config(format!("unknown channel platform: {platform}"))
+        })?;
+
+        let incoming = plugin.receive(&ctx).await?;
+        let messages = incoming
+            .into_iter()
+            .map(|m| ChannelWebhookMessage {
+                from: m.sender_id,
+                content: m.content,
+                metadata: serde_json::Value::Object(m.metadata),
+            })
+            .collect();
+
+        Ok(ChannelPollResponse { messages })
+    }
+
     pub async fn send_channel_message(
         &self,
         req: clawz_services::dto::ChannelSendRequest,
@@ -610,8 +823,14 @@ impl RoomRuntimeProvider for WorkerService {
         agent_id: &str,
         req: &RunTurnRequest,
     ) -> Result<Arc<AgentRuntime>> {
-        self.runtime_for(agent_id, req.model.as_deref(), req.system_prompt.as_deref())
-            .await
+        self.runtime_for(
+            agent_id,
+            req.model.as_deref(),
+            req.system_prompt.as_deref(),
+            req.cron_mode || req.background_mode,
+            &req.disabled_tools,
+        )
+        .await
     }
 
     async fn prepare_room_turn(

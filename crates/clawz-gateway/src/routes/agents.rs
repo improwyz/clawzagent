@@ -47,6 +47,10 @@ pub fn routes() -> Router<AppState> {
             get(get_agent).put(update_agent).delete(delete_agent),
         )
         .route("/{id}/run", post(run_agent))
+        .route(
+            "/{id}/runs/{run_id}/events",
+            get(crate::routes::run_events::run_events_sse),
+        )
         .route("/{id}/stop", post(stop_agent))
         .route("/{id}/autonomous", post(run_autonomous))
         .route("/{id}/history", get(agent_history))
@@ -126,6 +130,8 @@ pub struct AutonomousBody {
     pub cost_budget_usd: Option<f64>,
     /// Optional per-session system prompt override.
     pub system_prompt: Option<String>,
+    /// First user message for the autonomous session (defaults to a generic start).
+    pub initial_message: Option<String>,
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -450,6 +456,7 @@ async fn run_autonomous(
         updated_at: now,
     };
     let session_id = session.id.clone();
+    let conversation_id = format!("autonomous-{session_id}");
     let max_turns = session.max_turns;
     let system_prompt = session.system_prompt.clone();
 
@@ -469,19 +476,30 @@ async fn run_autonomous(
 
     state.publish_event(
         "agent.autonomous.start",
-        json!({ "session_id": session_id, "agent_id": id }),
+        json!({
+            "session_id": session_id,
+            "conversation_id": conversation_id,
+            "agent_id": id,
+        }),
     );
 
     if let Some(platform) = state.platform.clone() {
         let state_bg = state.clone();
         let agent_id = id.clone();
         let sid = session_id.clone();
+        let conv_id = conversation_id.clone();
         let model = {
             let agents = state.agents.read().await;
             agents.iter().find(|a| a.id == id).map(|a| a.model.clone())
         };
+        let initial_prompt = body
+            .initial_message
+            .clone()
+            .unwrap_or_else(|| "Begin your autonomous task.".to_string());
         tokio::spawn(async move {
-            for turn in 0..max_turns {
+            let mut turn = 0usize;
+            let mut last_content = String::new();
+            while turn < max_turns {
                 {
                     let sessions = state_bg.autonomous_sessions.read().await;
                     if let Some(s) = sessions.iter().find(|s| s.id == sid) {
@@ -491,7 +509,12 @@ async fn run_autonomous(
                     }
                 }
 
-                let msg = format!("Autonomous turn {} — continue your task.", turn + 1);
+                let msg = if turn == 0 {
+                    initial_prompt.clone()
+                } else {
+                    format!("Continue your task. Previous output:\n{last_content}")
+                };
+
                 match platform
                     .execution
                     .run_turn(
@@ -500,19 +523,22 @@ async fn run_autonomous(
                             message: msg,
                             model: model.clone(),
                             system_prompt: system_prompt.clone(),
-                            conversation_id: None,
+                            conversation_id: Some(conv_id.clone()),
                             ..Default::default()
                         },
                     )
                     .await
                 {
                     Ok(resp) => {
+                        last_content = resp.content.clone();
                         state_bg.publish_event(
                             "agent.autonomous.turn",
                             json!({
                                 "session_id": sid,
+                                "conversation_id": conv_id,
                                 "agent_id": agent_id,
                                 "turn": turn,
+                                "run_id": resp.run_id,
                                 "content": resp.content,
                             }),
                         );
@@ -521,6 +547,7 @@ async fn run_autonomous(
                             s.turns_executed = turn + 1;
                             s.updated_at = Utc::now();
                         }
+                        turn += 1;
                     }
                     Err(e) => {
                         state_bg.publish_event(
@@ -539,7 +566,12 @@ async fn run_autonomous(
             }
             state_bg.publish_event(
                 "agent.autonomous.end",
-                json!({ "session_id": sid, "agent_id": agent_id }),
+                json!({
+                    "session_id": sid,
+                    "conversation_id": conv_id,
+                    "agent_id": agent_id,
+                    "total_turns": turn,
+                }),
             );
         });
     }

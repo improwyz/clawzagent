@@ -6,12 +6,14 @@ use clawz_worker::runtime::{agent::AgentRuntime, RuntimeDependencies};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
+use crate::shell::{self, ShellConfig, ShellConfigInput};
+
 /// Global app state accessed from Tauri command handlers.
 /// Set once at startup in `main.rs` before the app loop begins.
-static APP_STATE: std::sync::OnceLock<AppState> = std::sync::OnceLock::new();
+static APP_STATE: std::sync::OnceLock<Arc<AppState>> = std::sync::OnceLock::new();
 
 /// Set the global app state. Must be called before any commands are invoked.
-pub fn set_app_state(state: AppState) {
+pub fn set_app_state(state: Arc<AppState>) {
     APP_STATE.set(state).ok();
 }
 
@@ -52,9 +54,11 @@ impl AppState {
 
         let router = Self::build_provider_router(tier).await;
 
+        let memory = clawz_worker::memory::create_memory_backend().await;
+
         let deps = RuntimeDependencies::new(
             Arc::new(router),
-            Arc::new(clawz_worker::memory::store::InMemoryBackend::new()),
+            memory,
             Arc::new(
                 clawz_worker::governance::engine::ClawzGovernanceEngine::new(
                     clawz_worker::governance::engine::GovernanceEngineConfig::default(),
@@ -262,4 +266,29 @@ pub fn health_check() -> Result<String, String> {
         .unwrap_or_else(|| "0.0.0".to_string());
 
     Ok(format!("ClawZ {} — tier {} — {}", version, tier, rt_status))
+}
+
+#[tauri::command]
+pub fn get_shell_config() -> ShellConfig {
+    shell::load_config()
+}
+
+#[tauri::command]
+pub fn set_shell_config(
+    app: tauri::AppHandle,
+    input: ShellConfigInput,
+) -> Result<ShellConfig, String> {
+    let cfg = shell::save_config(input)?;
+    crate::tray::refresh_tray_tooltip(&app);
+    Ok(cfg)
+}
+
+/// Load gateway API key from OS keyring (desktop shell only).
+#[tauri::command]
+pub fn load_gateway_api_key() -> Result<Option<String>, String> {
+    match shell::read_keyring("api_key") {
+        Ok(key) if !key.is_empty() => Ok(Some(key)),
+        Ok(_) => Ok(None),
+        Err(_) => Ok(None),
+    }
 }
