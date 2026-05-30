@@ -126,8 +126,9 @@ export PATH="$PWD/target/release:$PATH"
 
 | Command | Purpose |
 |---------|---------|
-| `clawz onboard` | Interactive first-run wizard; writes hints for `.env` and `~/.clawz/cli.toml` |
+| `clawz onboard` | Interactive first-run wizard (Linux TUI primary); see [install wizard design](docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md) |
 | `clawz onboard --install-daemon` | Same, then `docker compose up -d` in the repo |
+| `./scripts/install.sh --wizard` | Install + guided onboarding (fallback on all platforms; planned) |
 | `clawz doctor` | Gateway, worker, env, and Docker checks |
 | `clawz gateway status` | Health for gateway + worker |
 | `clawz gateway start` / `stop` | Docker Compose in current repo (or `CLAWZ_REPO`) |
@@ -139,6 +140,15 @@ export PATH="$PWD/target/release:$PATH"
 | `clawz setup` / `clawz tui config` | Interactive config menu |
 
 Set `CLAWZ_API_KEY` or `VALID_API_KEYS` (first key used) and `CLAWZ_GATEWAY_URL` (default `http://127.0.0.1:3000`).
+
+### First-run onboarding wizard (planned)
+
+A unified setup flow guides deployment mode, Docker prebuilt vs build, agent identity (“who am I”), role, skills, and LLM keys, then verifies with `clawz doctor`. Platform defaults: **Linux** → `clawz onboard` (TUI); **Windows/macOS** → web `/setup`; **mobile** → app first launch.
+
+- **Design:** [docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md](docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md)
+- **Task tracker:** [docs/install-onboarding-wizard-tasks.md](docs/install-onboarding-wizard-tasks.md)
+
+Until the wizard ships, use `clawz onboard` for env hints and `./scripts/install.sh` for the stack.
 
 ## Channels and webhooks
 

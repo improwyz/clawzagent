@@ -30,6 +30,8 @@ Thumbs.db
 !/docs/openhuman-comparison.md
 !/docs/CLAWZ_PHASE0_COMPLETE.md
 !/docs/PHASE0_COMPLETE_ANALYSIS.md
+!/docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md
+!/docs/install-onboarding-wizard-tasks.md
 
 # Node
 node_modules/

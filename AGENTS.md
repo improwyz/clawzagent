@@ -314,6 +314,8 @@ Private registry: **[docs/private-registry.md](docs/private-registry.md)**. Full
 
 Windows: `.\scripts\install.ps1`.
 
+**Onboarding wizard (in progress):** A shared **`clawz-setup`** engine (planned crate) will power `clawz onboard` (Linux TUI), web `/setup` (Win/Mac), and mobile first launch — one state machine for deploy mode, dependencies, agent identity/skills, LLM keys, and `doctor` verification. Design: [docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md](docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md); tasks: [docs/install-onboarding-wizard-tasks.md](docs/install-onboarding-wizard-tasks.md).
+
 **Branding:** Logo assets in **`web/public/branding/`** — silver on dark, copper on light. UI tokens: **[crates/clawz-tauri/design/design-system.md](crates/clawz-tauri/design/design-system.md)**.
 
 ---
