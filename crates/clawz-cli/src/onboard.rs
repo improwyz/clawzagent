@@ -97,20 +97,13 @@ async fn finish_cli_config(install_daemon: bool) -> Result<()> {
 }
 
 fn detect_platform() -> SetupPlatform {
-    #[cfg(target_os = "linux")]
-    {
-        return SetupPlatform::Linux;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        return SetupPlatform::MacOs;
-    }
-    #[cfg(target_os = "windows")]
-    {
-        return SetupPlatform::Windows;
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
-    {
+    if cfg!(target_os = "linux") {
+        SetupPlatform::Linux
+    } else if cfg!(target_os = "macos") {
+        SetupPlatform::MacOs
+    } else if cfg!(target_os = "windows") {
+        SetupPlatform::Windows
+    } else {
         SetupPlatform::Unknown
     }
 }

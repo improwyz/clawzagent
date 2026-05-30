@@ -155,8 +155,7 @@ impl HostSpecReport {
         if let Some(disk) = self.disk_free_gb {
             if disk < DISK_GB_MIN {
                 out.push(format!(
-                    "Free disk space is low ({} GB free; recommend >= {DISK_GB_MIN} GB for images/builds).",
-                    disk
+                    "Free disk space is low ({disk} GB free; recommend >= {DISK_GB_MIN} GB for images/builds)."
                 ));
             }
         }
@@ -177,6 +176,7 @@ impl HostSpecReport {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_summary(
     os: &str,
     arch: &str,
@@ -242,7 +242,7 @@ fn total_memory_mb() -> Option<u64> {
     #[cfg(target_os = "linux")]
     {
         let content = std::fs::read_to_string("/proc/meminfo").ok()?;
-        return parse_meminfo_kb(&content).map(|kb| kb / 1024);
+        parse_meminfo_kb(&content).map(|kb| kb / 1024)
     }
     #[cfg(target_os = "macos")]
     {
@@ -403,7 +403,7 @@ fn github_token_present() -> bool {
 /// Compare dotted numeric semver prefixes (`1.87.0` >= `1.87`).
 pub fn version_ge(actual: &str, minimum: &str) -> bool {
     let parse = |s: &str| -> Vec<u32> {
-        s.split(|c| c == '.' || c == '-')
+        s.split(['.', '-'])
             .filter_map(|p| {
                 let digits: String = p.chars().take_while(|c| c.is_ascii_digit()).collect();
                 if digits.is_empty() {

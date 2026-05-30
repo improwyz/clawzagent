@@ -45,11 +45,12 @@ impl DoctorReport {
 
 /// Run all configured doctor checks (blocking).
 pub fn run_doctor(config: &DoctorConfig) -> DoctorReport {
-    let mut checks = Vec::new();
-    checks.push(host_spec_check());
-    checks.push(setup_complete_check());
-    checks.push(clawz_mode_check());
-    checks.push(api_keys_check());
+    let mut checks = vec![
+        host_spec_check(),
+        setup_complete_check(),
+        clawz_mode_check(),
+        api_keys_check(),
+    ];
 
     if !config.gateway_url.trim().is_empty() {
         checks.push(gateway_health_check(&config.gateway_url));

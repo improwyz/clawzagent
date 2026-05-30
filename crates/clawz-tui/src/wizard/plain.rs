@@ -41,7 +41,7 @@ pub fn run(sm: &mut SetupStateMachine, answers: &mut WizardAnswers) -> Result<()
             SetupStep::AgentTopology => {
                 println!("\n--- Agent topology ---");
                 if let Some(d) = sm.session().deployment {
-                    println!("Using {:?} deployment template.", d);
+                    println!("Using {d:?} deployment template.");
                 }
                 sm.advance()?;
             }
