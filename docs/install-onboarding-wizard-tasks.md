@@ -165,10 +165,10 @@ Use this file to track progress. Mark items `[x]` when done.
 
 - [x] `POST /api/v1/setup/oauth/start` (provider enum)
 - [x] `POST /api/v1/setup/oauth/callback`
-- [ ] Cursor OAuth flow (stub URL only)
-- [ ] Anthropic OAuth / API key (stub)
-- [ ] OpenAI OAuth / API key (stub)
-- [ ] Codex token exchange (document env vars)
+- [x] Cursor OAuth flow (local import + API key path; dashboard link)
+- [x] Anthropic OAuth PKCE (`claude.ai` → token exchange)
+- [x] OpenAI / Codex OAuth PKCE (`auth.openai.com` + device code option)
+- [x] Codex token exchange via shared OpenAI OAuth client
 - [x] Store tokens in setup-only vault (not gateway providers until promoted)
 
 ---
@@ -296,13 +296,13 @@ Use this file to track progress. Mark items `[x]` when done.
 | 2. CLI/doctor | 12 | 8 |
 | 3. Linux TUI | 14 | 14 |
 | 4. install.sh | 5 | 4 |
-| 5. Gateway API | 18 | 0 |
-| 6. Web wizard | 17 | 0 |
+| 5. Gateway API | 18 | 15 |
+| 6. Web wizard | 17 | 16 |
 | 7. OAuth/MSP | 7 | 0 |
 | 8. AI agent | 16 | 0 |
 | 9. Multi-agent | 6 | 0 |
 | 10. Mobile | 6 | 0 |
 | 11. Verification | 6 | 0 |
-| **Approx. total** | **~147** | **~59** |
+| **Approx. total** | **~147** | **~90** |
 
 _Update the table counts when checking off items._

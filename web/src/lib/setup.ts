@@ -186,9 +186,41 @@ export interface SetupStatusFallback extends SetupStatus {
 }
 
 export interface SetupOAuthStartResponse {
+  provider?: string;
   auth_url?: string;
   state: string;
   message: string;
+  flow?: 'authorization_code' | 'device_code' | 'api_key' | 'imported' | 'skip';
+  device_code?: string;
+  verification_uri?: string;
+  expires_in?: number;
+}
+
+export interface SetupOAuthCallbackResponse {
+  stored: boolean;
+  state: string;
+  provider: string;
+  source?: string;
+}
+
+export async function completeSetupOAuth(payload: {
+  state: string;
+  code?: string;
+  token?: string;
+}): Promise<SetupOAuthCallbackResponse> {
+  return setupReq<SetupOAuthCallbackResponse>('/setup/oauth/callback', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Parse `?code=&state=` after browser OAuth redirect back to `/setup`. */
+export function parseSetupOAuthReturn(search: string): { code: string; state: string } | null {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const code = params.get('code');
+  const state = params.get('state');
+  if (code && state) return { code, state };
+  return null;
 }
 
 export const SETUP_STEP_NAMES = [

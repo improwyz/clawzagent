@@ -7,6 +7,7 @@
 mod bootstrap;
 mod config;
 pub mod doctor;
+pub mod oauth;
 mod deploy;
 mod error;
 mod paths;
@@ -26,6 +27,10 @@ pub use doctor::{
     doctor_fix_tools, run_doctor, DoctorCheck, DoctorConfig, DoctorReport,
 };
 pub use error::{Result, SetupError};
+pub use oauth::{
+    load_oauth_tokens, oauth_complete, oauth_redirect_uri, oauth_start, save_oauth_tokens,
+    OAuthStartResult, OAuthTokenBundle, SetupOAuthProvider,
+};
 pub use paths::{clawz_home, session_path, setup_dir, user_config_path};
 pub use session::{
     ensure_setup_dir, load_session, load_session_from, save_session, save_session_to,

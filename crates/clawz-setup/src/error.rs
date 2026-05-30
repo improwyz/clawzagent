@@ -26,10 +26,19 @@ pub enum SetupError {
 
     #[error("session not found at {path}")]
     SessionNotFound { path: String },
+
+    #[error("{0}")]
+    Internal(String),
 }
 
 impl SetupError {
     pub fn serialization(msg: impl Into<String>) -> Self {
         Self::Serialization(msg.into())
+    }
+}
+
+impl From<serde_json::Error> for SetupError {
+    fn from(e: serde_json::Error) -> Self {
+        Self::Serialization(e.to_string())
     }
 }

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ClawzLogo } from '../components/shared/ClawzLogo';
 import { Badge } from '../components/shared/Badge';
 import {
   applySetup,
   completeSetup,
+  completeSetupOAuth,
   detectWebPlatform,
+  parseSetupOAuthReturn,
   fetchSetupStatus,
   setupStepToIndex,
   isDesktopWebPlatform,
@@ -364,6 +366,7 @@ function DoctorPanel({
 
 export function Setup() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<WizardAnswers>(defaultAnswers);
   const [secrets, setSecrets] = useState<SetupSecrets | null>(null);
@@ -396,6 +399,25 @@ export function Setup() {
     });
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('oauth') === 'success') {
+      setOauthMessage('Sign-in complete. Continue with the wizard.');
+      navigate('/setup', { replace: true });
+      return;
+    }
+    const ret = parseSetupOAuthReturn(location.search);
+    if (!ret) return;
+    completeSetupOAuth({ state: ret.state, code: ret.code })
+      .then((res) => {
+        setAnswers((a) => ({ ...a, oauth_provider: res.provider as OAuthProvider }));
+        setOauthMessage(`Signed in with ${res.provider}.`);
+        setError('');
+        navigate('/setup', { replace: true });
+      })
+      .catch((e) => setError(String(e)));
+  }, [location.search, navigate]);
+
   const syncAnswer = useCallback(
     async (payload: Parameters<typeof submitSetupAnswer>[0]) => {
       try {
@@ -414,11 +436,19 @@ export function Setup() {
     mutationFn: (provider: OAuthProvider) => startSetupOAuth(provider),
     onSuccess: (data, provider) => {
       setAnswers((a) => ({ ...a, oauth_provider: provider }));
-      if (data.auth_url) {
-        window.open(data.auth_url, '_blank', 'noopener,noreferrer');
-        setOauthMessage('Complete sign-in in the browser tab, then continue.');
+      if (data.flow === 'imported') {
+        setOauthMessage(data.message);
       } else if (data.device_code) {
-        setOauthMessage(`Device code: ${data.device_code}`);
+        setOauthMessage(
+          `${data.message} Open ${data.verification_uri ?? 'https://auth.openai.com/codex/device'} and enter: ${data.device_code}`,
+        );
+        if (data.auth_url) window.open(data.auth_url, '_blank', 'noopener,noreferrer');
+      } else if (data.flow === 'api_key') {
+        setOauthMessage(data.message);
+        if (data.auth_url) window.open(data.auth_url, '_blank', 'noopener,noreferrer');
+      } else if (data.auth_url) {
+        window.open(data.auth_url, '_blank', 'noopener,noreferrer');
+        setOauthMessage('Complete sign-in in the browser tab. You will return here automatically.');
       } else {
         setOauthMessage(data.message ?? (provider === 'skip' ? 'Manual path selected.' : 'OAuth started.'));
       }

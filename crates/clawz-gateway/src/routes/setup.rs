@@ -8,15 +8,17 @@ use std::fs;
 use std::path::PathBuf;
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{Query, State},
     http::{HeaderMap, StatusCode},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
 use chrono::Utc;
 use clawz_setup::{
     AgentBootstrap, ClawzUserConfig, DeploymentChoice, IdentityInput, InstallStrategy,
-    SetupPlatform, SetupStateMachine, SetupStep, ensure_setup_dir,
-    init_workspace_at, load_session, save_session, session_path, setup_dir, workspace_root,
+    OAuthStartResult, SetupOAuthProvider, SetupPlatform, SetupStateMachine, SetupStep,
+    ensure_setup_dir, init_workspace_at, load_session, oauth_complete,
+    oauth_start as setup_oauth_start, save_session, session_path, setup_dir, workspace_root,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -35,7 +37,7 @@ pub fn routes() -> Router<AppState> {
         .route("/apply", post(apply))
         .route("/complete", post(complete))
         .route("/oauth/start", post(oauth_start))
-        .route("/oauth/callback", post(oauth_callback))
+        .route("/oauth/callback", get(oauth_callback_browser).post(oauth_callback))
 }
 
 // ─── Request / response types ─────────────────────────────────────────────────
@@ -85,13 +87,7 @@ pub struct OAuthStartBody {
     pub provider: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct OAuthStartResponse {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub auth_url: Option<String>,
-    pub state: String,
-    pub message: String,
-}
+pub type OAuthStartResponse = OAuthStartResult;
 
 #[derive(Debug, Deserialize)]
 pub struct OAuthCallbackBody {
@@ -172,6 +168,7 @@ fn map_setup_error(err: clawz_setup::SetupError) -> GatewayError {
                 id: path,
             }
         }
+        clawz_setup::SetupError::Internal(msg) => GatewayError::Internal(msg),
         other => GatewayError::Internal(other.to_string()),
     }
 }
@@ -473,75 +470,101 @@ async fn complete(
     ))
 }
 
-/// `POST /setup/oauth/start` — stub OAuth redirect URLs (v1).
+/// `POST /setup/oauth/start` — real OAuth authorize URLs (PKCE) or Cursor import.
 async fn oauth_start(
-    State(state): State<AppState>,
     Json(body): Json<OAuthStartBody>,
 ) -> Result<Json<OAuthStartResponse>, GatewayError> {
     guard_mutations_allowed()?;
 
-    let state_id = Uuid::new_v4().to_string();
-    let (auth_url, message) = match body.provider.to_ascii_lowercase().as_str() {
-        "skip" => (None, "OAuth skipped".into()),
-        "cursor" => (
-            Some("https://cursor.com/oauth/authorize?stub=1".into()),
-            "Cursor OAuth stub — complete via callback with token".into(),
-        ),
-        "codex" => (
-            Some("https://auth.openai.com/oauth/authorize?stub=codex".into()),
-            "Codex OAuth stub — set OPENAI_API_KEY or complete callback".into(),
-        ),
-        "anthropic" => (
-            Some("https://console.anthropic.com/oauth/authorize?stub=1".into()),
-            "Anthropic OAuth stub — use API key in /answer or callback".into(),
-        ),
-        "openai" => (
-            Some("https://auth.openai.com/oauth/authorize?stub=1".into()),
-            "OpenAI OAuth stub — use API key in /answer or callback".into(),
-        ),
-        other => {
-            return Err(GatewayError::Unprocessable(format!(
-                "unsupported oauth provider: {other}"
-            )));
-        }
-    };
+    let provider = SetupOAuthProvider::parse(&body.provider).ok_or_else(|| {
+        GatewayError::Unprocessable(format!("unsupported oauth provider: {}", body.provider))
+    })?;
 
-    state
-        .setup_oauth_vault
-        .write()
-        .await
-        .insert(format!("pending:{state_id}"), body.provider.clone());
-
-    Ok(Json(OAuthStartResponse {
-        auth_url,
-        state: state_id,
-        message,
-    }))
+    let result = setup_oauth_start(provider).map_err(map_setup_error)?;
+    Ok(Json(result))
 }
 
-/// `POST /setup/oauth/callback` — store setup-only tokens in the vault.
+#[derive(Debug, Deserialize)]
+pub struct OAuthCallbackQuery {
+    pub code: Option<String>,
+    pub state: Option<String>,
+    pub error: Option<String>,
+    pub error_description: Option<String>,
+}
+
+/// `GET /setup/oauth/callback` — browser redirect target after provider sign-in.
+async fn oauth_callback_browser(
+    State(state): State<AppState>,
+    Query(query): Query<OAuthCallbackQuery>,
+) -> Result<Response, GatewayError> {
+    guard_mutations_allowed()?;
+
+    if let Some(err) = query.error {
+        let detail = query.error_description.unwrap_or(err);
+        return Ok(Html(format!(
+            r#"<!DOCTYPE html><html><body style="font-family:system-ui;background:#18181b;color:#fafafa;padding:2rem">
+            <h1>Setup sign-in failed</h1><p>{detail}</p>
+            <p>You can close this tab and return to the setup wizard.</p></body></html>"#
+        ))
+        .into_response());
+    }
+
+    let state_id = query
+        .state
+        .ok_or_else(|| GatewayError::Unprocessable("missing state".into()))?;
+    let code = query
+        .code
+        .ok_or_else(|| GatewayError::Unprocessable("missing code".into()))?;
+
+    let bundle = oauth_complete(&state_id, Some(&code), None).map_err(map_setup_error)?;
+    sync_vault_from_bundle(&state, &bundle).await;
+
+    let setup_url = std::env::var("CLAWZ_SETUP_UI_URL")
+        .unwrap_or_else(|_| "/setup?oauth=success".into());
+
+    Ok(Html(format!(
+        r#"<!DOCTYPE html><html><head>
+        <meta http-equiv="refresh" content="2;url={setup_url}">
+        </head><body style="font-family:system-ui;background:#18181b;color:#fafafa;padding:2rem">
+        <h1>Signed in successfully</h1>
+        <p>Provider: {}. Redirecting back to setup…</p>
+        <p><a href="{setup_url}" style="color:#60a5fa">Continue setup</a></p>
+        </body></html>"#,
+        bundle.provider
+    ))
+    .into_response())
+}
+
+/// `POST /setup/oauth/callback` — exchange code or store API key token.
 async fn oauth_callback(
     State(state): State<AppState>,
     Json(body): Json<OAuthCallbackBody>,
 ) -> Result<Json<Value>, GatewayError> {
     guard_mutations_allowed()?;
 
-    let token = body
-        .token
-        .or(body.code)
-        .ok_or_else(|| GatewayError::Unprocessable("code or token required".into()))?;
+    let bundle = oauth_complete(
+        &body.state,
+        body.code.as_deref(),
+        body.token.as_deref(),
+    )
+    .map_err(map_setup_error)?;
 
-    let mut vault = state.setup_oauth_vault.write().await;
-    let provider = vault
-        .remove(&format!("pending:{}", body.state))
-        .unwrap_or_else(|| "unknown".into());
-    vault.insert(body.state.clone(), token.clone());
+    sync_vault_from_bundle(&state, &bundle).await;
 
     Ok(Json(json!({
         "stored": true,
         "state": body.state,
-        "provider": provider,
+        "provider": bundle.provider,
+        "source": bundle.source,
     })))
+}
+
+async fn sync_vault_from_bundle(state: &AppState, bundle: &clawz_setup::OAuthTokenBundle) {
+    let mut vault = state.setup_oauth_vault.write().await;
+    vault.insert(
+        bundle.provider.clone(),
+        serde_json::to_string(bundle).unwrap_or_else(|_| bundle.access_token.clone()),
+    );
 }
 
 fn find_answer(
