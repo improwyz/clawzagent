@@ -1,0 +1,18 @@
+[package]
+name = "clawz-setup"
+version = "1.0.0"
+edition = "2021"
+license = "Elastic-2.0"
+description = "ClawZ install & onboarding wizard — session state, persistence, state machine"
+rust-version = "1.75"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+dirs = "6"
+
+[dev-dependencies]
+tempfile = "3"
