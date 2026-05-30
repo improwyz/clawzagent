@@ -245,6 +245,17 @@ pull_prebuilt_images() {
   exit 1
 }
 
+# Shared Compose up sequence (used by install.sh and clawz-setup StackRunner).
+clawz_wait_for_gateway() {
+  wait_for_gateway
+}
+
+clawz_compose_up() {
+  local use_build="${1:-${CLAWZ_INSTALL_BUILD:-0}}"
+  CLAWZ_INSTALL_BUILD="$use_build"
+  install_with_docker
+}
+
 install_with_docker() {
   local use_build="${CLAWZ_INSTALL_BUILD:-0}"
   ensure_docker || exit 1

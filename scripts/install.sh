@@ -18,6 +18,7 @@
 #   --with-web    Build the React dashboard in web/
 #   --dir PATH    Install/clone location (default: ~/clawz)
 #   --wizard      After install, run interactive `clawz onboard --install-daemon`
+#   --bootstrap-only  Install host deps only (curl, git, Docker); no Compose stack
 #   --help        Show usage
 
 set -euo pipefail
@@ -76,9 +77,10 @@ MODE="auto"
 WITH_WEB=0
 CLAWZ_INSTALL_BUILD=0
 RUN_WIZARD=0
+BOOTSTRAP_ONLY=0
 
 usage() {
-  sed -n '2,17p' "$0"
+  sed -n '2,18p' "$0"
   exit 0
 }
 
@@ -101,6 +103,7 @@ while [[ $# -gt 0 ]]; do
       shift 2
       ;;
     --wizard) RUN_WIZARD=1; shift ;;
+    --bootstrap-only) BOOTSTRAP_ONLY=1; shift ;;
     --help|-h) usage ;;
     *)
       err "Unknown option: $1"
@@ -127,6 +130,21 @@ fi
 
 ROOT="$(pwd)"
 log "Using repository at $ROOT"
+
+if [[ "$BOOTSTRAP_ONLY" == "1" ]]; then
+  ensure_curl
+  ensure_git
+  if ensure_docker; then
+    log "Docker is available."
+  else
+    warn "Docker not installed — run install again without --bootstrap-only to install Docker."
+  fi
+  if [[ "$WITH_WEB" == "1" ]]; then
+    ensure_node
+  fi
+  log "Bootstrap complete (host dependencies only)."
+  exit 0
+fi
 
 if [[ "$MODE" == "auto" ]]; then
   if ensure_docker; then

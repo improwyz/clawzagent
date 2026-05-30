@@ -2,8 +2,9 @@
 
 **Document version:** 1.0  
 **Date:** 2026-05-30  
-**Status:** Approved for implementation  
-**Task tracker:** [install-onboarding-wizard-tasks.md](../../install-onboarding-wizard-tasks.md)
+**Status:** Implemented (core paths)  
+**Task tracker:** [install-onboarding-wizard-tasks.md](../../install-onboarding-wizard-tasks.md)  
+**Install runbook:** [INSTALL.md](../../../INSTALL.md) · **Docker bootstrap:** [2026-05-30-docker-bootstrap-compose-deploy-plan.md](2026-05-30-docker-bootstrap-compose-deploy-plan.md)
 
 ---
 
@@ -14,7 +15,7 @@
 | [`crates/clawz-tui/src/lib.rs`](../../crates/clawz-tui/src/lib.rs) | Prints `export` lines for port, keys, mode; no agent identity/skills; no stack start | Not a completion flow |
 | [`crates/clawz-cli/src/onboard.rs`](../../crates/clawz-cli/src/onboard.rs) | Calls TUI; optional `gateway start` | No AI, no agent bootstrap |
 | [`crates/clawz-cli/src/doctor.rs`](../../crates/clawz-cli/src/doctor.rs) | Env + gateway/worker/docker checks | No remediation / install |
-| [`scripts/install.sh`](../../scripts/install.sh) + [`scripts/install-deps.sh`](../../scripts/install-deps.sh) | Clone, deps, prebuilt vs `--build`, compose up | No identity/LLM wizard; not linked to `clawz onboard` |
+| [`scripts/install.sh`](../../../scripts/install.sh) + [`setup-host-exec.sh`](../../../scripts/setup-host-exec.sh) | Clone, deps, prebuilt vs `--build`, compose up, `--wizard` | Linked via `clawz-setup` + web `/setup` stack step |
 | [`scripts/init-workspace.sh`](../../scripts/init-workspace.sh) | Seeds `~/.clawz/workspace/AGENTS.md` + example skill | Not invoked from onboard |
 | Web [`web/src/components/ShellBootstrap.tsx`](../../web/src/components/ShellBootstrap.tsx) | Tauri API init only | No `/setup` wizard |
 | Gateway [`POST /agents/onboard`](../../crates/clawz-gateway/src/routes/agents.rs) | Goal → create agent (API) | Different from install wizard |

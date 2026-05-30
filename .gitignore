@@ -23,6 +23,7 @@ Thumbs.db
 
 # Documentation tree (local copies); ship install/registry docs only
 /docs/*
+!/docs/INSTALL.md
 !/docs/private-registry.md
 !/docs/install-dependencies.csv
 !/docs/deployment-build-strategy.md
@@ -31,6 +32,7 @@ Thumbs.db
 !/docs/CLAWZ_PHASE0_COMPLETE.md
 !/docs/PHASE0_COMPLETE_ANALYSIS.md
 !/docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md
+!/docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md
 !/docs/install-onboarding-wizard-tasks.md
 
 # Node

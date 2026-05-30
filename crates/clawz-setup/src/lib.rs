@@ -6,11 +6,14 @@
 
 mod bootstrap;
 mod config;
+pub mod deps;
 pub mod doctor;
+pub mod host_exec;
 pub mod oauth;
 mod deploy;
 mod error;
 mod paths;
+mod stack;
 pub mod prompts;
 mod session;
 mod spec;
@@ -23,6 +26,11 @@ pub use config::ClawzUserConfig;
 pub use deploy::{
     ComposeOverlay, DeployPlan, DeployPlanError, DeployPlanner, StandaloneSourcePlan,
 };
+pub use deps::{DepComponent, DependencyInstaller};
+pub use host_exec::{
+    resolve_repo_root, HostExecOutput, HostExecPolicy, HostScriptRunner,
+};
+pub use stack::{StackAction, StackRunner};
 pub use doctor::{
     doctor_fix_tools, run_doctor, DoctorCheck, DoctorConfig, DoctorReport,
 };
@@ -39,8 +47,9 @@ pub use session::{
 pub use spec::{HostSpecChecker, HostSpecReport, CLAWZ_MIN_RUST};
 pub use state_machine::SetupStateMachine;
 pub use tools::{
-    ConfirmGate, InitWorkspaceTool, SetupTool, SetupToolRegistry, SpecCheckTool, ToolContext,
-    ToolInput, ToolResult, WriteEnvTool,
+    ComposeDownTool, ComposeUpTool, ConfirmGate, InitWorkspaceTool, InstallDepsTool,
+    MigrateDbTool, SetupTool, SetupToolRegistry, SpecCheckTool, ToolContext, ToolInput,
+    ToolResult, WriteEnvTool,
 };
 pub use tools::{init_workspace_at, workspace_root};
 pub use types::{

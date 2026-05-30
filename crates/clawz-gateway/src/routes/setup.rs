@@ -15,9 +15,10 @@ use axum::{
 };
 use chrono::Utc;
 use clawz_setup::{
-    AgentBootstrap, ClawzUserConfig, DeploymentChoice, IdentityInput, InstallStrategy,
-    OAuthStartResult, SetupOAuthProvider, SetupPlatform, SetupStateMachine, SetupStep,
-    ensure_setup_dir, init_workspace_at, load_session, oauth_complete,
+    AgentBootstrap, ClawzUserConfig, ConfirmGate, DeploymentChoice, HostExecPolicy,
+    HostSpecChecker, IdentityInput, InstallStrategy, OAuthStartResult, SetupOAuthProvider,
+    SetupPlatform, SetupStateMachine, SetupStep, SetupToolRegistry, ToolContext, ToolInput,
+    ensure_setup_dir, init_workspace_at, load_session, oauth_complete, resolve_repo_root,
     oauth_start as setup_oauth_start, save_session, session_path, setup_dir, workspace_root,
 };
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,8 @@ pub fn routes() -> Router<AppState> {
         .route("/complete", post(complete))
         .route("/oauth/start", post(oauth_start))
         .route("/oauth/callback", get(oauth_callback_browser).post(oauth_callback))
+        .route("/stack/status", get(stack_status))
+        .route("/stack", post(stack_mutate))
 }
 
 // ─── Request / response types ─────────────────────────────────────────────────
@@ -94,6 +97,29 @@ pub struct OAuthCallbackBody {
     pub state: String,
     pub code: Option<String>,
     pub token: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct StackBody {
+    /// `deps`, `up`, `down`, or `migrate`.
+    pub action: String,
+    pub install_strategy: Option<String>,
+    #[serde(default)]
+    pub with_web: bool,
+    #[serde(default)]
+    pub dry_run: bool,
+    /// Required for mutating tools when confirm gate is enforced (e.g. `yes-install`).
+    pub confirm: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct StackStatusResponse {
+    pub host_exec_allowed: bool,
+    pub suggested_command: &'static str,
+    pub docker_available: bool,
+    pub compose_v2_available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_root: Option<String>,
 }
 
 // ─── Bootstrap token ──────────────────────────────────────────────────────────
@@ -556,6 +582,88 @@ async fn oauth_callback(
         "state": body.state,
         "provider": bundle.provider,
         "source": bundle.source,
+    })))
+}
+
+/// `GET /setup/stack/status` — host exec policy and Docker readiness (read-only).
+async fn stack_status() -> Result<Json<StackStatusResponse>, GatewayError> {
+    let spec = HostSpecChecker::collect();
+    let repo_root = resolve_repo_root()
+        .ok()
+        .map(|p| p.display().to_string());
+    Ok(Json(StackStatusResponse {
+        host_exec_allowed: HostExecPolicy::allowed(),
+        suggested_command: HostExecPolicy::suggested_install_command(),
+        docker_available: spec.docker_available,
+        compose_v2_available: spec.compose_v2_available,
+        repo_root,
+    }))
+}
+
+/// `POST /setup/stack` — install deps or start/stop Compose stack on the host.
+async fn stack_mutate(
+    headers: HeaderMap,
+    Json(body): Json<StackBody>,
+) -> Result<Json<Value>, GatewayError> {
+    guard_mutations_allowed()?;
+    verify_bootstrap_token(&headers)?;
+
+    let host_exec_allowed = HostExecPolicy::allowed();
+    let suggested = HostExecPolicy::suggested_install_command();
+
+    if !host_exec_allowed && !body.dry_run {
+        return Ok(Json(json!({
+            "ok": false,
+            "host_exec_allowed": false,
+            "suggested_command": suggested,
+            "message": "host bootstrap is disabled inside the gateway container; run the suggested command on the host",
+        })));
+    }
+
+    let repo_root = resolve_repo_root().map_err(map_setup_error)?;
+    let machine = load_machine()?;
+    let mut registry = SetupToolRegistry::with_default_tools();
+    if let Some(ref confirm) = body.confirm {
+        registry.set_confirm_gate(ConfirmGate::new(confirm.clone()));
+    }
+
+    let ctx = ToolContext {
+        session: machine.session().clone(),
+        confirm_token: body.confirm.clone(),
+        repo_root: repo_root.clone(),
+        env_path: repo_root.join(".env"),
+    };
+
+    let tool_args = json!({
+        "dry_run": body.dry_run,
+        "with_web": body.with_web,
+        "install_strategy": body.install_strategy,
+    });
+    let input = ToolInput { args: tool_args };
+
+    let tool_name = match body.action.as_str() {
+        "deps" => "install_deps",
+        "up" => "compose_up",
+        "down" => "compose_down",
+        "migrate" => "migrate_db",
+        other => {
+            return Err(GatewayError::Unprocessable(format!(
+                "unknown stack action: {other} (use deps, up, down, migrate)"
+            )));
+        }
+    };
+
+    let result = registry
+        .run(tool_name, &ctx, &input)
+        .map_err(map_setup_error)?;
+
+    Ok(Json(json!({
+        "ok": result.ok,
+        "host_exec_allowed": host_exec_allowed,
+        "suggested_command": if host_exec_allowed { Value::Null } else { json!(suggested) },
+        "tool": tool_name,
+        "dry_run": body.dry_run,
+        "message": result.message,
     })))
 }
 

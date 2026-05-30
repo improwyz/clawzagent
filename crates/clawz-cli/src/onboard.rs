@@ -6,8 +6,10 @@ use clawz_setup::{
     SetupStep,
 };
 
+use clawz_setup::DeploymentChoice;
+
 use crate::config::{self, CliConfig};
-use crate::gateway;
+use crate::setup_cmd::{self, SetupStackOptions};
 
 #[derive(Debug, Clone, Copy)]
 pub struct OnboardOptions {
@@ -88,9 +90,22 @@ async fn finish_cli_config(install_daemon: bool) -> Result<()> {
     config::save(&cfg).context("save cli.toml")?;
 
     if install_daemon {
-        gateway::start().await?;
+        let deployment = clawz_setup::load_session()
+            .ok()
+            .and_then(|s| s.deployment)
+            .unwrap_or(DeploymentChoice::Micro);
+        let build = clawz_setup::load_session()
+            .ok()
+            .and_then(|s| s.install_strategy)
+            .is_some_and(|s| matches!(s, clawz_setup::InstallStrategy::Build));
+        setup_cmd::run_stack(SetupStackOptions {
+            build,
+            with_web: false,
+            dry_run: false,
+            deployment: Some(deployment),
+        })?;
     } else {
-        println!("\nNext: `clawz gateway start` (Docker) or `./scripts/install.sh`");
+        println!("\nNext: `clawz setup stack` or `./scripts/install.sh --docker`");
         println!("Then: `clawz doctor`");
     }
     Ok(())

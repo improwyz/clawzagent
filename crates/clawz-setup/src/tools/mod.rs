@@ -1,13 +1,21 @@
 //! Allowlisted setup tools (no arbitrary shell).
 
 pub mod init_workspace;
+mod compose_down;
+mod compose_up;
+mod install_deps;
+mod migrate_db;
 mod spec_check;
 mod write_env;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub use compose_down::ComposeDownTool;
+pub use compose_up::ComposeUpTool;
 pub use init_workspace::{InitWorkspaceTool, init_workspace_at, workspace_root};
+pub use install_deps::InstallDepsTool;
+pub use migrate_db::MigrateDbTool;
 pub use spec_check::SpecCheckTool;
 pub use write_env::WriteEnvTool;
 
@@ -99,6 +107,10 @@ impl SetupToolRegistry {
         reg.register(SpecCheckTool);
         reg.register(WriteEnvTool);
         reg.register(InitWorkspaceTool);
+        reg.register(InstallDepsTool);
+        reg.register(ComposeUpTool);
+        reg.register(ComposeDownTool);
+        reg.register(MigrateDbTool);
         reg
     }
 
@@ -203,5 +215,8 @@ mod tests {
         assert!(names.contains(&"spec_check"));
         assert!(names.contains(&"write_env"));
         assert!(names.contains(&"init_workspace"));
+        assert!(names.contains(&"install_deps"));
+        assert!(names.contains(&"compose_up"));
+        assert!(names.contains(&"migrate_db"));
     }
 }

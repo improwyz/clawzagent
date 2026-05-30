@@ -10,6 +10,7 @@ mod cron;
 mod doctor;
 mod gateway;
 mod onboard;
+mod setup_cmd;
 
 #[derive(Parser)]
 #[command(
@@ -40,7 +41,10 @@ enum Commands {
         step: Option<u8>,
     },
     /// Same as onboard configuration menu.
-    Setup,
+    Setup {
+        #[command(subcommand)]
+        action: Option<SetupAction>,
+    },
     /// Check gateway, worker, env, and Docker.
     Doctor {
         #[arg(long)]
@@ -69,6 +73,26 @@ enum Commands {
     Cron {
         #[command(subcommand)]
         action: cron::CronAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum SetupAction {
+    /// Install curl, git, Docker (and optional Node for web).
+    Deps {
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        with_web: bool,
+    },
+    /// Start micro Compose stack (prebuilt GHCR by default).
+    Stack {
+        #[arg(long)]
+        build: bool,
+        #[arg(long)]
+        with_web: bool,
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -104,9 +128,22 @@ async fn main() -> Result<()> {
             })
             .await?
         }
-        Commands::Setup => {
-            clawz_tui::run_config();
-        }
+        Commands::Setup { action } => match action {
+            None => clawz_tui::run_config(),
+            Some(SetupAction::Deps { dry_run, with_web }) => {
+                setup_cmd::run_deps(setup_cmd::SetupDepsOptions { dry_run, with_web })?
+            }
+            Some(SetupAction::Stack {
+                build,
+                with_web,
+                dry_run,
+            }) => setup_cmd::run_stack(setup_cmd::SetupStackOptions {
+                build,
+                with_web,
+                dry_run,
+                deployment: None,
+            })?,
+        },
         Commands::Doctor { json } => doctor::run(json).await?,
         Commands::Gateway { action } => match action {
             GatewayAction::Status => gateway::status().await?,

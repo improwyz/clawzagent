@@ -13,7 +13,9 @@ cd ~/clawz
 ./install.sh
 ```
 
-The installer logs in to `ghcr.io` from `GITHUB_TOKEN` / `CLAWZ_REGISTRY_TOKEN`, then pulls gateway + worker.
+The installer logs in to `ghcr.io` from `GITHUB_TOKEN` / `CLAWZ_REGISTRY_TOKEN`, then pulls gateway + worker, starts Postgres, runs migrations, and brings up worker + gateway.
+
+**Related install docs:** [INSTALL.md](../INSTALL.md) (full procedures), [README.md](../README.md) (quick start), `clawz setup stack` / web `/setup` for post-install onboarding.
 
 ## Images
 

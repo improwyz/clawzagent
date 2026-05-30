@@ -7,13 +7,17 @@ import {
   applySetup,
   completeSetup,
   completeSetupOAuth,
+  detectClientPlatform,
   detectWebPlatform,
   parseSetupOAuthReturn,
+  fetchSetupStackStatus,
   fetchSetupStatus,
+  runSetupStack,
   setupStepToIndex,
   isDesktopWebPlatform,
   PLACEHOLDER_HOST_SPEC,
   runSetupDoctor,
+  suggestedHostInstallCommand,
   startSetupOAuth,
   startSetupSession,
   submitSetupAnswer,
@@ -372,6 +376,9 @@ export function Setup() {
   const [secrets, setSecrets] = useState<SetupSecrets | null>(null);
   const [secretsConfirmed, setSecretsConfirmed] = useState(false);
   const [doctorChecks, setDoctorChecks] = useState<DoctorCheck[]>([]);
+  const [stackMessage, setStackMessage] = useState('');
+  const [hostInstallCmd, setHostInstallCmd] = useState('');
+  const [stackBlocked, setStackBlocked] = useState(false);
   const [error, setError] = useState('');
   const [oauthMessage, setOauthMessage] = useState('');
 
@@ -485,6 +492,53 @@ export function Setup() {
     onError: () => navigate('/dashboard', { replace: true }),
   });
 
+  const stackMut = useMutation({
+    mutationFn: async () => {
+      const strategy = answers.install_strategy ?? 'prebuilt';
+      if (strategy === 'source') {
+        return {
+          ok: true,
+          message: 'Source (cargo) install — skipping Docker Compose stack on this step.',
+        };
+      }
+      const stackStatus = await fetchSetupStackStatus();
+      if (!stackStatus.host_exec_allowed) {
+        const err = new Error('HOST_EXEC_BLOCKED') as Error & { suggested?: string };
+        err.suggested = stackStatus.suggested_command;
+        throw err;
+      }
+      await runSetupStack({ action: 'deps', dry_run: false, with_web: false });
+      return runSetupStack({
+        action: 'up',
+        install_strategy: strategy,
+        dry_run: false,
+        with_web: false,
+      });
+    },
+    onSuccess: async (data) => {
+      setStackMessage(data.message);
+      setStackBlocked(false);
+      setError('');
+      await syncAnswer({ advance: true });
+      setStep(4);
+    },
+    onError: (e: Error & { suggested?: string }) => {
+      if (e.message === 'HOST_EXEC_BLOCKED') {
+        setStackBlocked(true);
+        setHostInstallCmd(
+          e.suggested ?? suggestedHostInstallCommand(detectClientPlatform()),
+        );
+        setStackMessage(
+          'The gateway cannot install Docker from inside a container. Run this command on the host, then continue.',
+        );
+        setError('');
+        return;
+      }
+      setStackMessage('');
+      setError(String(e));
+    },
+  });
+
   const goNext = useCallback(async () => {
     setError('');
     const next = Math.min(step + 1, 10);
@@ -496,8 +550,14 @@ export function Setup() {
       });
     }
     if (step === 3) {
-      await syncAnswer({ advance: true });
-      setStep(4);
+      if (stackBlocked) {
+        await syncAnswer({ advance: true });
+        setStep(4);
+        return;
+      }
+      if (!stackMut.isSuccess && !stackMut.isPending) {
+        stackMut.mutate();
+      }
       return;
     }
     if (step === 4) {
@@ -578,6 +638,8 @@ export function Setup() {
         return Boolean(answers.deployment);
       case 2:
         return Boolean(answers.install_strategy);
+      case 3:
+        return stackMut.isSuccess || stackBlocked;
       case 4:
         if (!secrets) return true;
         return secretsConfirmed;
@@ -590,18 +652,19 @@ export function Setup() {
       default:
         return true;
     }
-  }, [step, answers, secrets, secretsConfirmed, doctorChecks]);
+  }, [step, answers, secrets, secretsConfirmed, doctorChecks, stackMut.isSuccess, stackBlocked]);
 
   useEffect(() => {
-    if (step === 3) {
-      const t = window.setTimeout(() => {
-        setStep(4);
-        syncAnswer({ step: 3, field: 'stack', value: 'auto' });
-      }, 2200);
-      return () => window.clearTimeout(t);
+    if (
+      step === 3 &&
+      !stackMut.isPending &&
+      !stackMut.isSuccess &&
+      !stackMut.isError &&
+      !stackBlocked
+    ) {
+      stackMut.mutate();
     }
-    return undefined;
-  }, [step, syncAnswer]);
+  }, [step, stackMut.isPending, stackMut.isSuccess, stackMut.isError, stackBlocked, stackMut]);
 
   useEffect(() => {
     if (topologyLocked) {
@@ -702,13 +765,31 @@ export function Setup() {
           )}
 
           {step === 3 && (
-            <div className="py-8 text-center space-y-3">
-              <div className="inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-zinc-300 text-sm">Preparing stack…</p>
-              <p className="text-zinc-500 text-xs max-w-md mx-auto">
-                Compose up, migrations, and health probes will run on the gateway when setup API is
-                wired. Advancing automatically.
-              </p>
+            <div className="py-6 space-y-4">
+              {stackMut.isPending && (
+                <div className="text-center space-y-3">
+                  <div className="inline-block w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-zinc-300 text-sm">Installing dependencies and starting stack…</p>
+                </div>
+              )}
+              {stackBlocked && (
+                <div className="space-y-3">
+                  <p className="text-zinc-300 text-sm">{stackMessage}</p>
+                  <pre className="text-xs bg-zinc-950 border border-zinc-700 rounded-lg p-3 overflow-x-auto text-zinc-200 whitespace-pre-wrap">
+                    {hostInstallCmd}
+                  </pre>
+                  <p className="text-zinc-500 text-xs">
+                    After the stack is healthy, click Continue. You can verify with{' '}
+                    <code className="text-zinc-400">curl http://127.0.0.1:3000/health</code>.
+                  </p>
+                </div>
+              )}
+              {stackMut.isSuccess && !stackBlocked && (
+                <p className="text-emerald-400 text-sm">{stackMessage || 'Stack is ready.'}</p>
+              )}
+              {stackMut.isError && !stackBlocked && (
+                <p className="text-red-400 text-sm">{error || 'Stack setup failed.'}</p>
+              )}
             </div>
           )}
 

@@ -302,19 +302,30 @@ For local development, use the one-click installer (Docker Compose **micro/fleet
 
 ```bash
 docker login ghcr.io              # required for private prebuilt images on GHCR
+export GITHUB_TOKEN=ghp_xxx GITHUB_USER=you
 git clone https://github.com/improwyz/clawz.git ~/clawz && cd ~/clawz
-./scripts/install.sh              # pull prebuilt gateway/worker (falls back to local build)
-./scripts/install.sh --build      # force local image build (docker-compose.build.yml)
-./scripts/install.sh --with-web   # include React dashboard
-./scripts/install.sh --source     # cargo build without Docker
+./scripts/install.sh              # prebuilt pull → db → migrate → worker + gateway
+./scripts/install.sh --build      # local image build (docker-compose.build.yml)
+./scripts/install.sh --bootstrap-only  # host deps only (no stack)
+./scripts/install.sh --wizard       # install + clawz onboard --install-daemon
+./scripts/install.sh --with-web     # include React dashboard
+./scripts/install.sh --source       # cargo build without Docker
 ```
 
-Compose overlays: `docker-compose.prebuilt.yml` (registry pull), `docker-compose.build.yml` (local build).  
+**CLI stack commands** (`cargo build -p clawz-cli`):
+
+```bash
+clawz setup deps                  # install-deps.sh on host
+clawz setup stack                 # same Compose sequence as install.sh
+clawz onboard --install-daemon    # wizard then setup stack
+```
+
+**Windows:** `.\scripts\install.ps1 -Docker -Prebuilt -Wizard` (prebuilt pull, migrate-db, optional winget Docker via `-InstallDocker`).
+
+Compose overlays: `docker-compose.prebuilt.yml` (registry pull), `docker-compose.build.yml` (local build). Host bootstrap scripts: `scripts/setup-host-exec.sh` (used by **`clawz-setup`** `HostScriptRunner` and gateway `POST /api/v1/setup/stack`).  
 Private registry: **[docs/private-registry.md](docs/private-registry.md)**. Full guide: **[INSTALL.md](INSTALL.md)**.
 
-Windows: `.\scripts\install.ps1`.
-
-**Onboarding wizard (in progress):** A shared **`clawz-setup`** engine (planned crate) will power `clawz onboard` (Linux TUI), web `/setup` (Win/Mac), and mobile first launch — one state machine for deploy mode, dependencies, agent identity/skills, LLM keys, and `doctor` verification. Design: [docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md](docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md); tasks: [docs/install-onboarding-wizard-tasks.md](docs/install-onboarding-wizard-tasks.md).
+**Onboarding wizard:** **`clawz-setup`** powers `clawz onboard` (Linux TUI), web **`/setup`**, and gateway setup API — deploy mode, dependencies, stack, agent identity/skills, LLM OAuth, and `doctor` verification. Design: [docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md](docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md); Docker bootstrap: [docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md](docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md); tasks: [docs/install-onboarding-wizard-tasks.md](docs/install-onboarding-wizard-tasks.md).
 
 **Branding:** Logo assets in **`web/public/branding/`** — silver on dark, copper on light. UI tokens: **[crates/clawz-tauri/design/design-system.md](crates/clawz-tauri/design/design-system.md)**.
 

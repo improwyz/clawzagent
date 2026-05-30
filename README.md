@@ -152,16 +152,20 @@ improwyz/clawz/
 ├── install.ps1                # wrapper → scripts/install.ps1
 └── scripts/
     ├── install.sh             # main Linux/macOS installer
-    ├── install-common.sh      # shared helpers
-    ├── install-deps.sh        # installs Docker, Rust, Node, etc.
-    └── install.ps1            # Windows installer
+    ├── install-common.sh      # shared Compose helpers (clawz_compose_up)
+    ├── install-deps.sh        # host deps: curl, git, Docker, Rust, Node
+    ├── setup-host-exec.sh     # allowlisted entry for clawz-setup / wizard API
+    ├── migrate-db.sh          # SQL migrations (Compose db service)
+    └── install.ps1            # Windows installer (prebuilt pull + migrate)
 ```
 
 | Platform | Command |
 |----------|---------|
 | **Linux / macOS (curl)** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh \| bash` |
-| **Linux / macOS (git)** | `export GITHUB_TOKEN=ghp_xxx GITHUB_USER=you && git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
-| **Windows (PowerShell)** | `git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz; & "$env:USERPROFILE\clawz\scripts\install.ps1"` |
+| **Linux / macOS (git + GHCR)** | `export GITHUB_TOKEN=ghp_xxx GITHUB_USER=you && git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
+| **Linux / macOS (install + wizard)** | `./scripts/install.sh --wizard` |
+| **Windows (PowerShell)** | `git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz; & "$env:USERPROFILE\clawz\scripts\install.ps1 -Docker -Prebuilt"` |
+| **Windows (install + wizard)** | `.\scripts\install.ps1 -Docker -Prebuilt -Wizard` |
 | **Already cloned** | `./install.sh` or `./scripts/install.sh` |
 
 **Curl URL vs repo path:** the file lives at `install.sh` in the repo root.  
@@ -169,17 +173,36 @@ improwyz/clawz/
 That bootstrap script only needs **git** on your machine; it clones the full repo, then runs `scripts/install.sh` (which can install Docker/Rust if missing).  
 Curl requires the repo to be **public** (or use the git one-liner with your credentials). A 404 from curl usually means the repo is private.
 
-**Options**
+**Installer options**
 
-| Flag | Description |
-|------|-------------|
-| *(default)* | Docker Compose (micro/fleet): **pull prebuilt images** from GHCR (`GITHUB_TOKEN` + `GITHUB_USER` required) |
-| `--docker` / `-Docker` | Force Docker Compose (installs Docker if missing) |
-| `--build` | Build gateway/worker images locally (`docker-compose.build.yml`) |
-| `--registry` / `--tag` | Override `CLAWZ_REGISTRY` / `CLAWZ_IMAGE_TAG` for prebuilt pulls |
-| `--source` / `-Source` | Force `cargo` build (installs Rust via rustup if missing) |
-| `--with-web` / `-WithWeb` | Build the React dashboard in `web/` (installs Node.js 20+ if missing) |
-| `--dir PATH` / `-InstallDir PATH` | Clone/install location (default: `~/clawz` or `%USERPROFILE%\clawz`) |
+| Linux / macOS | Windows (PowerShell) | Description |
+|---------------|----------------------|-------------|
+| *(default)* | *(auto)* | Docker Compose micro/fleet: **prebuilt GHCR pull** → `db` → migrate → `worker` + `gateway` |
+| `--docker` | `-Docker` | Force Docker Compose (installs Docker if missing on Linux/macOS) |
+| `--build` | `-Build` | Build images locally (`docker-compose.build.yml`) instead of GHCR pull |
+| `--bootstrap-only` | `-BootstrapOnly` | Host deps only (curl, git, Docker); **no** Compose stack |
+| `--wizard` | `-Wizard` | After install, run `clawz onboard --install-daemon` (or open web `/setup`) |
+| `--registry R` / `--tag T` | `-Registry` / `-Tag` | Override `CLAWZ_REGISTRY` / `CLAWZ_IMAGE_TAG` |
+| `--source` | `-Source` | `cargo` release build (installs Rust if missing; no Docker) |
+| `--with-web` | `-WithWeb` | Build React dashboard in `web/` (installs Node 20+ if missing) |
+| `--dir PATH` | `-InstallDir PATH` | Clone/install location (`~/clawz` or `%USERPROFILE%\clawz`) |
+| — | `-InstallDocker` | Attempt Docker Desktop install via **winget** (Windows) |
+| — | `-Prebuilt` | Explicit prebuilt pull (default when not using `-Build`) |
+
+Set `GITHUB_TOKEN` (PAT with `read:packages`) and `GITHUB_USER` before the default prebuilt install. See [docs/private-registry.md](docs/private-registry.md).
+
+**Operator CLI** (from repo: `cargo build -p clawz-cli --release`):
+
+| Command | Purpose |
+|---------|---------|
+| `clawz setup deps` | Install host prerequisites via `install-deps.sh` |
+| `clawz setup stack` | Prebuilt pull + Compose up (same sequence as `install.sh`) |
+| `clawz setup stack --build` | Local image build overlay |
+| `clawz onboard` | Interactive first-run wizard (Linux TUI) |
+| `clawz onboard --install-daemon` | Wizard then `clawz setup stack` |
+| `clawz doctor` | Gateway, worker, env, and Docker checks |
+
+**First-run web wizard:** after the gateway is up, open **http://localhost:3000/setup**. The Stack step uses `POST /api/v1/setup/stack` when the gateway runs **on the host**; inside a container it shows a copy-paste `install.sh` / `install.ps1` command. Details: [INSTALL.md](INSTALL.md) and [docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md](docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md).
 
 After install, open **http://localhost:3000** and run:
 
@@ -516,7 +539,9 @@ clawz/
 ├── docker-compose.yml
 ├── scripts/
 │   ├── install.sh              # Linux/macOS one-click install
-│   └── install.ps1             # Windows installer
+│   ├── install.ps1             # Windows installer
+│   ├── setup-host-exec.sh      # host bootstrap for clawz-setup / setup API
+│   └── migrate-db.sh           # Postgres migrations
 ├── web/                        # React dashboard (--with-web)
 │   └── public/branding/        # Logo assets (silver / copper)
 └── crates/

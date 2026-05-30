@@ -37,12 +37,16 @@ The fastest path is the one-click installer — it clones the repo, creates `.en
 ```bash
 git clone https://github.com/improwyz/clawz.git
 cd clawz
-./scripts/install.sh          # Docker when available, else source build
-./scripts/install.sh --source   # Force cargo build without Docker
-./scripts/install.sh --with-web # Include React dashboard build
+./scripts/install.sh              # Prebuilt Docker stack (default)
+./scripts/install.sh --build      # Local image build
+./scripts/install.sh --bootstrap-only  # Host deps only
+./scripts/install.sh --source     # Force cargo build without Docker
+./scripts/install.sh --with-web   # Include React dashboard build
+./scripts/install.sh --wizard     # Install + clawz onboard --install-daemon
+# Or: clawz setup stack / clawz onboard (after cargo build -p clawz-cli)
 ```
 
-See **[INSTALL.md](INSTALL.md)** for Windows (`install.ps1`), production checklist, and troubleshooting.
+See **[INSTALL.md](INSTALL.md)** for Windows (`install.ps1 -Docker -Prebuilt`), web `/setup` wizard, `clawz setup deps|stack`, production checklist, and troubleshooting.
 
 ### Clone & build (without installer)
 

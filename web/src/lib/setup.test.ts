@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  fetchSetupStackStatus,
   fetchSetupStatus,
   getSetupRedirectTarget,
   PLACEHOLDER_HOST_SPEC,
+  runSetupStack,
   shouldRedirectToSetup,
+  suggestedHostInstallCommand,
 } from './setup';
 
 function mockFetchResponse(body: unknown, ok = true, status = ok ? 200 : 503) {
@@ -69,6 +72,63 @@ describe('fetchSetupStatus', () => {
     expect(status.setup_complete).toBe(false);
     expect(status.host_spec?.warnings).toEqual(PLACEHOLDER_HOST_SPEC.warnings);
     expect(status.routes_enabled).toBe(false);
+  });
+});
+
+describe('setup stack API', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+    localStorage.setItem('clawz_setup_bootstrap_token', 'tok-stack');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it('fetchSetupStackStatus calls GET /setup/stack/status', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      mockFetchResponse({
+        host_exec_allowed: true,
+        suggested_command: './scripts/install.sh --docker',
+        docker_available: true,
+        compose_v2_available: true,
+      }),
+    );
+
+    const status = await fetchSetupStackStatus();
+
+    expect(status.host_exec_allowed).toBe(true);
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/v1\/setup\/stack\/status$/),
+      expect.any(Object),
+    );
+  });
+
+  it('runSetupStack posts action with confirm token header', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      mockFetchResponse({
+        ok: true,
+        host_exec_allowed: true,
+        message: 'bash setup-host-exec.sh ensure_docker',
+        dry_run: true,
+      }),
+    );
+
+    const res = await runSetupStack({ action: 'deps', dry_run: true });
+
+    expect(res.ok).toBe(true);
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['X-Clawz-Setup-Token']).toBe('tok-stack');
+    const body = JSON.parse(init.body as string) as { action: string; confirm: string };
+    expect(body.action).toBe('deps');
+    expect(body.confirm).toBe('yes-install');
+  });
+
+  it('suggestedHostInstallCommand includes platform hints', () => {
+    expect(suggestedHostInstallCommand('windows')).toContain('install.ps1');
+    expect(suggestedHostInstallCommand('linux')).toContain('install.sh');
   });
 });
 

@@ -1,6 +1,7 @@
 # Install & Onboarding Wizard — Implementation Task List
 
 **Design spec:** [superpowers/specs/2026-05-30-install-onboarding-wizard-design.md](superpowers/specs/2026-05-30-install-onboarding-wizard-design.md)  
+**Docker bootstrap plan:** [superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md](superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md)  
 **Last updated:** 2026-05-30  
 
 Use this file to track progress. Mark items `[x]` when done.
@@ -54,7 +55,7 @@ Use this file to track progress. Mark items `[x]` when done.
 - [ ] `tool:doctor_run` → wrap existing doctor checks
 - [x] `tool:write_env` → patch `.env` with confirm token
 - [x] `tool:init_workspace` → invoke `init-workspace.sh` logic in Rust
-- [ ] `tool:compose_up` / `compose_down` → install-common patterns
+- [x] `tool:compose_up` / `compose_down` / `migrate_db` → `scripts/setup-host-exec.sh`
 - [ ] `tool:migrate_db` → call migrate-db.sh or SQL embed
 - [ ] `tool:create_agent` → build `AgentConfig` payload
 - [ ] `tool:set_provider` → provider config DTO for gateway
@@ -96,7 +97,7 @@ Use this file to track progress. Mark items `[x]` when done.
 
 ### 2.3 Dependency installer
 
-- [ ] `DependencyInstaller` wraps `install-deps.sh` with dry-run
+- [x] `DependencyInstaller` wraps `install-deps.sh` with dry-run (`host_exec` + `install_deps` tool)
 - [ ] Sudo consent callback (TUI prompt / JSON confirm id)
 - [ ] Idempotent: skip already-satisfied deps
 - [ ] Log output captured for AI context (last N lines)
@@ -137,7 +138,7 @@ Use this file to track progress. Mark items `[x]` when done.
 - [x] After clone/deps: exec `clawz onboard --json` or cargo run CLI
 - [x] Pass `--install-daemon` when docker mode
 - [x] Document in `install.sh` header comment
-- [ ] `install.ps1 --wizard` stub (message: use web on Windows until P4)
+- [x] `install.ps1` prebuilt pull, migrate-db, `-InstallDocker`, `-BootstrapOnly`, `-Wizard`
 
 ---
 
@@ -153,6 +154,8 @@ Use this file to track progress. Mark items `[x]` when done.
 - [x] `POST /api/v1/setup/apply`
 - [x] `POST /api/v1/setup/complete`
 - [x] Disable bootstrap routes when `setup_complete`
+- [x] `GET /api/v1/setup/stack/status` (host exec policy + Docker probes)
+- [x] `POST /api/v1/setup/stack` (`deps` / `up` / `down` / `migrate`, dry-run + confirm)
 
 ### 5.2 Server-side apply
 
@@ -187,6 +190,7 @@ Use this file to track progress. Mark items `[x]` when done.
 - [x] Welcome + spec cards (RAM, Docker, disk)
 - [x] Deploy mode cards (standalone / micro / elastic)
 - [x] Prebuilt vs build selector + GHCR instructions
+- [x] Stack step: `POST /setup/stack` or host install command fallback
 - [x] Secrets review panel (masked)
 - [x] LLM provider picker + key input
 - [x] Identity form: name, who am I, role, tone
@@ -205,6 +209,13 @@ Use this file to track progress. Mark items `[x]` when done.
 
 - [x] Playwright or vitest: setup redirect when incomplete
 - [x] Mock setup API responses
+- [x] Vitest: stack status + `runSetupStack` client
+
+### 6.5 CLI stack commands
+
+- [x] `clawz setup deps [--dry-run] [--with-web]`
+- [x] `clawz setup stack [--build] [--dry-run] [--with-web]`
+- [x] `onboard --install-daemon` → `setup stack`
 
 ---
 

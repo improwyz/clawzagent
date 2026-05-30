@@ -35,8 +35,34 @@ improwyz/clawz/
     ├── install.sh             # main Linux/macOS installer
     ├── install-common.sh
     ├── install-deps.sh
+    ├── setup-host-exec.sh     # allowlisted host ops (wizard / clawz setup)
+    ├── migrate-db.sh
     └── install.ps1
 ```
+
+---
+
+## Install procedures (overview)
+
+| Goal | Linux / macOS | Windows | CLI (any host) |
+|------|---------------|---------|----------------|
+| **Full stack (recommended)** | `./scripts/install.sh` | `.\scripts\install.ps1 -Docker -Prebuilt` | `clawz setup stack` |
+| **Install + guided wizard** | `./scripts/install.sh --wizard` | `.\scripts\install.ps1 -Docker -Prebuilt -Wizard` | `clawz onboard --install-daemon` |
+| **Host deps only** | `./scripts/install.sh --bootstrap-only` | `.\scripts\install.ps1 -BootstrapOnly` | `clawz setup deps` |
+| **Local image build** | `./scripts/install.sh --build` | `.\scripts\install.ps1 -Docker -Build` | `clawz setup stack --build` |
+| **No Docker (cargo)** | `./scripts/install.sh --source` | `.\scripts\install.ps1 -Source` | — |
+| **Web onboarding only** | Open `http://localhost:3000/setup` | Same (or remote gateway URL) | `clawz onboard` (TUI) |
+
+**What the Docker path does (all platforms):**
+
+1. Ensure **Git** (and **Docker** + Compose v2, or install them).
+2. Create `.env` from `.env.example` (random dev secrets when possible).
+3. **Prebuilt (default):** `docker login ghcr.io` → pull `gateway` + `worker` images.
+4. **Or `--build`:** compile images via `docker-compose.build.yml`.
+5. `docker compose up -d db` → run **`scripts/migrate-db.sh`** → `up -d worker gateway`.
+6. Wait for `GET /health`.
+
+The same sequence is implemented in `scripts/setup-host-exec.sh` and exposed to the wizard via `POST /api/v1/setup/stack` when host execution is allowed.
 
 ---
 
@@ -97,14 +123,33 @@ git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz
 | Linux / macOS | Windows (PowerShell) | Description |
 |---------------|----------------------|-------------|
 | `--docker` | `-Docker` | Force Docker Compose (default when Docker is running) |
-| `--build` | — | Build gateway/worker images locally instead of pulling from registry |
-| `--registry R` | — | Image registry (default: `ghcr.io/improwyz`) |
-| `--tag TAG` | — | Image tag (default: `latest`) |
+| `--build` | `-Build` | Build gateway/worker images locally instead of pulling from registry |
+| `--bootstrap-only` | `-BootstrapOnly` | Install curl, git, Docker (and Node with `--with-web`) only — no stack |
+| `--wizard` | `-Wizard` | After install, run `clawz onboard --install-daemon` (or `cargo run -p clawz-cli -- …`) |
+| `--registry R` | `-Registry` | Image registry (default: `ghcr.io/improwyz`) |
+| `--tag TAG` | `-Tag` | Image tag (default: `latest`) |
 | `--source` | `-Source` | Build with `cargo` and run local binaries (no Docker) |
 | `--with-web` | `-WithWeb` | Build the React dashboard in `web/` |
 | `--dir PATH` | `-InstallDir PATH` | Clone/install location (default: `~/clawz` or `%USERPROFILE%\clawz`) |
+| — | `-Prebuilt` | Pull prebuilt GHCR images (default when not using `-Build`) |
+| — | `-InstallDocker` | Attempt Docker Desktop install via **winget**, then re-run |
 
 **Auto mode:** When neither `--docker` nor `--source` is set, the script uses Docker if the daemon is running; otherwise it falls back to a source build.
+
+**Examples**
+
+```bash
+# Greenfield Linux server (prebuilt + wizard)
+export GITHUB_TOKEN=ghp_xxx GITHUB_USER=you
+curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh | bash -s -- --docker --wizard
+
+# Clone: deps only, then stack later via CLI
+./scripts/install.sh --bootstrap-only
+clawz setup stack
+
+# Windows: prebuilt stack + web dashboard
+.\scripts\install.ps1 -Docker -Prebuilt -WithWeb
+```
 
 ### Verify the install
 
@@ -127,8 +172,14 @@ export PATH="$PWD/target/release:$PATH"
 | Command | Purpose |
 |---------|---------|
 | `clawz onboard` | Interactive first-run wizard (Linux TUI primary); see [install wizard design](docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md) |
-| `clawz onboard --install-daemon` | Same, then `docker compose up -d` in the repo |
-| `./scripts/install.sh --wizard` | Install + guided onboarding (fallback on all platforms; planned) |
+| `clawz onboard --install-daemon` | Same, then `clawz setup stack` (deps + Compose up) |
+| `clawz setup deps` | Install host prerequisites (curl, git, Docker) via `install-deps.sh` |
+| `clawz setup stack` | Prebuilt GHCR pull + `db` → migrate → `worker` + `gateway` |
+| `clawz setup stack --build` | Local image build overlay instead of GHCR pull |
+| `./scripts/install.sh --wizard` | Install + `clawz onboard --install-daemon` |
+| `./scripts/install.sh --bootstrap-only` | Host deps only (no Compose stack) |
+| `.\scripts\install.ps1 -Docker -Prebuilt` | Windows: prebuilt pull + migrate + stack |
+| `.\scripts\install.ps1 -InstallDocker` | Attempt Docker Desktop install via winget |
 | `clawz doctor` | Gateway, worker, env, and Docker checks |
 | `clawz gateway status` | Health for gateway + worker |
 | `clawz gateway start` / `stop` | Docker Compose in current repo (or `CLAWZ_REPO`) |
@@ -141,14 +192,38 @@ export PATH="$PWD/target/release:$PATH"
 
 Set `CLAWZ_API_KEY` or `VALID_API_KEYS` (first key used) and `CLAWZ_GATEWAY_URL` (default `http://127.0.0.1:3000`).
 
-### First-run onboarding wizard (planned)
+### First-run onboarding wizard
 
-A unified setup flow guides deployment mode, Docker prebuilt vs build, agent identity (“who am I”), role, skills, and LLM keys, then verifies with `clawz doctor`. Platform defaults: **Linux** → `clawz onboard` (TUI); **Windows/macOS** → web `/setup`; **mobile** → app first launch.
+A unified setup flow guides deployment mode, Docker prebuilt vs build, **stack bootstrap**, agent identity, skills, LLM keys (including OAuth), and verification.
 
-- **Design:** [docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md](docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md)
-- **Task tracker:** [docs/install-onboarding-wizard-tasks.md](docs/install-onboarding-wizard-tasks.md)
+| Platform | Primary entry | Stack step |
+|----------|---------------|------------|
+| **Linux** | `clawz onboard` (TUI) or web `/setup` | `clawz setup stack` / setup API |
+| **Windows / macOS** | Web **http://localhost:3000/setup** | Host install command if gateway is in Docker |
+| **All** | `./scripts/install.sh --wizard` | Runs onboard + `setup stack` after install |
 
-Until the wizard ships, use `clawz onboard` for env hints and `./scripts/install.sh` for the stack.
+**Web wizard (`/setup`):**
+
+1. `GET /api/v1/setup/status` — progress + bootstrap token (`X-Clawz-Setup-Token`).
+2. Phases: deploy mode → install strategy → **stack** → secrets → LLM OAuth → identity → verify → complete.
+3. **Stack step:** `POST /api/v1/setup/stack` with `{ "action": "deps" }` then `{ "action": "up", "install_strategy": "prebuilt" }` when `host_exec_allowed` is true.
+4. If the gateway runs inside Compose (`/.dockerenv`), the UI shows a platform-specific `install.sh` / `install.ps1` one-liner instead.
+
+**Setup API (stack):**
+
+```bash
+TOKEN="<from GET /setup/status bootstrap_token>"
+curl -s http://127.0.0.1:3000/api/v1/setup/stack/status
+curl -s -X POST http://127.0.0.1:3000/api/v1/setup/stack \
+  -H "X-Clawz-Setup-Token: $TOKEN" -H "Content-Type: application/json" \
+  -d '{"action":"deps","dry_run":true,"confirm":"yes-install"}'
+```
+
+**Docs**
+
+- Design: [docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md](docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md)
+- Docker bootstrap: [docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md](docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md)
+- Task tracker: [docs/install-onboarding-wizard-tasks.md](docs/install-onboarding-wizard-tasks.md)
 
 ## Channels and webhooks
 

@@ -346,6 +346,61 @@ export async function startSetupOAuth(provider: OAuthProvider): Promise<SetupOAu
   });
 }
 
+/** `GET /api/v1/setup/stack/status`. */
+export interface SetupStackStatus {
+  host_exec_allowed: boolean;
+  suggested_command: string;
+  docker_available: boolean;
+  compose_v2_available: boolean;
+  repo_root?: string;
+}
+
+/** `POST /api/v1/setup/stack` body. */
+export interface SetupStackRequest {
+  action: 'deps' | 'up' | 'down' | 'migrate';
+  install_strategy?: InstallStrategy;
+  with_web?: boolean;
+  dry_run?: boolean;
+  confirm?: string;
+}
+
+/** `POST /api/v1/setup/stack` response. */
+export interface SetupStackResponse {
+  ok: boolean;
+  host_exec_allowed: boolean;
+  suggested_command?: string | null;
+  tool?: string;
+  dry_run?: boolean;
+  message: string;
+}
+
+export async function fetchSetupStackStatus(): Promise<SetupStackStatus> {
+  return setupReq<SetupStackStatus>('/setup/stack/status');
+}
+
+export async function runSetupStack(body: SetupStackRequest): Promise<SetupStackResponse> {
+  return setupReq<SetupStackResponse>('/setup/stack', {
+    method: 'POST',
+    body: JSON.stringify({
+      confirm: 'yes-install',
+      ...body,
+    }),
+  });
+}
+
+/** Host install one-liner when gateway cannot exec on the host. */
+export function suggestedHostInstallCommand(platform: ClientPlatform): string {
+  switch (platform) {
+    case 'windows':
+      return 'git clone --depth 1 https://github.com/improwyz/clawz.git %USERPROFILE%\\clawz && %USERPROFILE%\\clawz\\scripts\\install.ps1 -Docker -Prebuilt';
+    case 'macos':
+    case 'linux':
+      return 'curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh | bash -s -- --docker';
+    default:
+      return './scripts/install.sh --docker';
+  }
+}
+
 export async function runSetupDoctor(): Promise<{ checks: DoctorCheck[]; all_ok: boolean }> {
   try {
     const res = await submitSetupAnswer({ advance: true });
