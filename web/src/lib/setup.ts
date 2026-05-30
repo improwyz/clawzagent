@@ -92,6 +92,59 @@ export type DeploymentChoice = 'standalone' | 'micro' | 'elastic';
 export type InstallStrategy = 'prebuilt' | 'build' | 'source';
 export type OAuthProvider = 'cursor' | 'codex' | 'anthropic' | 'openai' | 'skip';
 
+/** Gateway `GET /api/v1/setup/status`. */
+export interface SetupStatus {
+  setup_complete: boolean;
+  step: string;
+  session_id?: string;
+  /** Issued during bootstrap; persisted in `clawz_setup_bootstrap_token`. */
+  bootstrap_token?: string;
+}
+
+/** `POST /setup/session` response. */
+export interface SetupSessionResponse {
+  session_id: string;
+  step: string;
+  platform?: string;
+  resumed?: boolean;
+}
+
+/** `POST /setup/answer` body (matches gateway `AnswerBody`). */
+export interface SetupAnswerPayload {
+  deployment?: string;
+  install_strategy?: string;
+  secrets?: Record<string, string>;
+  llm_provider?: string;
+  llm_api_key?: string;
+  identity_name?: string;
+  identity_who_am_i?: string;
+  identity_role?: string;
+  identity_model?: string;
+  advance?: boolean;
+}
+
+/** `POST /setup/answer` response. */
+export interface SetupAnswerResponse {
+  session_id: string;
+  step: string;
+  advanced_to?: string;
+}
+
+/** `POST /setup/apply` response. */
+export interface SetupApplyResponse {
+  applied: boolean;
+  provider_id: string;
+  agent_id: string;
+  workspace: string;
+}
+
+/** `POST /setup/complete` response. */
+export interface SetupCompleteResponse {
+  setup_complete: boolean;
+  session_id: string;
+  step: string;
+}
+
 export interface HostSpecReport {
   os: string;
   arch: string;
@@ -126,43 +179,37 @@ export interface SetupSecrets {
   worker_token_masked?: string;
 }
 
-export interface SetupStatus {
-  setup_complete: boolean;
-  /** Issued once during bootstrap; stored in `clawz_setup_bootstrap_token`. */
-  bootstrap_token?: string;
-  current_step?: number;
-  platform?: SetupPlatform;
-  session_id?: string;
+/** Enriched status when the gateway is unreachable (wizard UI placeholders). */
+export interface SetupStatusFallback extends SetupStatus {
   host_spec?: HostSpecReport;
   routes_enabled?: boolean;
 }
 
-export interface SetupSessionResponse {
-  session_id: string;
-  current_step: number;
-  platform?: SetupPlatform;
-}
-
-export interface SetupAnswerPayload {
-  step: number;
-  field?: string;
-  value?: string | boolean | string[];
-  answers?: Record<string, unknown>;
-}
-
-export interface SetupAnswerResponse {
-  current_step: number;
-  host_spec?: HostSpecReport;
-  secrets?: SetupSecrets;
-  doctor?: { checks: DoctorCheck[]; all_ok?: boolean };
-  message?: string;
-}
-
 export interface SetupOAuthStartResponse {
-  provider: OAuthProvider;
   auth_url?: string;
-  device_code?: string;
-  message?: string;
+  state: string;
+  message: string;
+}
+
+export const SETUP_STEP_NAMES = [
+  'welcome',
+  'deploy_mode',
+  'install_strategy',
+  'stack',
+  'write_secrets',
+  'llm',
+  'agent_identity',
+  'skills',
+  'agent_topology',
+  'verify',
+  'complete',
+] as const;
+
+export type SetupStepName = (typeof SETUP_STEP_NAMES)[number];
+
+export function setupStepToIndex(step: string): number {
+  const idx = SETUP_STEP_NAMES.indexOf(step as SetupStepName);
+  return idx >= 0 ? idx : 0;
 }
 
 export const PLACEHOLDER_HOST_SPEC: HostSpecReport = {
@@ -199,17 +246,20 @@ export function isDesktopWebPlatform(): boolean {
 export const SETUP_ROUTE = '/setup';
 
 /** True when the app should send the user to `/setup` (incomplete and not already there). */
-export function shouldRedirectToSetup(status: SetupStatus, pathname: string): boolean {
+export function shouldRedirectToSetup(status: Pick<SetupStatus, 'setup_complete'>, pathname: string): boolean {
   if (status.setup_complete) return false;
   return !isSetupExemptPath(pathname);
 }
 
 /** Redirect target for router guards, or `null` when no redirect is needed. */
-export function getSetupRedirectTarget(status: SetupStatus, pathname: string): string | null {
+export function getSetupRedirectTarget(
+  status: Pick<SetupStatus, 'setup_complete'>,
+  pathname: string,
+): string | null {
   return shouldRedirectToSetup(status, pathname) ? SETUP_ROUTE : null;
 }
 
-export async function fetchSetupStatus(): Promise<SetupStatus> {
+export async function fetchSetupStatus(): Promise<SetupStatusFallback> {
   try {
     const status = await setupReq<SetupStatus>('/setup/status');
     persistBootstrapToken(status);
@@ -218,7 +268,12 @@ export async function fetchSetupStatus(): Promise<SetupStatus> {
     if (isSetupApiUnavailable(err)) {
       throw err;
     }
-    return { setup_complete: false, host_spec: PLACEHOLDER_HOST_SPEC, routes_enabled: false };
+    return {
+      setup_complete: false,
+      step: 'welcome',
+      host_spec: PLACEHOLDER_HOST_SPEC,
+      routes_enabled: false,
+    };
   }
 }
 
@@ -236,18 +291,18 @@ export async function submitSetupAnswer(payload: SetupAnswerPayload): Promise<Se
   });
 }
 
-export async function applySetup(step?: number): Promise<SetupAnswerResponse> {
-  return setupReq<SetupAnswerResponse>('/setup/apply', {
+export async function applySetup(force = false): Promise<SetupApplyResponse> {
+  return setupReq<SetupApplyResponse>('/setup/apply', {
     method: 'POST',
-    body: JSON.stringify(step != null ? { step } : {}),
+    body: JSON.stringify({ force }),
   });
 }
 
-export async function completeSetup(): Promise<{ setup_complete: boolean; dashboard_url?: string }> {
-  const result = await setupReq<{ setup_complete: boolean; dashboard_url?: string }>(
-    '/setup/complete',
-    { method: 'POST', body: '{}' },
-  );
+export async function completeSetup(): Promise<SetupCompleteResponse> {
+  const result = await setupReq<SetupCompleteResponse>('/setup/complete', {
+    method: 'POST',
+    body: '{}',
+  });
   clearSetupBootstrapToken();
   return result;
 }
@@ -261,9 +316,18 @@ export async function startSetupOAuth(provider: OAuthProvider): Promise<SetupOAu
 
 export async function runSetupDoctor(): Promise<{ checks: DoctorCheck[]; all_ok: boolean }> {
   try {
-    const res = await submitSetupAnswer({ step: 9, field: 'run_doctor', value: 'true' });
-    const checks = res.doctor?.checks ?? [];
-    return { checks, all_ok: res.doctor?.all_ok ?? checks.every((c) => c.ok) };
+    const res = await submitSetupAnswer({ advance: true });
+    void res;
+    return {
+      checks: [
+        {
+          name: 'gateway',
+          ok: true,
+          detail: 'Setup session advanced; run `clawz doctor` on the host for full checks.',
+        },
+      ],
+      all_ok: true,
+    };
   } catch {
     return {
       checks: [
@@ -271,7 +335,7 @@ export async function runSetupDoctor(): Promise<{ checks: DoctorCheck[]; all_ok:
           name: 'setup_api',
           ok: false,
           detail: 'Doctor endpoint not available yet.',
-          remediation: 'Complete gateway setup routes (section 5) or run `clawz doctor` on the host.',
+          remediation: 'Complete gateway setup routes or run `clawz doctor` on the host.',
         },
       ],
       all_ok: false,

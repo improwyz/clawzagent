@@ -8,6 +8,7 @@ import {
   completeSetup,
   detectWebPlatform,
   fetchSetupStatus,
+  setupStepToIndex,
   isDesktopWebPlatform,
   PLACEHOLDER_HOST_SPEC,
   runSetupDoctor,
@@ -383,8 +384,9 @@ export function Setup() {
     if (status?.setup_complete) {
       navigate('/dashboard', { replace: true });
     }
-    if (status?.current_step != null && status.current_step > 0 && status.current_step <= 10) {
-      setStep(status.current_step);
+    if (status?.step) {
+      const idx = setupStepToIndex(status.step);
+      if (idx > 0 && idx <= 10) setStep(idx);
     }
   }, [status, navigate]);
 
@@ -398,9 +400,8 @@ export function Setup() {
     async (payload: Parameters<typeof submitSetupAnswer>[0]) => {
       try {
         const res = await submitSetupAnswer(payload);
-        if (res.secrets) setSecrets(res.secrets);
-        if (res.doctor?.checks) setDoctorChecks(res.doctor.checks);
-        if (res.current_step != null) setStep(res.current_step);
+        if (res.advanced_to) setStep(setupStepToIndex(res.advanced_to));
+        else if (res.step) setStep(setupStepToIndex(res.step));
         return res;
       } catch {
         return null;
@@ -431,9 +432,8 @@ export function Setup() {
   });
 
   const applyMut = useMutation({
-    mutationFn: () => applySetup(step),
-    onSuccess: (res) => {
-      if (res.secrets) setSecrets(res.secrets);
+    mutationFn: () => applySetup(),
+    onSuccess: () => {
       setSecretsConfirmed(true);
       setError('');
     },
@@ -459,62 +459,56 @@ export function Setup() {
     setError('');
     const next = Math.min(step + 1, 10);
 
-    if (step === 2) {
+    if (step === 2 && answers.install_strategy) {
       await syncAnswer({
-        step: 2,
-        answers: { install_strategy: answers.install_strategy },
+        install_strategy: answers.install_strategy,
+        advance: true,
       });
     }
     if (step === 3) {
-      await syncAnswer({ step: 3, field: 'stack', value: 'placeholder' });
+      await syncAnswer({ advance: true });
       setStep(4);
       return;
     }
     if (step === 4) {
       if (!secrets) {
-        const res = await syncAnswer({ step: 4, field: 'generate_secrets', value: 'true' });
-        if (!res?.secrets) {
-          setSecrets({
-            jwt_secret_masked: 'clawz-jwt-••••••••',
-            api_keys_masked: ['clawz-dev-••••••••'],
-          });
-        }
+        setSecrets({
+          jwt_secret_masked: 'clawz-jwt-••••••••',
+          api_keys_masked: ['clawz-dev-••••••••'],
+        });
         return;
       }
       if (!secretsConfirmed) return;
+      await syncAnswer({ advance: true });
     }
     if (step === 5) {
+      const llmKey =
+        answers.llm_provider === 'openai'
+          ? answers.openai_key
+          : answers.llm_provider === 'anthropic'
+            ? answers.anthropic_key
+            : answers.cursor_key;
       await syncAnswer({
-        step: 5,
-        answers: {
-          llm_provider: answers.llm_provider,
-          anthropic_key: answers.anthropic_key || undefined,
-          openai_key: answers.openai_key || undefined,
-          cursor_key: answers.cursor_key || undefined,
-        },
+        llm_provider: answers.llm_provider,
+        llm_api_key: llmKey || undefined,
+        advance: true,
       });
     }
     if (step === 6) {
       await syncAnswer({
-        step: 6,
-        answers: {
-          agent_name: answers.agent_name,
-          agent_who: answers.agent_who,
-          agent_role: answers.agent_role,
-          agent_tone: answers.agent_tone,
-        },
+        identity_name: answers.agent_name,
+        identity_who_am_i: answers.agent_who,
+        identity_role: answers.agent_role,
+        advance: true,
       });
     }
     if (step === 7) {
-      await syncAnswer({ step: 7, answers: { skills: answers.skills } });
+      await syncAnswer({ advance: true });
     }
-    if (step === 8) {
+    if (step === 8 && answers.deployment) {
       await syncAnswer({
-        step: 8,
-        answers: {
-          topology: answers.topology,
-          deployment: answers.deployment,
-        },
+        deployment: answers.deployment,
+        advance: true,
       });
     }
     if (step === 9) {
@@ -534,7 +528,7 @@ export function Setup() {
 
     setStep(next);
     if (step === 1 && answers.deployment) {
-      await syncAnswer({ step: 1, answers: { deployment: answers.deployment } });
+      await syncAnswer({ deployment: answers.deployment, advance: true });
     }
   }, [step, answers, secrets, doctorChecks, syncAnswer, doctorMut]);
 

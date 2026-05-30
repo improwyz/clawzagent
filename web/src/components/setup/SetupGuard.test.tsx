@@ -28,7 +28,10 @@ describe('SetupGuard', () => {
   });
 
   it('redirects to /setup when setup is incomplete', async () => {
-    vi.mocked(setup.fetchSetupStatus).mockResolvedValue({ setup_complete: false });
+    vi.mocked(setup.fetchSetupStatus).mockResolvedValue({
+      setup_complete: false,
+      step: 'welcome',
+    });
 
     renderGuard('/dashboard');
 
@@ -38,7 +41,10 @@ describe('SetupGuard', () => {
   });
 
   it('renders outlet when setup is complete', async () => {
-    vi.mocked(setup.fetchSetupStatus).mockResolvedValue({ setup_complete: true });
+    vi.mocked(setup.fetchSetupStatus).mockResolvedValue({
+      setup_complete: true,
+      step: 'complete',
+    });
 
     renderGuard('/dashboard');
 

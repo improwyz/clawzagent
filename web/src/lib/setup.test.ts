@@ -27,7 +27,7 @@ describe('fetchSetupStatus', () => {
 
   it('calls GET /api/v1/setup/status and returns setup_complete', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
-      mockFetchResponse({ setup_complete: true, current_step: 10 }),
+      mockFetchResponse({ setup_complete: true, step: 'complete' }),
     );
 
     const status = await fetchSetupStatus();
@@ -37,6 +37,20 @@ describe('fetchSetupStatus', () => {
       expect.stringMatching(/\/api\/v1\/setup\/status$/),
       expect.objectContaining({ headers: expect.any(Object) }),
     );
+  });
+
+  it('persists bootstrap_token from status into localStorage', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      mockFetchResponse({
+        setup_complete: false,
+        step: 'welcome',
+        bootstrap_token: 'tok-abc',
+      }),
+    );
+
+    await fetchSetupStatus();
+
+    expect(localStorage.getItem('clawz_setup_bootstrap_token')).toBe('tok-abc');
   });
 
   it('rethrows when setup API responds unavailable (503)', async () => {
