@@ -1,12 +1,12 @@
 [package]
 name = "clawz-tui"
-version = "1.1.0"
+version = "1.0.1"
 edition = "2021"
 license = "Elastic-2.0"
 description = "Interactive terminal wizards for ClawZ setup and configuration"
 
 [dependencies]
-clawz-setup = { path = "../clawz-setup", version = "1.1.0" }
+clawz-setup = { path = "../clawz-setup", version = "1.0.1" }
 uuid = { version = "1", features = ["v4"] }
 ratatui = "0.29"
 crossterm = "0.28"

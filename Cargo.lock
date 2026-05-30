@@ -836,7 +836,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "clawz-cli"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -852,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-core"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -874,7 +874,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-embedded"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "async-trait",
  "clawz-core",
@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-gateway"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -932,14 +932,14 @@ dependencies = [
 
 [[package]]
 name = "clawz-platform"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "clawz-runtime"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "async-trait",
  "thiserror 2.0.18",
@@ -948,7 +948,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-services"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -963,7 +963,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-setup"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -981,7 +981,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-tauri"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "clawz-core",
@@ -1007,7 +1007,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-tui"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "clawz-setup",
  "crossterm",
@@ -1017,7 +1017,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-worker"
-version = "1.1.0"
+version = "1.0.1"
 dependencies = [
  "anyhow",
  "async-stream",

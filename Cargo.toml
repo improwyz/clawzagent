@@ -3,7 +3,7 @@ members = ["crates/clawz-core", "crates/clawz-services", "crates/clawz-worker", 
 resolver = "2"
 
 [workspace.package]
-version = "1.1.0"
+version = "1.0.1"
 edition = "2021"
 license = "Elastic-2.0"
 rust-version = "1.75"
@@ -38,17 +38,17 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid"
 parking_lot = "0.12"
 
 # Workspace packages
-clawz-core = { path = "crates/clawz-core", version = "1.1.0" }
-clawz-worker = { path = "crates/clawz-worker", version = "1.1.0" }
-clawz-gateway = { path = "crates/clawz-gateway", version = "1.1.0" }
-clawz-platform = { path = "crates/clawz-platform", version = "1.1.0" }
-clawz-runtime = { path = "crates/clawz-runtime", version = "1.1.0" }
-clawz-embedded = { path = "crates/clawz-embedded", version = "1.1.0" }
-clawz-tauri = { path = "crates/clawz-tauri", version = "1.1.0" }
-clawz-tui = { path = "crates/clawz-tui", version = "1.1.0" }
-clawz-cli = { path = "crates/clawz-cli", version = "1.1.0" }
-clawz-services = { path = "crates/clawz-services", version = "1.1.0" }
-clawz-setup = { path = "crates/clawz-setup", version = "1.1.0" }
+clawz-core = { path = "crates/clawz-core", version = "1.0.1" }
+clawz-worker = { path = "crates/clawz-worker", version = "1.0.1" }
+clawz-gateway = { path = "crates/clawz-gateway", version = "1.0.1" }
+clawz-platform = { path = "crates/clawz-platform", version = "1.0.1" }
+clawz-runtime = { path = "crates/clawz-runtime", version = "1.0.1" }
+clawz-embedded = { path = "crates/clawz-embedded", version = "1.0.1" }
+clawz-tauri = { path = "crates/clawz-tauri", version = "1.0.1" }
+clawz-tui = { path = "crates/clawz-tui", version = "1.0.1" }
+clawz-cli = { path = "crates/clawz-cli", version = "1.0.1" }
+clawz-services = { path = "crates/clawz-services", version = "1.0.1" }
+clawz-setup = { path = "crates/clawz-setup", version = "1.0.1" }
 
 # =============================================================================
 # Platform Feature Flags
