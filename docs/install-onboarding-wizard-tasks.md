@@ -145,31 +145,31 @@ Use this file to track progress. Mark items `[x]` when done.
 
 ### 5.1 Routes & auth
 
-- [ ] New module `crates/clawz-gateway/src/routes/setup.rs`
-- [ ] Bootstrap token middleware (env `CLAWZ_SETUP_BOOTSTRAP_TOKEN`, one-time file)
-- [ ] `GET /api/v1/setup/status`
-- [ ] `POST /api/v1/setup/session` (start/resume)
-- [ ] `POST /api/v1/setup/answer`
-- [ ] `POST /api/v1/setup/apply`
-- [ ] `POST /api/v1/setup/complete`
-- [ ] Disable bootstrap routes when `setup_complete`
+- [x] New module `crates/clawz-gateway/src/routes/setup.rs`
+- [x] Bootstrap token middleware (env `CLAWZ_SETUP_BOOTSTRAP_TOKEN`, one-time file)
+- [x] `GET /api/v1/setup/status`
+- [x] `POST /api/v1/setup/session` (start/resume)
+- [x] `POST /api/v1/setup/answer`
+- [x] `POST /api/v1/setup/apply`
+- [x] `POST /api/v1/setup/complete`
+- [x] Disable bootstrap routes when `setup_complete`
 
 ### 5.2 Server-side apply
 
-- [ ] Apply `.env` recommendations to `UiSettings` / provider store
-- [ ] Persist `setup_complete` in gateway state + disk
-- [ ] PRISM-G audit entries for setup mutations
-- [ ] Integration test: bootstrap token → complete flow (mocked docker)
+- [x] Apply `.env` recommendations to `UiSettings` / provider store
+- [x] Persist `setup_complete` in gateway state + disk
+- [x] PRISM-G audit entries for setup mutations
+- [x] Integration test: bootstrap token → complete flow (mocked docker)
 
 ### 5.3 OAuth callbacks (P2/P3)
 
-- [ ] `POST /api/v1/setup/oauth/start` (provider enum)
-- [ ] `POST /api/v1/setup/oauth/callback`
-- [ ] Cursor OAuth flow
-- [ ] Anthropic OAuth / API key
-- [ ] OpenAI OAuth / API key
+- [x] `POST /api/v1/setup/oauth/start` (provider enum)
+- [x] `POST /api/v1/setup/oauth/callback`
+- [ ] Cursor OAuth flow (stub URL only)
+- [ ] Anthropic OAuth / API key (stub)
+- [ ] OpenAI OAuth / API key (stub)
 - [ ] Codex token exchange (document env vars)
-- [ ] Store tokens in setup-only vault (not gateway providers until promoted)
+- [x] Store tokens in setup-only vault (not gateway providers until promoted)
 
 ---
 
@@ -177,34 +177,34 @@ Use this file to track progress. Mark items `[x]` when done.
 
 ### 6.1 Routing & guard
 
-- [ ] `web/src/pages/Setup.tsx` — stepper UI matching phases 0–10
-- [ ] `web/src/lib/setup.ts` — API client for setup routes
-- [ ] Router guard: redirect to `/setup` if `!setup_complete`
-- [ ] `ShellBootstrap` waits for setup status before dashboard
+- [x] `web/src/pages/Setup.tsx` — stepper UI matching phases 0–10
+- [x] `web/src/lib/setup.ts` — API client for setup routes
+- [x] Router guard: redirect to `/setup` if `!setup_complete`
+- [x] `ShellBootstrap` waits for setup status before dashboard
 
 ### 6.2 UI components
 
-- [ ] Welcome + spec cards (RAM, Docker, disk)
-- [ ] Deploy mode cards (standalone / micro / elastic)
-- [ ] Prebuilt vs build selector + GHCR instructions
-- [ ] Secrets review panel (masked)
-- [ ] LLM provider picker + key input
-- [ ] Identity form: name, who am I, role, tone
-- [ ] Skills checklist (workspace skills)
-- [ ] Topology picker (micro/elastic)
-- [ ] Doctor results panel with retry
-- [ ] Completion screen + link to dashboard
+- [x] Welcome + spec cards (RAM, Docker, disk)
+- [x] Deploy mode cards (standalone / micro / elastic)
+- [x] Prebuilt vs build selector + GHCR instructions
+- [x] Secrets review panel (masked)
+- [x] LLM provider picker + key input
+- [x] Identity form: name, who am I, role, tone
+- [x] Skills checklist (workspace skills)
+- [x] Topology picker (micro/elastic)
+- [x] Doctor results panel with retry
+- [x] Completion screen + link to dashboard
 
 ### 6.3 Win/Mac specifics
 
-- [ ] Detect platform; show “remote gateway URL” path (no local Docker)
-- [ ] WSL2 guidance link for Windows Docker
+- [x] Detect platform; show “remote gateway URL” path (no local Docker)
+- [x] WSL2 guidance link for Windows Docker
 - [ ] Keychain note for desktop (future Tauri bridge)
 
 ### 6.4 Web tests
 
-- [ ] Playwright or vitest: setup redirect when incomplete
-- [ ] Mock setup API responses
+- [x] Playwright or vitest: setup redirect when incomplete
+- [x] Mock setup API responses
 
 ---
 
