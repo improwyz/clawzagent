@@ -131,7 +131,7 @@ impl SaaSConnector for SlackConnector {
         };
         let limit = filters.limit.unwrap_or(100);
         let resp = client
-            .post(&format!("/{}", method))
+            .post(&format!("/{method}"))
             .form(&[("limit", limit.to_string())])
             .send()
             .await
@@ -170,7 +170,7 @@ impl SaaSConnector for SlackConnector {
             _ => obj,
         };
         let resp = client
-            .post(&format!("/{}", method))
+            .post(&format!("/{method}"))
             .json(&data)
             .send()
             .await
@@ -190,7 +190,7 @@ impl SaaSConnector for SlackConnector {
             map.insert("ts".into(), id.into());
         }
         let resp = client
-            .post(&format!("/{}", method))
+            .post(&format!("/{method}"))
             .json(&payload)
             .send()
             .await
@@ -206,7 +206,7 @@ impl SaaSConnector for SlackConnector {
             _ => obj,
         };
         let resp = client
-            .post(&format!("/{}", method))
+            .post(&format!("/{method}"))
             .form(&[("ts", id), ("channel", "")])
             .send()
             .await
@@ -235,7 +235,7 @@ impl SaaSConnector for SlackConnector {
             _ => action,
         };
         let resp = client
-            .post(&format!("/{}", method))
+            .post(&format!("/{method}"))
             .json(&params)
             .send()
             .await

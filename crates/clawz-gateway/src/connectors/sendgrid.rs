@@ -100,8 +100,8 @@ impl SaaSConnector for SendGridConnector {
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
         let limit = filters.limit.unwrap_or(100).min(500);
         let path = match obj {
-            "templates" => format!("/templates?generations=dynamic&page_size={}", limit),
-            "contacts" => format!("/marketing/contacts?page_size={}", limit),
+            "templates" => format!("/templates?generations=dynamic&page_size={limit}"),
+            "contacts" => format!("/marketing/contacts?page_size={limit}"),
             "lists" => "/marketing/lists".to_string(),
             "segments" => "/marketing/segments/2.0".to_string(),
             "senders" => "/marketing/senders".to_string(),
@@ -160,8 +160,8 @@ impl SaaSConnector for SendGridConnector {
 
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let path = match obj {
-            "templates" => format!("/templates/{}", id),
-            "lists" => format!("/marketing/lists/{}", id),
+            "templates" => format!("/templates/{id}"),
+            "lists" => format!("/marketing/lists/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown SendGrid object: {obj}"
@@ -179,8 +179,8 @@ impl SaaSConnector for SendGridConnector {
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let path = match obj {
-            "templates" => format!("/templates/{}", id),
-            "lists" => format!("/marketing/lists/{}", id),
+            "templates" => format!("/templates/{id}"),
+            "lists" => format!("/marketing/lists/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown SendGrid object: {obj}"

@@ -85,7 +85,7 @@ impl DeployProvider for RailwayAdapter {
         let resp = self
             .client
             .post(self.graphql_url())
-            .header("Authorization", format!("Bearer {}", token))
+            .header("Authorization", format!("Bearer {token}"))
             .json(&query)
             .send()
             .await

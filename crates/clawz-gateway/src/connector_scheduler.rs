@@ -164,11 +164,11 @@ async fn sync_tick(state: &AppState) -> anyhow::Result<()> {
             tracing::debug!("connector {} not registered, skipping", job.platform);
             continue;
         };
-        let mut filters = Filters::default();
-        filters.limit = Some(20);
-        if let Some(since) = since {
-            filters.updated_after = Some(since);
-        }
+        let filters = Filters {
+            limit: Some(20),
+            updated_after: since,
+            ..Default::default()
+        };
         let objects = connector
             .list_objects(&job.object, &filters)
             .await

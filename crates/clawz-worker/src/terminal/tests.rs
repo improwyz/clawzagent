@@ -1,9 +1,8 @@
 #[cfg(test)]
 mod local_tests {
     use std::collections::HashMap;
-    use std::sync::Arc;
 
-    use super::super::{LocalBackend, TerminalBackend, create_terminal_backend};
+    use super::super::{LocalBackend, TerminalBackend};
 
     #[tokio::test]
     async fn local_exec_echo() {

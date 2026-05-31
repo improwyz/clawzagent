@@ -80,7 +80,7 @@ impl SaaSConnector for StripeConnector {
         let client = self.client()?;
         let limit = filters.limit.unwrap_or(10);
         let resp = client
-            .get(&format!("/v1/{}", obj))
+            .get(&format!("/v1/{obj}"))
             .query(&[("limit", limit.to_string())])
             .send()
             .await
@@ -97,7 +97,7 @@ impl SaaSConnector for StripeConnector {
     async fn create_object(&self, obj: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let resp = client
-            .post(&format!("/v1/{}", obj))
+            .post(&format!("/v1/{obj}"))
             .json(&data)
             .send()
             .await
@@ -108,7 +108,7 @@ impl SaaSConnector for StripeConnector {
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let resp = client
-            .post(&format!("/v1/{}/{}", obj, id))
+            .post(&format!("/v1/{obj}/{id}"))
             .json(&data)
             .send()
             .await
@@ -119,7 +119,7 @@ impl SaaSConnector for StripeConnector {
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let client = self.client()?;
         let resp = client
-            .delete(&format!("/v1/{}/{}", obj, id))
+            .delete(&format!("/v1/{obj}/{id}"))
             .send()
             .await
             .map_err(|e| ClawzError::Provider(format!("Stripe delete failed: {e}")))?;
@@ -141,7 +141,7 @@ impl SaaSConnector for StripeConnector {
             "invoice" => "/v1/invoices".to_string(),
             "subscription" => "/v1/subscriptions".to_string(),
             "payout" => "/v1/payouts".to_string(),
-            _ => format!("/v1/{}", action),
+            _ => format!("/v1/{action}"),
         };
         let resp = client
             .post(&path)

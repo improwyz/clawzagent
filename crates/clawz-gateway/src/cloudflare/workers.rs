@@ -156,15 +156,12 @@ impl WorkersClient {
         let metadata = r#"{"main_module":"worker.js","compatibility_date":"2024-01-01"}"#;
 
         let body = format!(
-            "--{b}\r\nContent-Disposition: form-data; name=\"metadata\"\r\nContent-Type: application/json\r\n\r\n{meta}\r\n\
-             --{b}\r\nContent-Disposition: form-data; name=\"worker.js\"; filename=\"worker.js\"\r\nContent-Type: application/javascript\r\n\r\n{script}\r\n\
-             --{b}--\r\n",
-            b = boundary,
-            meta = metadata,
-            script = script,
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"metadata\"\r\nContent-Type: application/json\r\n\r\n{metadata}\r\n\
+             --{boundary}\r\nContent-Disposition: form-data; name=\"worker.js\"; filename=\"worker.js\"\r\nContent-Type: application/javascript\r\n\r\n{script}\r\n\
+             --{boundary}--\r\n",
         );
 
-        let content_type = format!("multipart/form-data; boundary={}", boundary);
+        let content_type = format!("multipart/form-data; boundary={boundary}");
 
         let resp = self
             .client

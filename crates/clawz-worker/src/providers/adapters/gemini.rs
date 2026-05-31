@@ -314,7 +314,7 @@ fn convert_content_to_parts(content: &MessageContent) -> Result<Vec<GeminiPart>,
                     ContentPart::ImageUrl { url, .. } => {
                         // Gemini doesn't support raw URLs; treat as text annotation
                         GeminiPart::Text {
-                            text: format!("[image: {}]", url),
+                            text: format!("[image: {url}]"),
                         }
                     }
                     ContentPart::AudioBase64 { media_type, data } => GeminiPart::InlineData {

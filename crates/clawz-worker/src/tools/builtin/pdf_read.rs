@@ -231,7 +231,7 @@ impl Tool for PdfReadTool {
         } else {
             // Read local file
             let metadata = std::fs::metadata(source)
-                .map_err(|e| ClawzError::Tool(format!("cannot stat '{}': {e}", source)))?;
+                .map_err(|e| ClawzError::Tool(format!("cannot stat '{source}': {e}")))?;
 
             if metadata.len() as usize > MAX_PDF_BYTES {
                 return Err(ClawzError::Tool(format!(
@@ -241,14 +241,13 @@ impl Tool for PdfReadTool {
             }
 
             std::fs::read(source)
-                .map_err(|e| ClawzError::Tool(format!("failed to read file '{}': {e}", source)))?
+                .map_err(|e| ClawzError::Tool(format!("failed to read file '{source}': {e}")))?
         };
 
         // Validate PDF header
         if pdf_bytes.len() < 5 || &pdf_bytes[..5] != b"%PDF-" {
             return Err(ClawzError::Validation(format!(
-                "'{}' does not appear to be a valid PDF file",
-                source
+                "'{source}' does not appear to be a valid PDF file"
             )));
         }
 
@@ -353,7 +352,7 @@ mod tests {
             .await;
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("PDF") || msg.contains("valid"), "msg: {}", msg);
+        assert!(msg.contains("PDF") || msg.contains("valid"), "msg: {msg}");
     }
 
     #[test]

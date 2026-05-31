@@ -400,8 +400,7 @@ impl Tool for FileOpsTool {
 
             other => {
                 return Err(ClawzError::Validation(format!(
-                    "unknown operation: {}",
-                    other
+                    "unknown operation: {other}"
                 )));
             }
         };
@@ -516,8 +515,7 @@ mod tests {
         let msg = result.unwrap_err().to_string();
         assert!(
             msg.contains("sandbox") || msg.contains("outside"),
-            "msg: {}",
-            msg
+            "msg: {msg}"
         );
     }
 

@@ -164,12 +164,12 @@ impl SkillBundle {
             role,
             skills
                 .iter()
-                .map(|s| format!("- {}", s))
+                .map(|s| format!("- {s}"))
                 .collect::<Vec<_>>()
                 .join("\n"),
             principles
                 .iter()
-                .map(|p| format!("- {}", p))
+                .map(|p| format!("- {p}"))
                 .collect::<Vec<_>>()
                 .join("\n"),
         );
@@ -178,7 +178,7 @@ impl SkillBundle {
             role,
             principles
                 .iter()
-                .map(|p| format!("- {}", p))
+                .map(|p| format!("- {p}"))
                 .collect::<Vec<_>>()
                 .join("\n"),
         );

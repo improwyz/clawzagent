@@ -72,8 +72,8 @@ impl GitLabConnector {
             client_id,
             client_secret,
             redirect_uri,
-            format!("{}/oauth/authorize", base),
-            format!("{}/oauth/token", base),
+            format!("{base}/oauth/authorize"),
+            format!("{base}/oauth/token"),
             vec!["api".into(), "read_user".into(), "read_repository".into()],
         );
         Self {
@@ -120,7 +120,7 @@ impl GitLabConnector {
     fn auth_headers(&self) -> Result<Vec<(String, String)>> {
         if let Some(creds) = &self.credentials {
             if let Some(token) = &creds.access_token {
-                return Ok(vec![("Authorization".into(), format!("Bearer {}", token))]);
+                return Ok(vec![("Authorization".into(), format!("Bearer {token}"))]);
             }
             if let Some(key) = &creds.api_key {
                 return Ok(vec![("PRIVATE-TOKEN".into(), key.clone())]);

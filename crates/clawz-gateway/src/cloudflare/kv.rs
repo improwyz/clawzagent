@@ -92,7 +92,7 @@ impl KvClient {
                     // Percent-encode each byte of the UTF-8 representation.
                     c.to_string()
                         .bytes()
-                        .flat_map(|b| format!("%{:02X}", b).chars().collect::<Vec<_>>())
+                        .flat_map(|b| format!("%{b:02X}").chars().collect::<Vec<_>>())
                         .collect()
                 }
             })
@@ -186,7 +186,7 @@ impl KvClient {
     pub async fn put(&self, key: &str, value: &str, ttl: Option<u64>) -> Result<(), ClawzError> {
         let mut url = self.value_url(key);
         if let Some(t) = ttl {
-            url.push_str(&format!("?expiration_ttl={}", t));
+            url.push_str(&format!("?expiration_ttl={t}"));
         }
 
         let resp = self

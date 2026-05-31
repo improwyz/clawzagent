@@ -533,9 +533,7 @@ pub async fn handle_mcp_request(
                         }]
                     }),
                 ),
-                None => {
-                    JsonRpcResponse::err(req.id, -32001, format!("Resource not found: {}", uri))
-                }
+                None => JsonRpcResponse::err(req.id, -32001, format!("Resource not found: {uri}")),
             }
         }
 

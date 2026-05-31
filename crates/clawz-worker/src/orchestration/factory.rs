@@ -54,9 +54,10 @@ pub fn env_max_agents() -> usize {
 
 /// [`AgentSpec`] with image and limits from environment.
 pub fn default_agent_spec() -> AgentSpec {
-    let mut spec = AgentSpec::default();
-    spec.image = env_agent_image();
-    spec
+    AgentSpec {
+        image: env_agent_image(),
+        ..AgentSpec::default()
+    }
 }
 
 /// Creates an [`AgentScheduler`] appropriate for the given deployment mode.

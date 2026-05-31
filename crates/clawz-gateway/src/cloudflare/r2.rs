@@ -98,8 +98,8 @@ impl R2Client {
             self.account_id, self.bucket_name
         );
         match prefix {
-            Some(p) if !p.is_empty() => format!("{}?list-type=2&prefix={}", base, p),
-            _ => format!("{}?list-type=2", base),
+            Some(p) if !p.is_empty() => format!("{base}?list-type=2&prefix={p}"),
+            _ => format!("{base}?list-type=2"),
         }
     }
 

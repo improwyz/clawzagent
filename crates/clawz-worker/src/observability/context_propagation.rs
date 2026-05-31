@@ -59,7 +59,7 @@ pub fn trace_env_for_container(
         // service in the trace backend, making per-agent filtering trivial.
         (
             "OTEL_SERVICE_NAME".into(),
-            format!("clawz-agent-{}", agent_id),
+            format!("clawz-agent-{agent_id}"),
         ),
         // Hardcoded to the in-cluster collector because workers run inside
         // the same k8s namespace as the otel-collector sidecar.
@@ -117,7 +117,7 @@ pub fn trace_env_for_tool(
         // differentiating by type keeps service meshes clean in Jaeger/Tempo.
         (
             "OTEL_SERVICE_NAME".into(),
-            format!("clawz-tool-{}", tool_type),
+            format!("clawz-tool-{tool_type}"),
         ),
         // Dependency: otel-collector sidecar address is provisioned by the
         // infrastructure layer; this string must stay in sync with the Helm chart.

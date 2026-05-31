@@ -211,10 +211,10 @@ impl SaaSConnector for NotionConnector {
         let client = self.client()?;
         let token = self.token()?;
         let path = match obj {
-            "pages" => format!("/pages/{}", id),
-            "databases" => format!("/databases/{}", id),
-            "blocks" => format!("/blocks/{}", id),
-            _ => format!("/pages/{}", id),
+            "pages" => format!("/pages/{id}"),
+            "databases" => format!("/databases/{id}"),
+            "blocks" => format!("/blocks/{id}"),
+            _ => format!("/pages/{id}"),
         };
         let resp = client
             .patch(format!("{}{}", self.base_url(), path))
@@ -231,8 +231,8 @@ impl SaaSConnector for NotionConnector {
         let client = self.client()?;
         let token = self.token()?;
         let path = match obj {
-            "blocks" => format!("/blocks/{}", id),
-            _ => format!("/pages/{}", id),
+            "blocks" => format!("/blocks/{id}"),
+            _ => format!("/pages/{id}"),
         };
         let resp = client
             .delete(format!("{}{}", self.base_url(), path))
@@ -257,10 +257,10 @@ impl SaaSConnector for NotionConnector {
         let path = match action {
             "query_database" => {
                 let db_id = params["database_id"].as_str().unwrap_or("");
-                format!("/databases/{}/query", db_id)
+                format!("/databases/{db_id}/query")
             }
             "search" => "/search".into(),
-            _ => format!("/{}", action),
+            _ => format!("/{action}"),
         };
         let resp = client
             .post(format!("{}{}", self.base_url(), path))

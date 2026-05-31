@@ -183,22 +183,22 @@ mod tests {
         let id = "test-session";
 
         store
-            .append_message(&id, &Message::user("hello"))
+            .append_message(id, &Message::user("hello"))
             .await
             .unwrap();
         store
-            .append_message(&id, &Message::assistant("hi"))
+            .append_message(id, &Message::assistant("hi"))
             .await
             .unwrap();
 
-        let loaded = store.load_transcript(&id).await.unwrap();
+        let loaded = store.load_transcript(id).await.unwrap();
         assert_eq!(loaded.len(), 2);
 
-        let removed = store.compact(&id, 1).await.unwrap();
+        let removed = store.compact(id, 1).await.unwrap();
         assert_eq!(removed, 1);
-        assert_eq!(store.load_transcript(&id).await.unwrap().len(), 1);
+        assert_eq!(store.load_transcript(id).await.unwrap().len(), 1);
 
-        store.reset(&id).await.unwrap();
-        assert!(store.load_transcript(&id).await.unwrap().is_empty());
+        store.reset(id).await.unwrap();
+        assert!(store.load_transcript(id).await.unwrap().is_empty());
     }
 }

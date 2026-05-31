@@ -100,10 +100,7 @@ fn build_azure_config(config: &AdapterConfig, request: &ChatRequest) -> AdapterC
 
     // Build the endpoint with deployment path and api-version query
     let base = config.endpoint.trim_end_matches('/');
-    let endpoint = format!(
-        "{}/openai/deployments/{}?api-version={}",
-        base, deployment, api_version
-    );
+    let endpoint = format!("{base}/openai/deployments/{deployment}?api-version={api_version}");
 
     // Azure uses "api-key" header instead of Bearer token
     let mut extra_headers = config.extra_headers.clone();

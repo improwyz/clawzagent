@@ -161,8 +161,8 @@ impl SaaSConnector for XeroConnector {
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let path = match obj {
-            "invoices" => format!("/Invoices/{}", id),
-            "contacts" => format!("/Contacts/{}", id),
+            "invoices" => format!("/Invoices/{id}"),
+            "contacts" => format!("/Contacts/{id}"),
             _ => return Err(ClawzError::Provider(format!("Unknown Xero object: {obj}"))),
         };
         let resp = client
@@ -179,7 +179,7 @@ impl SaaSConnector for XeroConnector {
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let client = self.client()?;
         let path = match obj {
-            "invoices" => format!("/Invoices/{}", id),
+            "invoices" => format!("/Invoices/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Cannot delete Xero {obj} directly; void instead"
@@ -228,7 +228,7 @@ impl SaaSConnector for XeroConnector {
             "email_invoice" => {
                 let id = params["invoice_id"].as_str().unwrap_or("");
                 let resp = client
-                    .post(&format!("/Invoices/{}/Email", id))
+                    .post(&format!("/Invoices/{id}/Email"))
                     .header("Xero-Tenant-Id", self.tenant_header())
                     .json(&params)
                     .send()

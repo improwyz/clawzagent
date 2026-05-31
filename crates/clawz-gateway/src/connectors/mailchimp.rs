@@ -82,7 +82,7 @@ impl MailchimpConnector {
     /// Build the per-data-center API base URL.
     fn base_url(&self) -> String {
         let dc = self.data_center.as_deref().unwrap_or("us1");
-        format!("https://{}.api.mailchimp.com/3.0", dc)
+        format!("https://{dc}.api.mailchimp.com/3.0")
     }
 
     fn client(&self) -> Result<reqwest::Client> {
@@ -97,12 +97,12 @@ impl MailchimpConnector {
     fn auth_header(&self) -> String {
         if let Some(creds) = &self.credentials {
             if let Some(token) = &creds.access_token {
-                return format!("Bearer {}", token);
+                return format!("Bearer {token}");
             }
             if let Some(key) = &creds.api_key {
                 // Mailchimp API key auth uses Basic: anystring:key
-                let encoded = base64_encode(&format!("anystring:{}", key));
-                return format!("Basic {}", encoded);
+                let encoded = base64_encode(&format!("anystring:{key}"));
+                return format!("Basic {encoded}");
             }
         }
         String::new()
@@ -149,7 +149,7 @@ impl SaaSConnector for MailchimpConnector {
             "templates" => "/templates".to_string(),
             "members" => {
                 let list_id = filters.search.as_deref().unwrap_or("");
-                format!("/lists/{}/members", list_id)
+                format!("/lists/{list_id}/members")
             }
             _ => {
                 return Err(ClawzError::Provider(format!(
@@ -175,7 +175,7 @@ impl SaaSConnector for MailchimpConnector {
             "lists" => "/lists".to_string(),
             "members" => {
                 let list_id = data["list_id"].as_str().unwrap_or("");
-                format!("/lists/{}/members", list_id)
+                format!("/lists/{list_id}/members")
             }
             _ => {
                 return Err(ClawzError::Provider(format!(
@@ -196,11 +196,11 @@ impl SaaSConnector for MailchimpConnector {
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let path = match obj {
-            "campaigns" => format!("/campaigns/{}", id),
-            "lists" => format!("/lists/{}", id),
+            "campaigns" => format!("/campaigns/{id}"),
+            "lists" => format!("/lists/{id}"),
             "members" => {
                 let list_id = data["list_id"].as_str().unwrap_or("");
-                format!("/lists/{}/members/{}", list_id, id)
+                format!("/lists/{list_id}/members/{id}")
             }
             _ => {
                 return Err(ClawzError::Provider(format!(
@@ -221,8 +221,8 @@ impl SaaSConnector for MailchimpConnector {
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let client = self.client()?;
         let path = match obj {
-            "campaigns" => format!("/campaigns/{}", id),
-            "lists" => format!("/lists/{}", id),
+            "campaigns" => format!("/campaigns/{id}"),
+            "lists" => format!("/lists/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Mailchimp object: {obj}"
@@ -250,15 +250,15 @@ impl SaaSConnector for MailchimpConnector {
         let path = match action {
             "send_campaign" => {
                 let id = params["campaign_id"].as_str().unwrap_or("");
-                format!("/campaigns/{}/actions/send", id)
+                format!("/campaigns/{id}/actions/send")
             }
             "schedule_campaign" => {
                 let id = params["campaign_id"].as_str().unwrap_or("");
-                format!("/campaigns/{}/actions/schedule", id)
+                format!("/campaigns/{id}/actions/schedule")
             }
             "add_member_to_list" => {
                 let list_id = params["list_id"].as_str().unwrap_or("");
-                format!("/lists/{}/members", list_id)
+                format!("/lists/{list_id}/members")
             }
             _ => {
                 return Err(ClawzError::Provider(format!(

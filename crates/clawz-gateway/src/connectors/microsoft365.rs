@@ -49,14 +49,8 @@ impl Microsoft365Connector {
             client_id,
             client_secret,
             redirect_uri,
-            format!(
-                "https://login.microsoftonline.com/{}/oauth2/v2.0/authorize",
-                tenant
-            ),
-            format!(
-                "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
-                tenant
-            ),
+            format!("https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"),
+            format!("https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"),
             vec![
                 "https://graph.microsoft.com/User.Read".into(),
                 "https://graph.microsoft.com/Mail.Read".into(),
@@ -117,7 +111,7 @@ impl SaaSConnector for Microsoft365Connector {
             "files" => "/me/drive/root/children".to_string(),
             "events" => "/me/events".to_string(),
             "teams" => "/me/joinedTeams".to_string(),
-            _ => format!("/me/{}?top={}", obj, limit),
+            _ => format!("/me/{obj}?top={limit}"),
         };
         let resp = client
             .get(&path)
@@ -141,7 +135,7 @@ impl SaaSConnector for Microsoft365Connector {
             "messages" => "/me/messages".to_string(),
             "events" => "/me/events".to_string(),
             "files" => "/me/drive/root/children".to_string(),
-            _ => format!("/me/{}", obj),
+            _ => format!("/me/{obj}"),
         };
         let resp = client
             .post(&path)
@@ -155,10 +149,10 @@ impl SaaSConnector for Microsoft365Connector {
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let path = match obj {
-            "messages" => format!("/me/messages/{}", id),
-            "events" => format!("/me/events/{}", id),
-            "files" => format!("/me/drive/items/{}", id),
-            _ => format!("/me/{}/{}", obj, id),
+            "messages" => format!("/me/messages/{id}"),
+            "events" => format!("/me/events/{id}"),
+            "files" => format!("/me/drive/items/{id}"),
+            _ => format!("/me/{obj}/{id}"),
         };
         let resp = client
             .patch(&path)
@@ -172,10 +166,10 @@ impl SaaSConnector for Microsoft365Connector {
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let client = self.client()?;
         let path = match obj {
-            "messages" => format!("/me/messages/{}", id),
-            "events" => format!("/me/events/{}", id),
-            "files" => format!("/me/drive/items/{}", id),
-            _ => format!("/me/{}/{}", obj, id),
+            "messages" => format!("/me/messages/{id}"),
+            "events" => format!("/me/events/{id}"),
+            "files" => format!("/me/drive/items/{id}"),
+            _ => format!("/me/{obj}/{id}"),
         };
         let resp = client
             .delete(&path)
@@ -205,7 +199,7 @@ impl SaaSConnector for Microsoft365Connector {
                     .unwrap_or("")
             ),
             "search" => "/me/microsoft.graph.search".to_string(),
-            _ => format!("/me/{}", action),
+            _ => format!("/me/{action}"),
         };
         let resp = client
             .post(&path)

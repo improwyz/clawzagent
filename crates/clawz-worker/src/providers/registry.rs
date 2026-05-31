@@ -102,8 +102,7 @@ impl ProviderRegistry {
         }
 
         Err(ClawzError::Provider(format!(
-            "no provider found for model: {}",
-            model
+            "no provider found for model: {model}"
         )))
     }
 

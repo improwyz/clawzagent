@@ -76,7 +76,7 @@ impl MetaAdsConnector {
     }
 
     fn base_url() -> String {
-        format!("https://graph.facebook.com/{}", GRAPH_VERSION)
+        format!("https://graph.facebook.com/{GRAPH_VERSION}")
     }
 }
 
@@ -110,21 +110,15 @@ impl SaaSConnector for MetaAdsConnector {
         // Meta’s maximum page size for most edges is 200.
         let limit = filters.limit.unwrap_or(50).min(200);
         let path = match obj {
-            "campaigns" => format!(
-                "/act_{}/campaigns?fields=id,name,status,objective&limit={}",
-                account_id, limit
-            ),
-            "adsets" => format!(
-                "/act_{}/adsets?fields=id,name,status,campaign_id&limit={}",
-                account_id, limit
-            ),
-            "ads" => format!(
-                "/act_{}/ads?fields=id,name,status,adset_id&limit={}",
-                account_id, limit
-            ),
+            "campaigns" => {
+                format!("/act_{account_id}/campaigns?fields=id,name,status,objective&limit={limit}")
+            }
+            "adsets" => {
+                format!("/act_{account_id}/adsets?fields=id,name,status,campaign_id&limit={limit}")
+            }
+            "ads" => format!("/act_{account_id}/ads?fields=id,name,status,adset_id&limit={limit}"),
             "insights" => format!(
-                "/act_{}/insights?fields=impressions,clicks,spend,reach&limit={}",
-                account_id, limit
+                "/act_{account_id}/insights?fields=impressions,clicks,spend,reach&limit={limit}"
             ),
             _ => {
                 return Err(ClawzError::Provider(format!(
@@ -150,9 +144,9 @@ impl SaaSConnector for MetaAdsConnector {
         let token = self.token()?;
         let account_id = self.account_id()?;
         let path = match obj {
-            "campaigns" => format!("/act_{}/campaigns", account_id),
-            "adsets" => format!("/act_{}/adsets", account_id),
-            "ads" => format!("/act_{}/ads", account_id),
+            "campaigns" => format!("/act_{account_id}/campaigns"),
+            "adsets" => format!("/act_{account_id}/adsets"),
+            "ads" => format!("/act_{account_id}/ads"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Meta Ads object: {obj}"

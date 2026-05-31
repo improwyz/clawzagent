@@ -110,7 +110,7 @@ impl ToolRegistry {
         let tool = self
             .get(name)
             .await
-            .ok_or_else(|| ClawzError::Tool(format!("tool not found: {}", name)))?;
+            .ok_or_else(|| ClawzError::Tool(format!("tool not found: {name}")))?;
 
         tool.execute(ctx, args).await
     }

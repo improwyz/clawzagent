@@ -370,8 +370,7 @@ impl Tool for GitTool {
 
             other => {
                 return Err(ClawzError::Validation(format!(
-                    "unknown operation: {}",
-                    other
+                    "unknown operation: {other}"
                 )));
             }
         };
@@ -406,16 +405,16 @@ fn format_git_status(porcelain_v2: &str) -> String {
             // Modified/added tracked file
             let parts: Vec<&str> = rest.splitn(9, ' ').collect();
             if let (Some(xy), Some(path)) = (parts.first(), parts.get(8)) {
-                lines.push(format!("  {} {}", xy, path));
+                lines.push(format!("  {xy} {path}"));
             }
         } else if let Some(rest) = line.strip_prefix("2 ") {
             // Renamed file
             let parts: Vec<&str> = rest.splitn(10, ' ').collect();
             if let (Some(xy), Some(path)) = (parts.first(), parts.get(9)) {
-                lines.push(format!("  R {} {}", xy, path));
+                lines.push(format!("  R {xy} {path}"));
             }
         } else if let Some(rest) = line.strip_prefix("? ") {
-            lines.push(format!("  ?? {}", rest));
+            lines.push(format!("  ?? {rest}"));
         }
     }
     if lines.len() <= 1 {

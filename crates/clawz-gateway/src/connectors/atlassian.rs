@@ -125,11 +125,11 @@ impl SaaSConnector for AtlassianConnector {
         let client = self.client()?;
         let limit = filters.limit.unwrap_or(50);
         let path = match obj {
-            "issues" => format!("/rest/api/3/search?maxResults={}", limit),
-            "projects" => format!("/rest/api/3/project?maxResults={}", limit),
-            "boards" => format!("/rest/agile/1.0/board?maxResults={}", limit),
-            "pages" => format!("/wiki/rest/api/content?limit={}", limit),
-            _ => format!("/rest/api/3/{}", obj),
+            "issues" => format!("/rest/api/3/search?maxResults={limit}"),
+            "projects" => format!("/rest/api/3/project?maxResults={limit}"),
+            "boards" => format!("/rest/agile/1.0/board?maxResults={limit}"),
+            "pages" => format!("/wiki/rest/api/content?limit={limit}"),
+            _ => format!("/rest/api/3/{obj}"),
         };
         let resp = client
             .get(&path)
@@ -158,7 +158,7 @@ impl SaaSConnector for AtlassianConnector {
         let path = match obj {
             "issues" => "/rest/api/3/issue".to_string(),
             "pages" => "/wiki/rest/api/content".to_string(),
-            _ => format!("/rest/api/3/{}", obj),
+            _ => format!("/rest/api/3/{obj}"),
         };
         let resp = client
             .post(&path)
@@ -172,9 +172,9 @@ impl SaaSConnector for AtlassianConnector {
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let path = match obj {
-            "issues" => format!("/rest/api/3/issue/{}", id),
-            "pages" => format!("/wiki/rest/api/content/{}", id),
-            _ => format!("/rest/api/3/{}/{}", obj, id),
+            "issues" => format!("/rest/api/3/issue/{id}"),
+            "pages" => format!("/wiki/rest/api/content/{id}"),
+            _ => format!("/rest/api/3/{obj}/{id}"),
         };
         let resp = client
             .put(&path)
@@ -188,9 +188,9 @@ impl SaaSConnector for AtlassianConnector {
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let client = self.client()?;
         let path = match obj {
-            "issues" => format!("/rest/api/3/issue/{}", id),
-            "pages" => format!("/wiki/rest/api/content/{}", id),
-            _ => format!("/rest/api/3/{}/{}", obj, id),
+            "issues" => format!("/rest/api/3/issue/{id}"),
+            "pages" => format!("/wiki/rest/api/content/{id}"),
+            _ => format!("/rest/api/3/{obj}/{id}"),
         };
         let resp = client
             .delete(&path)
@@ -216,7 +216,7 @@ impl SaaSConnector for AtlassianConnector {
             ),
             "search" => "/rest/api/3/search".to_string(),
             "myself" => "/rest/api/3/myself".to_string(),
-            _ => format!("/rest/api/3/{}", action),
+            _ => format!("/rest/api/3/{action}"),
         };
         let resp = client
             .post(&path)

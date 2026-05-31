@@ -106,7 +106,7 @@ impl DeployProvider for OracleCloudAdapter {
             .get(self.compute_url("/instances"))
             .header(
                 "Authorization",
-                format!("Signature version=1,{}:{}", api_key, api_secret),
+                format!("Signature version=1,{api_key}:{api_secret}"),
             )
             .send()
             .await

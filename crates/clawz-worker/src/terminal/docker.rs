@@ -175,8 +175,9 @@ impl DockerBackend {
 
         tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), collect)
             .await
-            .map_err(|_| ClawzError::Tool(format!("docker exec timed out after {timeout_secs}s")))?
-            .map_err(|e| e)?;
+            .map_err(|_| {
+                ClawzError::Tool(format!("docker exec timed out after {timeout_secs}s"))
+            })??;
 
         let inspect = self
             .docker

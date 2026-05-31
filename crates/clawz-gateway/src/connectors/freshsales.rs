@@ -135,10 +135,10 @@ impl SaaSConnector for FreshsalesConnector {
 
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let (path, key) = match obj {
-            "contacts" => (format!("/contacts/{}", id), "contact"),
-            "deals" => (format!("/deals/{}", id), "deal"),
-            "leads" => (format!("/leads/{}", id), "lead"),
-            "accounts" => (format!("/sales_accounts/{}", id), "sales_account"),
+            "contacts" => (format!("/contacts/{id}"), "contact"),
+            "deals" => (format!("/deals/{id}"), "deal"),
+            "leads" => (format!("/leads/{id}"), "lead"),
+            "accounts" => (format!("/sales_accounts/{id}"), "sales_account"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Freshsales object: {obj}"
@@ -160,10 +160,10 @@ impl SaaSConnector for FreshsalesConnector {
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let path = match obj {
-            "contacts" => format!("/contacts/{}", id),
-            "deals" => format!("/deals/{}", id),
-            "leads" => format!("/leads/{}", id),
-            "accounts" => format!("/sales_accounts/{}", id),
+            "contacts" => format!("/contacts/{id}"),
+            "deals" => format!("/deals/{id}"),
+            "leads" => format!("/leads/{id}"),
+            "accounts" => format!("/sales_accounts/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Freshsales object: {obj}"
@@ -191,13 +191,13 @@ impl SaaSConnector for FreshsalesConnector {
         let path = match action {
             "search" => {
                 let q = params["q"].as_str().unwrap_or("");
-                format!("/search?q={}", q)
+                format!("/search?q={q}")
             }
             "bulk_destroy" => format!(
                 "/{}/bulk_destroy",
                 params["type"].as_str().unwrap_or("contacts")
             ),
-            _ => format!("/{}", action),
+            _ => format!("/{action}"),
         };
         let resp = self
             .client

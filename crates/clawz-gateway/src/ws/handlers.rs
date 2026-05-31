@@ -91,8 +91,7 @@ async fn handle_agent_stream(mut socket: WebSocket) {
 
         // Build a canned response and stream it word by word.
         let response = format!(
-            "I received your message: \"{}\". Here is a streamed response from ClawZ.",
-            prompt
+            "I received your message: \"{prompt}\". Here is a streamed response from ClawZ."
         );
         let words: Vec<&str> = response.split_whitespace().collect();
         let total = words.len();

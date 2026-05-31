@@ -49,7 +49,7 @@ impl NorthflankAdapter {
 
     /// Build a Northflank API v1 URL for the given path.
     fn api_url(&self, path: &str) -> String {
-        format!("https://api.northflank.com/v1{}", path)
+        format!("https://api.northflank.com/v1{path}")
     }
 }
 

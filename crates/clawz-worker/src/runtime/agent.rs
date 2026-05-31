@@ -631,10 +631,10 @@ impl AgentRuntime {
                 && turns % self.deps.self_improvement_interval_turns == 0
             {
                 if let Some(ref loop_) = self.deps.self_improvement_loop {
-                    log::debug!("[agent_runtime] self-improvement at turn {}", turns);
+                    log::debug!("[agent_runtime] self-improvement at turn {turns}");
                     if let Ok(changes) = loop_.run_once().await {
                         for change in &changes {
-                            log::info!("[agent_runtime] applied: {:?}", change);
+                            log::info!("[agent_runtime] applied: {change:?}");
                         }
                     }
                 }
@@ -665,14 +665,12 @@ impl AgentRuntime {
                     break;
                 }
                 StepOutcome::Halt => {
-                    log::info!("[agent_runtime] pipeline halted after {} turns", turns);
+                    log::info!("[agent_runtime] pipeline halted after {turns} turns");
                     break;
                 }
                 StepOutcome::Delegate { target_agent } => {
                     log::info!(
-                        "[agent_runtime] delegating to '{}' after {} turns",
-                        target_agent,
-                        turns
+                        "[agent_runtime] delegating to '{target_agent}' after {turns} turns"
                     );
                     break;
                 }
@@ -698,8 +696,7 @@ impl AgentRuntime {
                         if identity.drift_score() > 0.75 {
                             let checkpoint_id = identity.compute_identity_version_hash();
                             let checkpoint_path = std::path::PathBuf::from(format!(
-                                "/tmp/drift_checkpoint_{}.json",
-                                agent_id
+                                "/tmp/drift_checkpoint_{agent_id}.json"
                             ));
                             let checkpoint = serde_json::json!({
                                 "agent_id": agent_id,
@@ -865,11 +862,10 @@ mod tests {
         traits::{GovernanceEngine, MemoryBackend, MemoryEntry},
         types::{
             agent::AgentConfig,
-            governance::{ApprovalRequest, GovernanceResult, TrustTier},
+            governance::{ApprovalRequest, GovernanceResult},
             message::Message,
         },
     };
-    use std::sync::Mutex;
 
     // Stub memory backend — satisfies all trait methods with no-ops.
     struct StubMemory;

@@ -73,8 +73,8 @@ impl GitHubConnector {
             client_id,
             client_secret,
             redirect_uri,
-            format!("{}/login/oauth/authorize", base),
-            format!("{}/login/oauth/access_token", base),
+            format!("{base}/login/oauth/authorize"),
+            format!("{base}/login/oauth/access_token"),
             vec!["repo".into(), "user:email".into(), "read:org".into()],
         );
         Self {
@@ -156,7 +156,7 @@ impl SaaSConnector for GitHubConnector {
             "orgs" => "/user/orgs".to_string(),
             "teams" => "/user/teams".to_string(),
             "workflows" => "/repos/{owner}/{repo}/actions/workflows".to_string(),
-            _ => format!("/user/{}", obj),
+            _ => format!("/user/{obj}"),
         };
         let resp = client
             .get(&path)
@@ -188,7 +188,7 @@ impl SaaSConnector for GitHubConnector {
                 data.get("owner").and_then(|v| v.as_str()).unwrap_or(""),
                 data.get("repo").and_then(|v| v.as_str()).unwrap_or("")
             ),
-            _ => format!("/user/{}", obj),
+            _ => format!("/user/{obj}"),
         };
         let resp = client
             .post(&path)
@@ -214,7 +214,7 @@ impl SaaSConnector for GitHubConnector {
                 data.get("repo").and_then(|v| v.as_str()).unwrap_or(""),
                 id
             ),
-            _ => format!("/user/{}/{}", obj, id),
+            _ => format!("/user/{obj}/{id}"),
         };
         let resp = client
             .patch(&path)
@@ -228,9 +228,9 @@ impl SaaSConnector for GitHubConnector {
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let client = self.client()?;
         let path = match obj {
-            "repositories" => format!("/repos/{}", id),
+            "repositories" => format!("/repos/{id}"),
             "issues" => format!("/repos/{}/{}/issues/{}", "owner", "repo", id),
-            _ => format!("/user/{}/{}", obj, id),
+            _ => format!("/user/{obj}/{id}"),
         };
         let resp = client
             .delete(&path)
@@ -275,7 +275,7 @@ impl SaaSConnector for GitHubConnector {
                     .and_then(|v| v.as_str())
                     .unwrap_or("code")
             ),
-            _ => format!("/{}", action),
+            _ => format!("/{action}"),
         };
         let resp = client
             .post(&path)

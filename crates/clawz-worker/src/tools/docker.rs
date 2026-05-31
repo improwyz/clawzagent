@@ -415,7 +415,7 @@ impl DockerToolManager {
 
     /// Pull an image if not already present locally.
     pub async fn pull_image(&self, image: &str) -> Result<(), ClawzError> {
-        log::info!("Pulling Docker image: {}", image);
+        log::info!("Pulling Docker image: {image}");
 
         let mut stream = self.docker.create_image(
             Some(CreateImageOptions {
@@ -430,13 +430,12 @@ impl DockerToolManager {
             match output {
                 Ok(info) => {
                     if let Some(status) = &info.status {
-                        log::debug!("Docker pull {}: {}", image, status);
+                        log::debug!("Docker pull {image}: {status}");
                     }
                 }
                 Err(e) => {
                     return Err(ClawzError::Tool(format!(
-                        "failed to pull image '{}': {e}",
-                        image
+                        "failed to pull image '{image}': {e}"
                     )));
                 }
             }
@@ -480,7 +479,7 @@ impl DockerToolManager {
         let env: Vec<String> = config
             .env_vars
             .iter()
-            .map(|(k, v)| format!("{}={}", k, v))
+            .map(|(k, v)| format!("{k}={v}"))
             .collect();
 
         // Build volume bindings
@@ -586,7 +585,7 @@ impl DockerToolManager {
             .await
             .map_err(|e| ClawzError::Tool(format!("failed to start container: {e}")))?;
 
-        log::info!("Deployed container {} (image: {})", container_id, image);
+        log::info!("Deployed container {container_id} (image: {image})");
         Ok(container_id)
     }
 
@@ -668,7 +667,7 @@ impl DockerToolManager {
                     protocol: p
                         .typ
                         .as_ref()
-                        .map(|t| format!("{:?}", t).to_lowercase())
+                        .map(|t| format!("{t:?}").to_lowercase())
                         .unwrap_or_else(|| "tcp".into()),
                 })
                 .collect();
@@ -816,7 +815,7 @@ impl DockerToolManager {
             image: entry.image.clone(),
             port_mappings,
             env_vars: entry.default_env,
-            name: name_override.or_else(|| Some(format!("clawz-{}", tool_name))),
+            name: name_override.or_else(|| Some(format!("clawz-{tool_name}"))),
             ..Default::default()
         };
 

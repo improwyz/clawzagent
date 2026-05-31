@@ -49,14 +49,13 @@ impl KnowledgeBaseTool {
         let sql = format!(
             r#"
             SELECT id::text, content, metadata::text,
-                   1 - (embedding <=> '{}'::vector) AS similarity
+                   1 - (embedding <=> '{embedding_str}'::vector) AS similarity
             FROM knowledge_entries
             WHERE (agent_id = $1 OR agent_id IS NULL)
               AND namespace = $2
-            ORDER BY embedding <=> '{}'::vector
+            ORDER BY embedding <=> '{embedding_str}'::vector
             LIMIT $3
-            "#,
-            embedding_str, embedding_str
+            "#
         );
 
         let rows = sqlx::query_as::<_, (String, String, Option<String>, f64)>(&sql)
@@ -116,11 +115,10 @@ impl KnowledgeBaseTool {
         let sql = format!(
             r#"
             INSERT INTO knowledge_entries (content, embedding, metadata, agent_id, namespace, created_at)
-            VALUES ($1, '{}'::vector, $2::jsonb, $3, $4, NOW())
+            VALUES ($1, '{embedding_str}'::vector, $2::jsonb, $3, $4, NOW())
             ON CONFLICT DO NOTHING
             RETURNING id::text
-            "#,
-            embedding_str
+            "#
         );
 
         let row: Option<(String,)> = sqlx::query_as::<_, (String,)>(&sql)
@@ -333,8 +331,7 @@ impl Tool for KnowledgeBaseTool {
 
             other => {
                 return Err(ClawzError::Validation(format!(
-                    "unknown operation: {}",
-                    other
+                    "unknown operation: {other}"
                 )));
             }
         };

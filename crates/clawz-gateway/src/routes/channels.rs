@@ -312,7 +312,7 @@ async fn approve_pairing(
     let channel_id = store
         .approve(&body.code, &body.peer_id)
         .await
-        .map_err(|e| GatewayError::Unprocessable(e))?;
+        .map_err(GatewayError::Unprocessable)?;
     Ok(Json(json!({
         "ok": true,
         "channel_id": channel_id,

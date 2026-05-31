@@ -131,7 +131,7 @@ impl SaaSConnector for GoogleWorkspaceConnector {
             "events" => ("www", "/calendar/v3/calendars/primary/events".to_string()),
             "spreadsheets" => ("sheets", "/sheets/v4/spreadsheets".to_string()),
             "users" => ("admin", "/admin/directory/v1/users".to_string()),
-            _ => ("www", format!("/{}?alt=json", obj)),
+            _ => ("www", format!("/{obj}?alt=json")),
         };
         let client = self.client(api)?;
         let limit = filters.limit.unwrap_or(100);
@@ -168,7 +168,7 @@ impl SaaSConnector for GoogleWorkspaceConnector {
             ),
             "events" => ("www", "/calendar/v3/calendars/primary/events".to_string()),
             "spreadsheets" => ("sheets", "/sheets/v4/spreadsheets".to_string()),
-            _ => ("www", format!("/{}?alt=json", obj)),
+            _ => ("www", format!("/{obj}?alt=json")),
         };
         let client = self.client(api)?;
         let resp = client
@@ -182,14 +182,11 @@ impl SaaSConnector for GoogleWorkspaceConnector {
 
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let (api, path) = match obj {
-            "messages" => ("gmail", format!("/gmail/v1/users/me/messages/{}", id)),
-            "files" => ("www", format!("/drive/v3/files/{}", id)),
-            "events" => (
-                "www",
-                format!("/calendar/v3/calendars/primary/events/{}", id),
-            ),
-            "spreadsheets" => ("sheets", format!("/sheets/v4/spreadsheets/{}", id)),
-            _ => ("www", format!("/me/{}/{}", obj, id)),
+            "messages" => ("gmail", format!("/gmail/v1/users/me/messages/{id}")),
+            "files" => ("www", format!("/drive/v3/files/{id}")),
+            "events" => ("www", format!("/calendar/v3/calendars/primary/events/{id}")),
+            "spreadsheets" => ("sheets", format!("/sheets/v4/spreadsheets/{id}")),
+            _ => ("www", format!("/me/{obj}/{id}")),
         };
         let client = self.client(api)?;
         let resp = client
@@ -203,14 +200,11 @@ impl SaaSConnector for GoogleWorkspaceConnector {
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let (api, path) = match obj {
-            "messages" => ("gmail", format!("/gmail/v1/users/me/messages/{}", id)),
-            "files" => ("www", format!("/drive/v3/files/{}", id)),
-            "events" => (
-                "www",
-                format!("/calendar/v3/calendars/primary/events/{}", id),
-            ),
-            "spreadsheets" => ("sheets", format!("/sheets/v4/spreadsheets/{}", id)),
-            _ => ("www", format!("/me/{}/{}", obj, id)),
+            "messages" => ("gmail", format!("/gmail/v1/users/me/messages/{id}")),
+            "files" => ("www", format!("/drive/v3/files/{id}")),
+            "events" => ("www", format!("/calendar/v3/calendars/primary/events/{id}")),
+            "spreadsheets" => ("sheets", format!("/sheets/v4/spreadsheets/{id}")),
+            _ => ("www", format!("/me/{obj}/{id}")),
         };
         let client = self.client(api)?;
         let resp = client
@@ -246,7 +240,7 @@ impl SaaSConnector for GoogleWorkspaceConnector {
                 "www",
                 "/calendar/v3/calendars/primary/events/watch".to_string(),
             ),
-            _ => ("www", format!("/me/{}?alt=json", action)),
+            _ => ("www", format!("/me/{action}?alt=json")),
         };
         let client = self.client(api)?;
         let resp = client

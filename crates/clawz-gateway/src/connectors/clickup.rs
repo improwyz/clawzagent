@@ -104,10 +104,10 @@ impl SaaSConnector for ClickUpConnector {
         // We repurpose `filters.search` as the parent ID for navigation.
         let parent_id = filters.search.as_deref().unwrap_or("");
         let path = match obj {
-            "tasks" => format!("/list/{}/task", parent_id),
-            "spaces" => format!("/team/{}/space", parent_id),
-            "folders" => format!("/space/{}/folder", parent_id),
-            "lists" => format!("/folder/{}/list", parent_id),
+            "tasks" => format!("/list/{parent_id}/task"),
+            "spaces" => format!("/team/{parent_id}/space"),
+            "folders" => format!("/space/{parent_id}/folder"),
+            "lists" => format!("/folder/{parent_id}/list"),
             "teams" => "/team".to_string(),
             _ => {
                 return Err(ClawzError::Provider(format!(
@@ -128,9 +128,9 @@ impl SaaSConnector for ClickUpConnector {
         // `parent_id` inside the payload determines the hierarchy placement.
         let parent_id = data["parent_id"].as_str().unwrap_or("");
         let path = match obj {
-            "tasks" => format!("/list/{}/task", parent_id),
-            "folders" => format!("/space/{}/folder", parent_id),
-            "lists" => format!("/folder/{}/list", parent_id),
+            "tasks" => format!("/list/{parent_id}/task"),
+            "folders" => format!("/space/{parent_id}/folder"),
+            "lists" => format!("/folder/{parent_id}/list"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown ClickUp object: {obj}"
@@ -148,9 +148,9 @@ impl SaaSConnector for ClickUpConnector {
 
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let path = match obj {
-            "tasks" => format!("/task/{}", id),
-            "folders" => format!("/folder/{}", id),
-            "lists" => format!("/list/{}", id),
+            "tasks" => format!("/task/{id}"),
+            "folders" => format!("/folder/{id}"),
+            "lists" => format!("/list/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown ClickUp object: {obj}"
@@ -168,9 +168,9 @@ impl SaaSConnector for ClickUpConnector {
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let path = match obj {
-            "tasks" => format!("/task/{}", id),
-            "folders" => format!("/folder/{}", id),
-            "lists" => format!("/list/{}", id),
+            "tasks" => format!("/task/{id}"),
+            "folders" => format!("/folder/{id}"),
+            "lists" => format!("/list/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown ClickUp object: {obj}"
@@ -197,12 +197,12 @@ impl SaaSConnector for ClickUpConnector {
             "add_tag_to_task" => {
                 let task_id = params["task_id"].as_str().unwrap_or("");
                 let tag_name = params["tag_name"].as_str().unwrap_or("");
-                format!("/task/{}/tag/{}", task_id, tag_name)
+                format!("/task/{task_id}/tag/{tag_name}")
             }
             "set_custom_field" => {
                 let task_id = params["task_id"].as_str().unwrap_or("");
                 let field_id = params["field_id"].as_str().unwrap_or("");
-                format!("/task/{}/field/{}", task_id, field_id)
+                format!("/task/{task_id}/field/{field_id}")
             }
             _ => {
                 return Err(ClawzError::Provider(format!(

@@ -337,7 +337,7 @@ async fn autonomous_endpoint_starts_multi_turn_session() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(format!("/api/v1/agents/{}/autonomous", agent_id))
+                .uri(format!("/api/v1/agents/{agent_id}/autonomous"))
                 .header("content-type", "application/json")
                 .body(Body::from(r#"{ "maxTurns": 10, "costBudgetUsd": 0.50 }"#))
                 .unwrap(),

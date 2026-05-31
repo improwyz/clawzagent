@@ -167,7 +167,7 @@ impl SaaSConnector for TwilioConnector {
                 let status = data["status"].as_str().unwrap_or("completed");
                 let params = [("Status", status)];
                 let resp = self
-                    .post(&format!("/Calls/{}.json", id))
+                    .post(&format!("/Calls/{id}.json"))
                     .form(&params)
                     .send()
                     .await
@@ -182,8 +182,8 @@ impl SaaSConnector for TwilioConnector {
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let path = match obj {
-            "messages" => format!("/Messages/{}.json", id),
-            "recordings" => format!("/Recordings/{}.json", id),
+            "messages" => format!("/Messages/{id}.json"),
+            "recordings" => format!("/Recordings/{id}.json"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Twilio object: {obj}"

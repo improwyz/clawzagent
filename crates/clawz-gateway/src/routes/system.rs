@@ -359,8 +359,7 @@ async fn register(
         let users = state.users.read().await;
         if users.iter().any(|u| u.email == email) {
             return Err(GatewayError::Unprocessable(format!(
-                "email '{}' is already registered",
-                email
+                "email '{email}' is already registered"
             )));
         }
     }

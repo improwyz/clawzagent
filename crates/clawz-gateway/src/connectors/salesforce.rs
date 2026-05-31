@@ -124,7 +124,7 @@ impl SaaSConnector for SalesforceConnector {
         let limit = filters.limit.unwrap_or(100);
         // Use FIELDS(STANDARD) so the query works for both standard and custom objects
         // without requiring an explicit field list.
-        let query = format!("SELECT FIELDS(STANDARD) FROM {} LIMIT {}", obj, limit);
+        let query = format!("SELECT FIELDS(STANDARD) FROM {obj} LIMIT {limit}");
         let resp = client
             .get("/services/data/v59.0/query")
             .query(&[("q", query)])
@@ -143,7 +143,7 @@ impl SaaSConnector for SalesforceConnector {
     async fn create_object(&self, obj: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let resp = client
-            .post(&format!("/services/data/v59.0/sobjects/{}/", obj))
+            .post(&format!("/services/data/v59.0/sobjects/{obj}/"))
             .json(&data)
             .send()
             .await
@@ -154,7 +154,7 @@ impl SaaSConnector for SalesforceConnector {
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let resp = client
-            .patch(&format!("/services/data/v59.0/sobjects/{}/{}", obj, id))
+            .patch(&format!("/services/data/v59.0/sobjects/{obj}/{id}"))
             .json(&data)
             .send()
             .await
@@ -165,7 +165,7 @@ impl SaaSConnector for SalesforceConnector {
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let client = self.client()?;
         let resp = client
-            .delete(&format!("/services/data/v59.0/sobjects/{}/{}", obj, id))
+            .delete(&format!("/services/data/v59.0/sobjects/{obj}/{id}"))
             .send()
             .await
             .map_err(|e| ClawzError::Provider(format!("Salesforce delete failed: {e}")))?;
@@ -185,7 +185,7 @@ impl SaaSConnector for SalesforceConnector {
             "query" => "/services/data/v59.0/query".to_string(),
             "search" => "/services/data/v59.0/search".to_string(),
             // Any other action is assumed to be a custom Apex REST class.
-            _ => format!("/services/apexrest/{}", action),
+            _ => format!("/services/apexrest/{action}"),
         };
         let resp = client
             .post(&path)

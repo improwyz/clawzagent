@@ -222,10 +222,7 @@ async fn generate_stable_diffusion(
         "steps": 30
     });
 
-    let url = format!(
-        "{}/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
-        base_url
-    );
+    let url = format!("{base_url}/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image");
     let response = client
         .post(&url)
         .bearer_auth(&api_key)

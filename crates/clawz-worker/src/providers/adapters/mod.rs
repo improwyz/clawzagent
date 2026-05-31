@@ -228,7 +228,7 @@ pub fn to_wire_message(msg: &Message) -> WireMessage {
                     ContentPart::ImageBase64 { media_type, data } => {
                         Some(WireContentPart::ImageUrl {
                             image_url: WireImageUrl {
-                                url: format!("data:{};base64,{}", media_type, data),
+                                url: format!("data:{media_type};base64,{data}"),
                                 detail: None,
                             },
                         })
@@ -284,8 +284,8 @@ pub async fn http_error(response: reqwest::Response) -> ClawzError {
             retry_after_secs: retry_secs,
         }
     } else if status.as_u16() == 401 || status.as_u16() == 403 {
-        ClawzError::Auth(format!("HTTP {}: {}", status, body))
+        ClawzError::Auth(format!("HTTP {status}: {body}"))
     } else {
-        ClawzError::Provider(format!("HTTP {}: {}", status, body))
+        ClawzError::Provider(format!("HTTP {status}: {body}"))
     }
 }

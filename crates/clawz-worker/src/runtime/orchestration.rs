@@ -238,8 +238,7 @@ impl Workflow {
             for dep in &step.dependencies {
                 if !self.steps.contains_key(dep.as_str()) {
                     return Err(ClawzError::Validation(format!(
-                        "step '{}' depends on unknown step '{}'",
-                        name, dep
+                        "step '{name}' depends on unknown step '{dep}'"
                     )));
                 }
                 // Each dependency increases the in-degree of the dependent step.
@@ -357,8 +356,7 @@ impl Workflow {
                     }
 
                     return Err(ClawzError::Internal(format!(
-                        "workflow step '{}' failed: {e}",
-                        step_name
+                        "workflow step '{step_name}' failed: {e}"
                     )));
                 }
             }

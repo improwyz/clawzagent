@@ -410,7 +410,7 @@ mod tests {
     async fn test_listen_accept() {
         let config = GrpcConfig::default();
         let transport = GrpcTransport::new(config);
-        let mut listener = transport.listen("127.0.0.1:0").await.unwrap();
+        let listener = transport.listen("127.0.0.1:0").await.unwrap();
         // Just verify we can create a listener without error.
         drop(listener);
     }

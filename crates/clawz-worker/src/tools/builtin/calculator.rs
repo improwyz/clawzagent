@@ -109,7 +109,7 @@ fn format_number(n: f64) -> String {
     if n == n.floor() && n.abs() < 1e15 {
         format!("{}", n as i64)
     } else {
-        format!("{}", n)
+        format!("{n}")
     }
 }
 
@@ -197,7 +197,7 @@ fn tokenize(input: &str) -> Result<Vec<Token>, CalcError> {
                 }
                 let n: f64 = num_str
                     .parse()
-                    .map_err(|_| CalcError::lex(format!("invalid number: {}", num_str)))?;
+                    .map_err(|_| CalcError::lex(format!("invalid number: {num_str}")))?;
                 tokens.push(Token::Number(n));
             }
             'a'..='z' | 'A'..='Z' | '_' => {
@@ -249,7 +249,7 @@ fn tokenize(input: &str) -> Result<Vec<Token>, CalcError> {
                 chars.next();
             }
             other => {
-                return Err(CalcError::lex(format!("unexpected character: '{}'", other)));
+                return Err(CalcError::lex(format!("unexpected character: '{other}'")));
             }
         }
     }
@@ -294,8 +294,7 @@ impl Parser {
                 Ok(())
             }
             other => Err(CalcError::Parse(format!(
-                "expected {:?}, got {:?}",
-                expected, other
+                "expected {expected:?}, got {other:?}"
             ))),
         }
     }
@@ -425,7 +424,7 @@ impl Parser {
                 }
             }
 
-            other => Err(CalcError::Parse(format!("unexpected token: {:?}", other))),
+            other => Err(CalcError::Parse(format!("unexpected token: {other:?}"))),
         }
     }
 }
@@ -437,7 +436,7 @@ fn resolve_constant(name: &str) -> Result<f64, CalcError> {
         "tau" | "TAU" => Ok(std::f64::consts::TAU),
         "inf" | "infinity" | "Infinity" => Ok(f64::INFINITY),
         "nan" | "NaN" => Ok(f64::NAN),
-        other => Err(CalcError::eval(format!("unknown constant: '{}'", other))),
+        other => Err(CalcError::eval(format!("unknown constant: '{other}'"))),
     }
 }
 
@@ -542,7 +541,7 @@ fn call_function(name: &str, args: &[f64]) -> Result<f64, CalcError> {
             }
         }
 
-        other => Err(CalcError::eval(format!("unknown function: '{}'", other))),
+        other => Err(CalcError::eval(format!("unknown function: '{other}'"))),
     }
 }
 

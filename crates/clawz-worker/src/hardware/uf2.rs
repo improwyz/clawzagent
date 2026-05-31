@@ -388,8 +388,7 @@ fn parse_uf2_blocks(data: &[u8]) -> Result<Vec<Uf2Block>> {
         let expected = first.num_blocks;
         if expected as usize != block_count {
             return Err(ClawzError::Hardware(format!(
-                "UF2 header says {} blocks but file has {} blocks",
-                expected, block_count
+                "UF2 header says {expected} blocks but file has {block_count} blocks"
             )));
         }
         for (idx, block) in blocks.iter().enumerate() {

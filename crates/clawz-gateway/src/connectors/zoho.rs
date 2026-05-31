@@ -57,8 +57,8 @@ impl ZohoConnector {
             client_id,
             client_secret,
             redirect_uri,
-            format!("{}/oauth/v2/auth", auth_domain),
-            format!("{}/oauth/v2/token", auth_domain),
+            format!("{auth_domain}/oauth/v2/auth"),
+            format!("{auth_domain}/oauth/v2/token"),
             vec!["ZohoCRM.modules.ALL".into(), "ZohoCRM.settings.ALL".into()],
         );
         Self {
@@ -126,7 +126,7 @@ impl SaaSConnector for ZohoConnector {
         // Zoho CRM caps per_page at 200.
         let per_page = filters.limit.unwrap_or(200).min(200);
         let resp = client
-            .get(&format!("/{}", module))
+            .get(&format!("/{module}"))
             .query(&[("per_page", per_page.to_string())])
             .send()
             .await
@@ -147,7 +147,7 @@ impl SaaSConnector for ZohoConnector {
         // Zoho CRM expects a wrapper `{ "data": [ { ... } ] }`.
         let body = serde_json::json!({ "data": [data] });
         let resp = client
-            .post(&format!("/{}", module))
+            .post(&format!("/{module}"))
             .json(&body)
             .send()
             .await
@@ -167,7 +167,7 @@ impl SaaSConnector for ZohoConnector {
         };
         let body = serde_json::json!({ "data": [data] });
         let resp = client
-            .put(&format!("/{}/{}", module, id))
+            .put(&format!("/{module}/{id}"))
             .json(&body)
             .send()
             .await
@@ -186,7 +186,7 @@ impl SaaSConnector for ZohoConnector {
             _ => obj,
         };
         let resp = client
-            .delete(&format!("/{}/{}", module, id))
+            .delete(&format!("/{module}/{id}"))
             .send()
             .await
             .map_err(|e| ClawzError::Provider(format!("Zoho delete failed: {e}")))?;
@@ -206,11 +206,11 @@ impl SaaSConnector for ZohoConnector {
             "search" => {
                 let module = params["module"].as_str().unwrap_or("Contacts");
                 let criteria = params["criteria"].as_str().unwrap_or("");
-                format!("/{}/search?criteria={}", module, criteria)
+                format!("/{module}/search?criteria={criteria}")
             }
             "convert_lead" => {
                 let id = params["id"].as_str().unwrap_or("");
-                format!("/Leads/{}/actions/convert", id)
+                format!("/Leads/{id}/actions/convert")
             }
             _ => format!(
                 "/{}/?action={}",

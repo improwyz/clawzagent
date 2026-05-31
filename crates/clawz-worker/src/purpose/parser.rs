@@ -68,7 +68,7 @@ impl GoalParser {
         for (name, value) in &metrics {
             constraints.push(Constraint::new(
                 ConstraintKind::Quality,
-                format!("{} constraint", name),
+                format!("{name} constraint"),
                 serde_json::json!(value),
             ));
         }
@@ -151,7 +151,7 @@ mod tests {
                 assert_eq!(goal.goal_type, GoalType::Optimize);
                 assert!(!goal.success_criteria.is_empty());
             }
-            other => panic!("expected Parsed, got {:?}", other),
+            other => panic!("expected Parsed, got {other:?}"),
         }
     }
 
@@ -170,7 +170,7 @@ mod tests {
             ParseOutcome::Parsed(goal) => {
                 assert_eq!(goal.milestones.len(), 1);
             }
-            other => panic!("expected Parsed, got {:?}", other),
+            other => panic!("expected Parsed, got {other:?}"),
         }
     }
 }

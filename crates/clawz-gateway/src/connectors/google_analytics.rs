@@ -141,8 +141,7 @@ impl SaaSConnector for GoogleAnalyticsConnector {
                 });
                 let resp = reqwest::Client::new()
                     .post(format!(
-                        "https://analyticsdata.googleapis.com/v1beta/{}:runReport",
-                        property
+                        "https://analyticsdata.googleapis.com/v1beta/{property}:runReport"
                     ))
                     .bearer_auth(&token)
                     .json(&body)
@@ -190,8 +189,7 @@ impl SaaSConnector for GoogleAnalyticsConnector {
             "run_report" => {
                 let resp = reqwest::Client::new()
                     .post(format!(
-                        "https://analyticsdata.googleapis.com/v1beta/{}:runReport",
-                        property
+                        "https://analyticsdata.googleapis.com/v1beta/{property}:runReport"
                     ))
                     .bearer_auth(&token)
                     .json(&params)
@@ -203,8 +201,7 @@ impl SaaSConnector for GoogleAnalyticsConnector {
             "run_realtime_report" => {
                 let resp = reqwest::Client::new()
                     .post(format!(
-                        "https://analyticsdata.googleapis.com/v1beta/{}:runRealtimeReport",
-                        property
+                        "https://analyticsdata.googleapis.com/v1beta/{property}:runRealtimeReport"
                     ))
                     .bearer_auth(&token)
                     .json(&params)

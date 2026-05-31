@@ -152,10 +152,7 @@ impl PipelineStep for ExecuteToolsStep {
             .collect();
 
         if !needs_approval.is_empty() {
-            log::info!(
-                "[execute_tools] tools requiring approval: {:?}",
-                needs_approval
-            );
+            log::info!("[execute_tools] tools requiring approval: {needs_approval:?}");
             ctx.insert_meta(META_TOOL_APPROVAL_PENDING, serde_json::Value::Bool(true));
             ctx.insert_meta(
                 META_TOOLS_REQUIRING_APPROVAL,

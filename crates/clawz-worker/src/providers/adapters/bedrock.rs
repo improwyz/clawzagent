@@ -233,8 +233,8 @@ impl ProviderAdapter for BedrockAdapter {
             .or_else(|| std::env::var("AWS_SESSION_TOKEN").ok());
 
         let model_id = url_encode_model(&request.model);
-        let path = format!("/model/{}/converse", model_id);
-        let url = format!("https://bedrock-runtime.{}.amazonaws.com{}", region, path);
+        let path = format!("/model/{model_id}/converse");
+        let url = format!("https://bedrock-runtime.{region}.amazonaws.com{path}");
 
         let body = build_request(request)?;
         let body_bytes =
@@ -303,8 +303,8 @@ impl ProviderAdapter for BedrockAdapter {
             .or_else(|| std::env::var("AWS_SESSION_TOKEN").ok());
 
         let model_id = url_encode_model(&request.model);
-        let path = format!("/model/{}/converse-stream", model_id);
-        let url = format!("https://bedrock-runtime.{}.amazonaws.com{}", region, path);
+        let path = format!("/model/{model_id}/converse-stream");
+        let url = format!("https://bedrock-runtime.{region}.amazonaws.com{path}");
 
         let body = build_request(request)?;
         let body_bytes =
@@ -695,28 +695,22 @@ fn sign_request(
     let body_hash = hex::encode(Sha256::digest(body));
 
     // Build canonical headers
-    let mut canonical_headers = format!(
-        "content-type:application/json\nhost:{}\nx-amz-date:{}\n",
-        host, date_time
-    );
+    let mut canonical_headers =
+        format!("content-type:application/json\nhost:{host}\nx-amz-date:{date_time}\n");
     let mut signed_headers_list = "content-type;host;x-amz-date".to_string();
 
     if let Some(token) = session_token {
-        canonical_headers.push_str(&format!("x-amz-security-token:{}\n", token));
+        canonical_headers.push_str(&format!("x-amz-security-token:{token}\n"));
         signed_headers_list.push_str(";x-amz-security-token");
     }
 
-    let canonical_request = format!(
-        "{}\n{}\n\n{}\n{}\n{}",
-        method, path, canonical_headers, signed_headers_list, body_hash
-    );
+    let canonical_request =
+        format!("{method}\n{path}\n\n{canonical_headers}\n{signed_headers_list}\n{body_hash}");
 
-    let credential_scope = format!("{}/{}/{}/aws4_request", date, region, service);
+    let credential_scope = format!("{date}/{region}/{service}/aws4_request");
     let canonical_hash = hex::encode(Sha256::digest(canonical_request.as_bytes()));
-    let string_to_sign = format!(
-        "AWS4-HMAC-SHA256\n{}\n{}\n{}",
-        date_time, credential_scope, canonical_hash
-    );
+    let string_to_sign =
+        format!("AWS4-HMAC-SHA256\n{date_time}\n{credential_scope}\n{canonical_hash}");
 
     // Derive signing key
     let signing_key = derive_signing_key(secret_key, &date, region, service)?;
@@ -726,8 +720,7 @@ fn sign_request(
     let signature = hex::encode(mac.finalize().into_bytes());
 
     let auth_header = format!(
-        "AWS4-HMAC-SHA256 Credential={}/{}, SignedHeaders={}, Signature={}",
-        access_key, credential_scope, signed_headers_list, signature
+        "AWS4-HMAC-SHA256 Credential={access_key}/{credential_scope}, SignedHeaders={signed_headers_list}, Signature={signature}"
     );
 
     let mut headers = vec![
@@ -749,7 +742,7 @@ fn derive_signing_key(
     region: &str,
     service: &str,
 ) -> Result<Vec<u8>, ClawzError> {
-    let date_key = hmac_sha256(format!("AWS4{}", secret_key).as_bytes(), date.as_bytes())?;
+    let date_key = hmac_sha256(format!("AWS4{secret_key}").as_bytes(), date.as_bytes())?;
     let region_key = hmac_sha256(&date_key, region.as_bytes())?;
     let service_key = hmac_sha256(&region_key, service.as_bytes())?;
     hmac_sha256(&service_key, b"aws4_request")

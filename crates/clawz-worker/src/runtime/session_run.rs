@@ -25,19 +25,19 @@ pub async fn execute_agent_turn(
     match session_commands::parse_command(&req.message) {
         SessionCommand::New => {
             let new_id = Uuid::new_v4().to_string();
-            return Ok(command_response(
+            Ok(command_response(
                 agent_id,
                 new_id,
                 "Started a new session. Use the returned conversation_id on your next message.",
-            ));
+            ))
         }
         SessionCommand::Reset => {
             service.session_store().reset(&conversation_id).await?;
-            return Ok(command_response(
+            Ok(command_response(
                 agent_id,
                 conversation_id,
                 "Session transcript cleared.",
-            ));
+            ))
         }
         SessionCommand::Compact => {
             let removed = service
@@ -45,25 +45,25 @@ pub async fn execute_agent_turn(
                 .compact(&conversation_id, session_commands::DEFAULT_COMPACT_KEEP)
                 .await?;
             let usage = service.session_store().usage(&conversation_id).await?;
-            return Ok(command_response(
+            Ok(command_response(
                 agent_id,
                 conversation_id,
                 format!(
                     "Compacted session: removed {removed} message(s); {} message(s) remain (~{} tokens).",
                     usage.message_count, usage.estimated_tokens
                 ),
-            ));
+            ))
         }
         SessionCommand::Usage => {
             let usage = service.session_store().usage(&conversation_id).await?;
-            return Ok(command_response(
+            Ok(command_response(
                 agent_id,
                 conversation_id,
                 format!(
                     "Session usage: {} message(s), ~{} estimated tokens.",
                     usage.message_count, usage.estimated_tokens
                 ),
-            ));
+            ))
         }
         SessionCommand::Chat(user_text) => {
             if user_text.is_empty() {

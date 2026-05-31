@@ -241,8 +241,7 @@ impl Tool for WebFetchTool {
 
         if bytes.len() > MAX_RESPONSE_BYTES {
             return Err(ClawzError::Tool(format!(
-                "response body exceeds {} byte limit",
-                MAX_RESPONSE_BYTES
+                "response body exceeds {MAX_RESPONSE_BYTES} byte limit"
             )));
         }
 

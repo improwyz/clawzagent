@@ -37,10 +37,7 @@ impl TofuRunner {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(ClawzError::Internal(format!(
-                "tofu init failed: {}",
-                stderr
-            )));
+            return Err(ClawzError::Internal(format!("tofu init failed: {stderr}")));
         }
 
         Ok(())
@@ -61,10 +58,7 @@ impl TofuRunner {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(ClawzError::Internal(format!(
-                "tofu plan failed: {}",
-                stderr
-            )));
+            return Err(ClawzError::Internal(format!("tofu plan failed: {stderr}")));
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).to_string())
@@ -92,10 +86,7 @@ impl TofuRunner {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(ClawzError::Internal(format!(
-                "tofu apply failed: {}",
-                stderr
-            )));
+            return Err(ClawzError::Internal(format!("tofu apply failed: {stderr}")));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -131,8 +122,7 @@ impl TofuRunner {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ClawzError::Internal(format!(
-                "tofu destroy failed: {}",
-                stderr
+                "tofu destroy failed: {stderr}"
             )));
         }
 
@@ -169,8 +159,7 @@ impl TofuRunner {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(ClawzError::Internal(format!(
-                "tofu output failed: {}",
-                stderr
+                "tofu output failed: {stderr}"
             )));
         }
 
@@ -210,22 +199,21 @@ pub fn generate_docker_service_tf(image: &str, port: u16, replicas: u32) -> Stri
 provider "docker" {{}}
 
 resource "docker_image" "app" {{
-  name         = "{}"
+  name         = "{image}"
   keep_locally = true
 }}
 
 resource "docker_container" "app" {{
-  count = {}
+  count = {replicas}
   image = docker_image.app.image_id
   name  = "clawz-app-${{count.index}}"
 
   ports {{
-    internal = {}
-    external = {} + count.index
+    internal = {port}
+    external = {port} + count.index
   }}
 }}
-"#,
-        image, replicas, port, port
+"#
     )
 }
 

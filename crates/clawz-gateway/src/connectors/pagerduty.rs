@@ -105,12 +105,12 @@ impl SaaSConnector for PagerDutyConnector {
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
         let limit = filters.limit.unwrap_or(100).min(100);
         let path = match obj {
-            "incidents" => format!("/incidents?limit={}", limit),
-            "services" => format!("/services?limit={}", limit),
-            "escalation_policies" => format!("/escalation_policies?limit={}", limit),
-            "schedules" => format!("/schedules?limit={}", limit),
-            "users" => format!("/users?limit={}", limit),
-            "teams" => format!("/teams?limit={}", limit),
+            "incidents" => format!("/incidents?limit={limit}"),
+            "services" => format!("/services?limit={limit}"),
+            "escalation_policies" => format!("/escalation_policies?limit={limit}"),
+            "schedules" => format!("/schedules?limit={limit}"),
+            "users" => format!("/users?limit={limit}"),
+            "teams" => format!("/teams?limit={limit}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown PagerDuty object: {obj}"
@@ -151,8 +151,8 @@ impl SaaSConnector for PagerDutyConnector {
 
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let (path, key) = match obj {
-            "incidents" => (format!("/incidents/{}", id), "incident"),
-            "services" => (format!("/services/{}", id), "service"),
+            "incidents" => (format!("/incidents/{id}"), "incident"),
+            "services" => (format!("/services/{id}"), "service"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown PagerDuty object: {obj}"
@@ -172,8 +172,8 @@ impl SaaSConnector for PagerDutyConnector {
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let path = match obj {
-            "services" => format!("/services/{}", id),
-            "escalation_policies" => format!("/escalation_policies/{}", id),
+            "services" => format!("/services/{id}"),
+            "escalation_policies" => format!("/escalation_policies/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Cannot delete PagerDuty {obj}"
@@ -208,20 +208,18 @@ impl SaaSConnector for PagerDutyConnector {
                     "incident": { "type": "incident_reference", "status": status }
                 });
                 let resp = self
-                    .put(&format!("/incidents/{}", id))
+                    .put(&format!("/incidents/{id}"))
                     .json(&body)
                     .send()
                     .await
-                    .map_err(|e| {
-                        ClawzError::Provider(format!("PagerDuty {} failed: {e}", action))
-                    })?;
+                    .map_err(|e| ClawzError::Provider(format!("PagerDuty {action} failed: {e}")))?;
                 crate::connectors::common::parse_json(resp).await
             }
             "create_override" => {
                 let schedule_id = params["schedule_id"].as_str().unwrap_or("");
                 let body = serde_json::json!({ "override": params });
                 let resp = self
-                    .post(&format!("/schedules/{}/overrides", schedule_id))
+                    .post(&format!("/schedules/{schedule_id}/overrides"))
                     .json(&body)
                     .send()
                     .await

@@ -70,7 +70,7 @@ impl QuickBooksConnector {
             "quickbooks"
         };
         let realm = self.realm_id.as_deref().unwrap_or("");
-        format!("https://{}.api.intuit.com/v3/company/{}", env, realm)
+        format!("https://{env}.api.intuit.com/v3/company/{realm}")
     }
 
     /// Build an [`ApiClient`] targeting the realm-specific endpoint.
@@ -123,7 +123,7 @@ impl SaaSConnector for QuickBooksConnector {
                 )));
             }
         };
-        let query = format!("SELECT * FROM {} MAXRESULTS {}", entity, max_results);
+        let query = format!("SELECT * FROM {entity} MAXRESULTS {max_results}");
         let resp = client
             .get("/query")
             .query(&[("query", query), ("minorversion", "65".into())])
@@ -154,7 +154,7 @@ impl SaaSConnector for QuickBooksConnector {
             }
         };
         let resp = client
-            .post(&format!("/{}", entity))
+            .post(&format!("/{entity}"))
             .query(&[("minorversion", "65")])
             .header("Accept", "application/json")
             .json(&data)
@@ -179,7 +179,7 @@ impl SaaSConnector for QuickBooksConnector {
         // QuickBooks requires sparse=true for partial updates; the minorversion and
         // operation query params signal an update rather than a create.
         let resp = client
-            .post(&format!("/{}", entity))
+            .post(&format!("/{entity}"))
             .query(&[("minorversion", "65"), ("operation", "update")])
             .header("Accept", "application/json")
             .json(&data)
@@ -203,7 +203,7 @@ impl SaaSConnector for QuickBooksConnector {
         // QBO delete requires the Id and a SyncToken (0 is acceptable for deletes).
         let body = serde_json::json!({ "Id": id, "SyncToken": "0" });
         let resp = client
-            .post(&format!("/{}", entity))
+            .post(&format!("/{entity}"))
             .query(&[("minorversion", "65"), ("operation", "delete")])
             .header("Accept", "application/json")
             .json(&body)
@@ -227,7 +227,7 @@ impl SaaSConnector for QuickBooksConnector {
                 let id = params["id"].as_str().unwrap_or("");
                 let email = params["email"].as_str().unwrap_or("");
                 let resp = client
-                    .post(&format!("/invoice/{}/send", id))
+                    .post(&format!("/invoice/{id}/send"))
                     .query(&[("sendTo", email), ("minorversion", "65")])
                     .header("Accept", "application/json")
                     .send()

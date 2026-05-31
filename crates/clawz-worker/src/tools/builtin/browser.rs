@@ -105,7 +105,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
 
     // Fetch the list of targets to get a WebSocket debugger URL
     let client = reqwest::Client::new();
-    let targets_url = format!("{}/json/list", cdp_base);
+    let targets_url = format!("{cdp_base}/json/list");
     let targets_resp = client
         .get(&targets_url)
         .timeout(std::time::Duration::from_secs(5))
@@ -127,7 +127,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
     } else {
         // Create a new target
         let new_target: Value = client
-            .put(format!("{}/json/new", cdp_base))
+            .put(format!("{cdp_base}/json/new"))
             .timeout(std::time::Duration::from_secs(5))
             .send()
             .await
@@ -201,7 +201,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                 .map_err(|e| ClawzError::Tool(format!("CDP send error: {e}")))?;
             let resp = recv_cdp_result(&mut ws, 3).await?;
             let data = resp["result"]["data"].as_str().unwrap_or("").to_string();
-            format!("base64_png:{}", data)
+            format!("base64_png:{data}")
         }
 
         "click" => {
@@ -228,7 +228,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
             let coords = &find_resp["result"]["result"]["value"];
             let x = coords["x"]
                 .as_f64()
-                .ok_or_else(|| ClawzError::Tool(format!("selector '{}' not found", selector)))?;
+                .ok_or_else(|| ClawzError::Tool(format!("selector '{selector}' not found")))?;
             let y = coords["y"]
                 .as_f64()
                 .ok_or_else(|| ClawzError::Tool("element has no y coord".into()))?;
@@ -252,7 +252,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                 recv_cdp_result(&mut ws, id).await?;
             }
 
-            format!("clicked element '{}' at ({:.0}, {:.0})", selector, x, y)
+            format!("clicked element '{selector}' at ({x:.0}, {y:.0})")
         }
 
         "type_text" => {
@@ -347,7 +347,7 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                 .await
                 .map_err(|e| ClawzError::Tool(format!("CDP send: {e}")))?;
             recv_cdp_result(&mut ws, 40).await?;
-            format!("element '{}' appeared", selector)
+            format!("element '{selector}' appeared")
         }
 
         "get_links" => {
@@ -400,11 +400,11 @@ async fn execute_cdp_action(action: &str, args: &Value) -> Result<ToolResult, Cl
                     filled += 1;
                 }
             }
-            format!("filled {} form fields", filled)
+            format!("filled {filled} form fields")
         }
 
         other => {
-            return Err(ClawzError::Validation(format!("unknown action: {}", other)));
+            return Err(ClawzError::Validation(format!("unknown action: {other}")));
         }
     };
 
@@ -532,8 +532,7 @@ mod tests {
                     || msg.contains("not available")
                     || msg.contains("connect")
                     || msg.contains("tool"),
-                "unexpected error: {}",
-                msg
+                "unexpected error: {msg}"
             );
         }
     }

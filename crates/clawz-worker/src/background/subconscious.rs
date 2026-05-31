@@ -88,7 +88,7 @@ pub async fn run_subconscious_tick(
          Be concise (bullet points). If nothing needs attention, say so.\n\n{context}"
     );
 
-    let conversation_id = format!("subconscious-{}", agent_id);
+    let conversation_id = format!("subconscious-{agent_id}");
     let turn = crate::runtime::session_run::execute_agent_turn(
         service,
         &agent_id,

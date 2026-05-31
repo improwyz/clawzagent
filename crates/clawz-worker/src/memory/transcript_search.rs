@@ -120,7 +120,7 @@ impl TranscriptFtsIndex {
             return Ok(vec![]);
         }
         let db_path = self.db_path.clone();
-        let limit = limit.max(1).min(50) as i64;
+        let limit = limit.clamp(1, 50) as i64;
         task::spawn_blocking(move || {
             let conn = Connection::open(&db_path)
                 .map_err(|e| ClawzError::Database(format!("transcript fts open: {e}")))?;

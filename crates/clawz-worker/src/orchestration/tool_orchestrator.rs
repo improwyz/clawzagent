@@ -479,7 +479,6 @@ impl ToolOrchestrator for InMemoryToolOrchestrator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     fn make_spawn_config(owner_agent_id: &str) -> SpawnConfig {
         SpawnConfig {

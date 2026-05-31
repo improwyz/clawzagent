@@ -149,7 +149,7 @@ impl AgentTreeSpawner {
                     handles.push(handle);
                 }
                 Err(e) => {
-                    log::error!("failed to spawn child: {}", e);
+                    log::error!("failed to spawn child: {e}");
                 }
             }
         }

@@ -309,7 +309,7 @@ mod tests {
         }
         // After drop, the deregister runs asynchronously. Give it a tick.
         tokio::time::sleep(Duration::from_millis(50)).await;
-        let entry = lookup(&format!("inproc://drop-test-peer")).await;
+        let entry = lookup(&"inproc://drop-test-peer".to_string()).await;
         assert!(entry.is_none());
     }
 }

@@ -215,7 +215,7 @@ impl SaaSConnector for BoxConnector {
             "shared_link" => {
                 let item_type = data["item_type"].as_str().unwrap_or("file");
                 let item_id = data["item_id"].as_str().unwrap_or("");
-                let path = format!("{}s/{}", item_type, item_id);
+                let path = format!("{item_type}s/{item_id}");
                 let body = serde_json::json!({
                     "shared_link": {
                         "access": data["access"].as_str().unwrap_or("open")

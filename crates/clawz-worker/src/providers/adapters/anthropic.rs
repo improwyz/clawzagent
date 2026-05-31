@@ -365,7 +365,7 @@ fn convert_message(msg: &Message) -> Result<AnthropicMessage, ClawzError> {
                     ContentPart::ImageUrl { url, .. } => {
                         // Anthropic doesn't support URL images directly; skip or use text
                         Some(AnthropicBlock::Text {
-                            text: format!("[image: {}]", url),
+                            text: format!("[image: {url}]"),
                         })
                     }
                     ContentPart::AudioBase64 { .. } => None,
