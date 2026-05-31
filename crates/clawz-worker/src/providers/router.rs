@@ -746,6 +746,32 @@ mod tests {
     }
 
     #[test]
+    fn test_circuit_breaker_half_open_after_timeout_then_closes() {
+        // 0s timeout means the open circuit immediately transitions to
+        // HalfOpen on the next check (pins open -> half-open -> closed).
+        let mut cb = CircuitBreaker::new(1, 0);
+        cb.record_failure();
+        assert!(matches!(cb.state, CircuitState::Open { .. }));
+        // Probe allowed: Open + elapsed >= timeout transitions to HalfOpen.
+        assert!(!cb.is_open());
+        assert_eq!(cb.state, CircuitState::HalfOpen);
+        // A successful probe closes the breaker.
+        cb.record_success();
+        assert_eq!(cb.state, CircuitState::Closed);
+    }
+
+    #[test]
+    fn test_circuit_breaker_half_open_failure_reopens() {
+        let mut cb = CircuitBreaker::new(1, 0);
+        cb.record_failure();
+        assert!(!cb.is_open()); // -> HalfOpen, failure_count reset to 0
+        assert_eq!(cb.state, CircuitState::HalfOpen);
+        // A failed probe re-opens the circuit (threshold 1).
+        cb.record_failure();
+        assert!(matches!(cb.state, CircuitState::Open { .. }));
+    }
+
+    #[test]
     fn test_get_adapter_known_providers() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         let router = rt.block_on(async {

@@ -322,3 +322,90 @@ pub fn cred_str<'a>(credentials: &'a serde_json::Value, key: &str) -> Result<&'a
 pub fn cred_string(credentials: &serde_json::Value, key: &str) -> Result<String> {
     cred_str(credentials, key).map(|s| s.to_string())
 }
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    // Characterization tests pinning `retry_with_backoff` attempt-count and
+    // RateLimited semantics BEFORE this helper is hoisted into clawz-core
+    // (Phase 4 dedup). Delays are sub-millisecond so the tests stay fast.
+
+    #[tokio::test]
+    async fn retry_returns_on_first_success() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let out: Result<u32> = retry_with_backoff(3, Duration::from_millis(1), move || {
+            let c = c.clone();
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Ok(7)
+            }
+        })
+        .await;
+        assert_eq!(out.unwrap(), 7);
+        assert_eq!(calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn retry_recovers_after_transient_failures() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let out: Result<u32> = retry_with_backoff(5, Duration::from_millis(1), move || {
+            let c = c.clone();
+            async move {
+                let n = c.fetch_add(1, Ordering::SeqCst) + 1;
+                if n < 3 {
+                    Err(ClawzError::Internal("transient".into()))
+                } else {
+                    Ok(n)
+                }
+            }
+        })
+        .await;
+        assert_eq!(out.unwrap(), 3);
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn retry_exhausts_and_returns_last_error() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let out: Result<u32> = retry_with_backoff(3, Duration::from_millis(1), move || {
+            let c = c.clone();
+            async move {
+                c.fetch_add(1, Ordering::SeqCst);
+                Err(ClawzError::Internal("always".into()))
+            }
+        })
+        .await;
+        assert!(out.is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn retry_honors_rate_limited_then_succeeds() {
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = calls.clone();
+        let out: Result<u32> = retry_with_backoff(3, Duration::from_millis(1), move || {
+            let c = c.clone();
+            async move {
+                let n = c.fetch_add(1, Ordering::SeqCst) + 1;
+                if n == 1 {
+                    // retry_after 0 keeps the test instant.
+                    Err(ClawzError::RateLimited {
+                        retry_after_secs: 0,
+                    })
+                } else {
+                    Ok(n)
+                }
+            }
+        })
+        .await;
+        assert_eq!(out.unwrap(), 2);
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+}
