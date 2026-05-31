@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 use clawz_services::dto::ChannelPollRequest;
 use tokio::sync::RwLock;
 
-use crate::routes::channel_inbound::{dispatch_parsed_messages, send_reply};
 use crate::AppState;
+use crate::routes::channel_inbound::{dispatch_parsed_messages, send_reply};
 
 struct PollState {
     last_tick: RwLock<HashMap<String, Instant>>,
@@ -77,10 +77,7 @@ async fn supervisor_tick(state: &AppState, poll_state: &PollState) -> anyhow::Re
         else {
             continue;
         };
-        if !poll_state
-            .due(&record.id, Duration::from_secs(secs))
-            .await
-        {
+        if !poll_state.due(&record.id, Duration::from_secs(secs)).await {
             continue;
         }
 

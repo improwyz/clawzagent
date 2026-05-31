@@ -26,9 +26,8 @@ impl TranscriptFtsIndex {
     pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
         let db_path = path.as_ref().to_path_buf();
         if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                ClawzError::Database(format!("create transcript fts dir: {e}"))
-            })?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| ClawzError::Database(format!("create transcript fts dir: {e}")))?;
         }
         let path_clone = db_path.clone();
         task::spawn_blocking(move || Self::migrate(&path_clone))
@@ -38,12 +37,14 @@ impl TranscriptFtsIndex {
     }
 
     pub fn default_db_path() -> PathBuf {
-        let home = std::env::var("CLAWZ_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-            std::env::var("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from("/tmp/clawz"))
-                .join(".clawz")
-        });
+        let home = std::env::var("CLAWZ_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::env::var("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| PathBuf::from("/tmp/clawz"))
+                    .join(".clawz")
+            });
         home.join("transcript_fts.db")
     }
 

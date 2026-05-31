@@ -5,7 +5,11 @@ use anyhow::{Context, Result};
 use crate::client::GatewayClient;
 use crate::config;
 
-pub async fn run(message: &str, agent_id: Option<&str>, conversation_id: Option<&str>) -> Result<()> {
+pub async fn run(
+    message: &str,
+    agent_id: Option<&str>,
+    conversation_id: Option<&str>,
+) -> Result<()> {
     let cfg = config::resolve();
     let client = GatewayClient::new(&cfg);
 

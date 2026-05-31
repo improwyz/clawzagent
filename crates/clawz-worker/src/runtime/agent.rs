@@ -175,7 +175,10 @@ impl RuntimeDependencies {
     }
 
     /// Attach a turn event bus for streaming tool/provider events.
-    pub fn with_turn_event_bus(mut self, bus: Arc<crate::runtime::turn_events::TurnEventBus>) -> Self {
+    pub fn with_turn_event_bus(
+        mut self,
+        bus: Arc<crate::runtime::turn_events::TurnEventBus>,
+    ) -> Self {
         self.turn_event_bus = Some(bus);
         self
     }

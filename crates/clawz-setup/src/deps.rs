@@ -51,11 +51,7 @@ impl DependencyInstaller {
         dry_run: bool,
     ) -> Result<Vec<HostExecOutput>> {
         let list = if components.is_empty() {
-            vec![
-                DepComponent::Curl,
-                DepComponent::Git,
-                DepComponent::Docker,
-            ]
+            vec![DepComponent::Curl, DepComponent::Git, DepComponent::Docker]
         } else {
             components.to_vec()
         };
@@ -79,11 +75,7 @@ impl DependencyInstaller {
     }
 
     pub fn install_all(&self, with_web: bool, dry_run: bool) -> Result<Vec<HostExecOutput>> {
-        let mut components = vec![
-            DepComponent::Curl,
-            DepComponent::Git,
-            DepComponent::Docker,
-        ];
+        let mut components = vec![DepComponent::Curl, DepComponent::Git, DepComponent::Docker];
         if with_web {
             components.push(DepComponent::Node);
         }

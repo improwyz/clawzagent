@@ -9,8 +9,8 @@ use clawz_services::dto::{MemoryIngestChunk, MemoryIngestRequest};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::connectors::{github::GitHubConnector, ConnectorRegistry, Filters};
 use crate::AppState;
+use crate::connectors::{ConnectorRegistry, Filters, github::GitHubConnector};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ConnectorSyncJob {
@@ -41,12 +41,14 @@ fn config_path() -> PathBuf {
     if let Ok(p) = std::env::var("CLAWZ_CONNECTOR_SYNC_FILE") {
         return PathBuf::from(p);
     }
-    let home = std::env::var("CLAWZ_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-        std::env::var("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(".clawz")
-    });
+    let home = std::env::var("CLAWZ_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::env::var("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(".clawz")
+        });
     home.join("connector-sync.json")
 }
 
@@ -100,8 +102,8 @@ fn save_state(state: &SyncState) -> anyhow::Result<()> {
 
 fn build_registry() -> ConnectorRegistry {
     let mut registry = ConnectorRegistry::new();
-    if let Ok(token) = std::env::var("GITHUB_TOKEN")
-        .or_else(|_| std::env::var("CLAWZ_CONNECTOR_GITHUB_TOKEN"))
+    if let Ok(token) =
+        std::env::var("GITHUB_TOKEN").or_else(|_| std::env::var("CLAWZ_CONNECTOR_GITHUB_TOKEN"))
     {
         if !token.is_empty() {
             registry.register(Arc::new(GitHubConnector::with_api_key(token)));
@@ -112,10 +114,7 @@ fn build_registry() -> ConnectorRegistry {
 
 fn object_to_text(obj: &Value) -> String {
     if let Some(title) = obj.get("title").and_then(|v| v.as_str()) {
-        let body = obj
-            .get("body")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let body = obj.get("body").and_then(|v| v.as_str()).unwrap_or("");
         return format!("{title}\n{body}");
     }
     obj.to_string()

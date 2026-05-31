@@ -68,10 +68,7 @@ impl AgentBootstrap {
             "who_am_i".into(),
             serde_json::Value::String(input.who_am_i.clone()),
         );
-        metadata.insert(
-            "onboarding".into(),
-            serde_json::Value::Bool(true),
-        );
+        metadata.insert("onboarding".into(), serde_json::Value::Bool(true));
 
         AgentConfigPayload {
             id: Uuid::new_v4(),

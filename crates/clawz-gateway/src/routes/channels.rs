@@ -39,7 +39,10 @@ pub fn routes() -> Router<AppState> {
         .route("/{id}/test", post(test_channel))
         .route("/pairing", post(create_pairing).get(list_pairing))
         .route("/pairing/approve", post(approve_pairing))
-        .route("/pairing/{channel_id}/{peer_id}", axum::routing::delete(revoke_pairing))
+        .route(
+            "/pairing/{channel_id}/{peer_id}",
+            axum::routing::delete(revoke_pairing),
+        )
 }
 
 fn caller_tenant(auth: Option<Extension<AuthContext>>) -> Result<String, GatewayError> {

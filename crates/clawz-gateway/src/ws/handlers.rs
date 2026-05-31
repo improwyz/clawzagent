@@ -481,11 +481,7 @@ async fn send_event(socket: &mut WebSocket, event: &WsEvent) -> bool {
 /// small delay between events so dashboards can wire up against a real
 /// `WsEvent` stream today. The actual event source will be wired in a
 /// follow-up commit once `run_multi_turn` exposes an event channel.
-async fn handle_autonomous_stream(
-    mut socket: WebSocket,
-    agent_id: String,
-    state: crate::AppState,
-) {
+async fn handle_autonomous_stream(mut socket: WebSocket, agent_id: String, state: crate::AppState) {
     // Greet the client so it knows the upgrade succeeded and which agent this
     // session is bound to. This is a plain JSON envelope, not a WsEvent, so
     // it never clashes with the typed event stream.

@@ -4,9 +4,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
-use crate::terminal::{
-    create_terminal_backend, default_workdir, LocalBackend, TerminalBackend,
-};
+use crate::terminal::{LocalBackend, TerminalBackend, create_terminal_backend, default_workdir};
 use crate::tools::tool_trait::{Tool, ToolContext};
 use clawz_core::error::ClawzError;
 use clawz_core::types::tool_risk::{ActionPrimitive, RiskLevel};
@@ -312,9 +310,7 @@ impl Tool for FileOpsTool {
 
             "create_directory" if !self.uses_local_fs() => {
                 let recursive = args["recursive"].as_bool().unwrap_or(true);
-                self.backend
-                    .create_directory(&safe_path, recursive)
-                    .await?;
+                self.backend.create_directory(&safe_path, recursive).await?;
                 serde_json::json!({
                     "path": safe_path.to_string_lossy(),
                     "created": true,

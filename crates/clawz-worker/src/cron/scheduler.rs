@@ -45,10 +45,7 @@ pub fn is_job_due(job: &CronJob, now: DateTime<Utc>, tick_secs: u64) -> bool {
         }
     }
 
-    schedule
-        .after(&window_start)
-        .take(3)
-        .any(|dt| dt <= now)
+    schedule.after(&window_start).take(3).any(|dt| dt <= now)
 }
 
 /// Start the background cron loop unless `CLAWZ_CRON_SCHEDULER=0`.

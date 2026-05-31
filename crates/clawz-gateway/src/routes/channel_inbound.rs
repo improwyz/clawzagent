@@ -16,7 +16,10 @@ pub fn agent_id_from_config(config: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-pub async fn load_channel(state: &AppState, channel_id: &str) -> Result<ChannelRecord, GatewayError> {
+pub async fn load_channel(
+    state: &AppState,
+    channel_id: &str,
+) -> Result<ChannelRecord, GatewayError> {
     let channels = state.channels.read().await;
     let record = channels
         .iter()
@@ -63,8 +66,8 @@ pub async fn dispatch_parsed_messages(
             continue;
         }
 
-        let conversation_id = SessionKey::from_channel(platform, &record.id, &msg.from, &agent_id)
-            .storage_id();
+        let conversation_id =
+            SessionKey::from_channel(platform, &record.id, &msg.from, &agent_id).storage_id();
 
         let turn = platform_exec
             .execution

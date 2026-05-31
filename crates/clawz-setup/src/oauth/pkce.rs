@@ -18,7 +18,10 @@ pub fn generate_pkce() -> PkcePair {
     let verifier = URL_SAFE_NO_PAD.encode(bytes);
     let digest = Sha256::digest(verifier.as_bytes());
     let challenge = URL_SAFE_NO_PAD.encode(digest);
-    PkcePair { verifier, challenge }
+    PkcePair {
+        verifier,
+        challenge,
+    }
 }
 
 #[cfg(test)]

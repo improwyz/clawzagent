@@ -119,5 +119,4 @@ mod tests {
         assert!(root.join("AGENTS.md").exists());
         assert!(root.join("skills/code-review/SKILL.md").exists());
     }
-
 }

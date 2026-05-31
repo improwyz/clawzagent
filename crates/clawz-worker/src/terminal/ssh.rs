@@ -9,7 +9,7 @@ use tokio::process::Command;
 
 use clawz_core::error::{ClawzError, Result};
 
-use super::{shell_escape, truncate_output, ExecResult, TerminalBackend, MAX_EXEC_OUTPUT_BYTES};
+use super::{ExecResult, MAX_EXEC_OUTPUT_BYTES, TerminalBackend, shell_escape, truncate_output};
 
 pub struct SshBackend {
     workdir: PathBuf,
@@ -27,8 +27,8 @@ impl SshBackend {
         let identity_file = std::env::var("CLAWZ_SSH_IDENTITY_FILE")
             .ok()
             .map(PathBuf::from);
-        let remote_workdir = std::env::var("CLAWZ_SSH_WORKDIR")
-            .unwrap_or_else(|_| "/tmp/clawz".into());
+        let remote_workdir =
+            std::env::var("CLAWZ_SSH_WORKDIR").unwrap_or_else(|_| "/tmp/clawz".into());
         Ok(Self {
             workdir,
             host,
@@ -104,19 +104,13 @@ impl TerminalBackend for SshBackend {
         timeout_secs: u64,
         _env: &HashMap<String, String>,
     ) -> Result<ExecResult> {
-        let remote_cmd = format!(
-            "cd {} && {}",
-            shell_escape(&self.remote_workdir),
-            command
-        );
+        let remote_cmd = format!("cd {} && {}", shell_escape(&self.remote_workdir), command);
         self.ssh_exec_raw(&remote_cmd, timeout_secs).await
     }
 
     async fn read_file(&self, path: &Path) -> Result<Vec<u8>> {
         let remote = shell_escape(&self.remote_path(path));
-        let out = self
-            .ssh_exec_raw(&format!("cat -- {remote}"), 60)
-            .await?;
+        let out = self.ssh_exec_raw(&format!("cat -- {remote}"), 60).await?;
         if out.success() {
             Ok(out.stdout.into_bytes())
         } else {
@@ -125,7 +119,7 @@ impl TerminalBackend for SshBackend {
     }
 
     async fn write_file(&self, path: &Path, content: &[u8]) -> Result<()> {
-        use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+        use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
         let remote = shell_escape(&self.remote_path(path));
         let encoded = B64.encode(content);
         let cmd = format!(

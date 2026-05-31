@@ -26,11 +26,11 @@ pub mod agents;
 // Dependency: crate::routes::channels (reads/writes `AppState.channels`)
 pub mod channels;
 
+pub mod background;
 /// Conversation routes — threaded chat history and message send / receive.
 // Dependency: crate::routes::conversations (reads/writes `AppState.conversations`, validates `AppState.agents`)
 pub mod conversations;
 pub mod cron;
-pub mod background;
 
 /// Multi-participant agent room routes.
 pub mod rooms;

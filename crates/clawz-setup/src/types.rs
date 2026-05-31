@@ -91,13 +91,32 @@ impl SetupStep {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SetupEvent {
-    StepEntered { step: SetupStep },
-    DeploymentChosen { choice: DeploymentChoice },
-    InstallStrategyChosen { strategy: InstallStrategy },
-    UserAnswer { step: SetupStep, field: String, value: String },
-    DoctorResult { passed: bool, summary: String },
-    ToolResult { tool: String, ok: bool, message: String },
-    Aborted { reason: Option<String> },
+    StepEntered {
+        step: SetupStep,
+    },
+    DeploymentChosen {
+        choice: DeploymentChoice,
+    },
+    InstallStrategyChosen {
+        strategy: InstallStrategy,
+    },
+    UserAnswer {
+        step: SetupStep,
+        field: String,
+        value: String,
+    },
+    DoctorResult {
+        passed: bool,
+        summary: String,
+    },
+    ToolResult {
+        tool: String,
+        ok: bool,
+        message: String,
+    },
+    Aborted {
+        reason: Option<String>,
+    },
     Completed,
 }
 

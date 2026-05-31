@@ -43,7 +43,11 @@ impl SetupTool for WriteEnvTool {
 
         Ok(ToolResult {
             ok: true,
-            message: format!("patched {} key(s) in {}", keys.len(), ctx.env_path.display()),
+            message: format!(
+                "patched {} key(s) in {}",
+                keys.len(),
+                ctx.env_path.display()
+            ),
             artifacts: vec![SetupArtifact::EnvPatch { keys }],
         })
     }
@@ -72,7 +76,10 @@ pub fn patch_env_file(path: &Path, pairs: &BTreeMap<String, String>) -> Result<(
     for (key, value) in pairs {
         let prefix = format!("{key}=");
         let new_line = format!("{key}={value}");
-        if let Some(line) = lines.iter_mut().find(|l| l.starts_with(&prefix) || *l == key) {
+        if let Some(line) = lines
+            .iter_mut()
+            .find(|l| l.starts_with(&prefix) || *l == key)
+        {
             *line = new_line;
         } else {
             lines.push(new_line);

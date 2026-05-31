@@ -87,9 +87,6 @@ mod tests {
     #[test]
     fn parse_deployment_from_args() {
         let args = serde_json::json!({ "deployment": "elastic" });
-        assert_eq!(
-            parse_deployment_arg(&args),
-            Some(DeploymentChoice::Elastic)
-        );
+        assert_eq!(parse_deployment_arg(&args), Some(DeploymentChoice::Elastic));
     }
 }

@@ -22,10 +22,7 @@ pub struct EnvRecommendations {
 }
 
 impl EnvRecommendations {
-    pub fn from_session(
-        deployment: DeploymentChoice,
-        port: Option<&str>,
-    ) -> Self {
+    pub fn from_session(deployment: DeploymentChoice, port: Option<&str>) -> Self {
         let mode = match deployment {
             DeploymentChoice::Standalone => "standalone",
             DeploymentChoice::Micro => "micro",
@@ -89,11 +86,7 @@ pub fn prompt_env_recommendations(
     };
     let anthropic_key = prompt(reader, "Anthropic API key (optional)", "");
     let openai_key = prompt(reader, "OpenAI API key (optional)", "");
-    let log_level = prompt(
-        reader,
-        "Log level (trace/debug/info/warn/error)",
-        "info",
-    );
+    let log_level = prompt(reader, "Log level (trace/debug/info/warn/error)", "info");
     let mode = prompt(
         reader,
         "Deployment mode (standalone/micro/elastic)",
@@ -213,10 +206,7 @@ mod tests {
 
     #[test]
     fn parse_deployment_values() {
-        assert_eq!(
-            parse_deployment("elastic"),
-            Some(DeploymentChoice::Elastic)
-        );
+        assert_eq!(parse_deployment("elastic"), Some(DeploymentChoice::Elastic));
         assert_eq!(parse_deployment("nope"), None);
     }
 

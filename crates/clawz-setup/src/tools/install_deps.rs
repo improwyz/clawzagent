@@ -19,7 +19,11 @@ impl SetupTool for InstallDepsTool {
     }
 
     fn execute(&self, ctx: &ToolContext, input: &ToolInput) -> crate::error::Result<ToolResult> {
-        let dry_run = input.args.get("dry_run").and_then(Value::as_bool).unwrap_or(false);
+        let dry_run = input
+            .args
+            .get("dry_run")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let with_web = input
             .args
             .get("with_web")

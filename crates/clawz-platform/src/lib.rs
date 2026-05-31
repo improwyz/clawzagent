@@ -62,7 +62,7 @@ impl PlatformTier {
 
 impl std::fmt::Display for PlatformTier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -74,7 +74,7 @@ impl std::str::FromStr for PlatformTier {
             "T1" => Ok(PlatformTier::T1),
             "T2" => Ok(PlatformTier::T2),
             "T3" => Ok(PlatformTier::T3),
-            _ => Err(format!("unknown platform tier: {}", s)),
+            _ => Err(format!("unknown platform tier: {s}")),
         }
     }
 }

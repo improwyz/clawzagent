@@ -40,8 +40,8 @@ impl ClawzUserConfig {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let data =
-            serde_json::to_string_pretty(self).map_err(|e| SetupError::serialization(e.to_string()))?;
+        let data = serde_json::to_string_pretty(self)
+            .map_err(|e| SetupError::serialization(e.to_string()))?;
         fs::write(path, data)?;
         Ok(())
     }

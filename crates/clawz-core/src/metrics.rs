@@ -147,24 +147,18 @@ impl Histogram {
         let lbl = if labels.is_empty() {
             String::new()
         } else {
-            format!("{{{}}}", labels)
+            format!("{{{labels}}}")
         };
 
         let mut running = 0u64;
         for (i, &bound) in self.buckets.iter().enumerate() {
             running += self.counts[i].load(Ordering::Relaxed);
-            out.push_str(&format!(
-                "{}_bucket{}{{le=\"{}\"}} {}\n",
-                name, lbl, bound, running
-            ));
+            out.push_str(&format!("{name}_bucket{lbl}{{le=\"{bound}\"}} {running}\n"));
         }
         running += self.counts[self.buckets.len()].load(Ordering::Relaxed);
-        out.push_str(&format!(
-            "{}_bucket{}{{le=\"+Inf\"}} {}\n",
-            name, lbl, running
-        ));
-        out.push_str(&format!("{}_count{} {}\n", name, lbl, self.count()));
-        out.push_str(&format!("{}_sum{} {}\n", name, lbl, self.sum()));
+        out.push_str(&format!("{name}_bucket{lbl}{{le=\"+Inf\"}} {running}\n"));
+        out.push_str(&format!("{name}_count{lbl} {}\n", self.count()));
+        out.push_str(&format!("{name}_sum{lbl} {}\n", self.sum()));
         out
     }
 }
@@ -270,17 +264,17 @@ impl MetricsRegistry {
         let mut out = String::new();
 
         for (name, counter) in self.inner.counters.read().iter() {
-            out.push_str(&format!("# TYPE {} counter\n", name));
-            out.push_str(&format!("{} {}\n", name, counter.get()));
+            out.push_str(&format!("# TYPE {name} counter\n"));
+            out.push_str(&format!("{name} {}\n", counter.get()));
         }
 
         for (name, gauge) in self.inner.gauges.read().iter() {
-            out.push_str(&format!("# TYPE {} gauge\n", name));
-            out.push_str(&format!("{} {}\n", name, gauge.get()));
+            out.push_str(&format!("# TYPE {name} gauge\n"));
+            out.push_str(&format!("{name} {}\n", gauge.get()));
         }
 
         for (name, hist) in self.inner.histograms.read().iter() {
-            out.push_str(&format!("# TYPE {} histogram\n", name));
+            out.push_str(&format!("# TYPE {name} histogram\n"));
             out.push_str(&hist.prometheus_lines(name, ""));
         }
 
@@ -339,7 +333,7 @@ pub fn record_tool_execution(
 /// Record a channel message (direction: "in" or "out").
 /// // Called by: worker::channel_plugin implementations on send/receive.
 pub fn record_channel_message(registry: &MetricsRegistry, channel: &str, direction: &str) {
-    let key = format!("clawz_channel_messages_{}", direction);
+    let key = format!("clawz_channel_messages_{direction}");
     registry.inc(&key);
     debug!(channel = channel, direction = direction, "channel message");
 }
@@ -352,7 +346,7 @@ pub fn record_governance_check(
     latency_ms: f64,
 ) {
     registry.inc("clawz_governance_checks_total");
-    let key = format!("clawz_governance_{}_total", result);
+    let key = format!("clawz_governance_{result}_total");
     registry.inc(&key);
     registry.observe("clawz_governance_latency_ms", latency_ms);
 
@@ -369,7 +363,7 @@ pub fn record_deploy_event(registry: &MetricsRegistry, provider: &str, event: &s
 /// Record an error by subsystem.
 /// // Called by: any subsystem that catches an error it wants to track.
 pub fn record_error(registry: &MetricsRegistry, subsystem: &str) {
-    let key = format!("clawz_{}_errors_total", subsystem);
+    let key = format!("clawz_{subsystem}_errors_total");
     registry.inc(&key);
 }
 

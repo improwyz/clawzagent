@@ -32,9 +32,8 @@ impl SqliteMemoryBackend {
     pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
         let db_path = path.as_ref().to_path_buf();
         if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                ClawzError::Database(format!("create memory db dir: {e}"))
-            })?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| ClawzError::Database(format!("create memory db dir: {e}")))?;
         }
         let path_clone = db_path.clone();
         task::spawn_blocking(move || Self::migrate(&path_clone))
@@ -48,13 +47,15 @@ impl SqliteMemoryBackend {
         if let Ok(p) = std::env::var("CLAWZ_MEMORY_DB") {
             return PathBuf::from(p);
         }
-        let home = std::env::var("CLAWZ_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-            std::env::var("HOME")
-                .or_else(|_| std::env::var("USERPROFILE"))
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(".clawz")
-        });
+        let home = std::env::var("CLAWZ_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::env::var("HOME")
+                    .or_else(|_| std::env::var("USERPROFILE"))
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(".clawz")
+            });
         home.join(DEFAULT_MEMORY_DB)
     }
 
@@ -309,8 +310,13 @@ impl MemoryBackend for SqliteMemoryBackend {
             let mut rows = stmt
                 .query(params![agent_id, key])
                 .map_err(|e| ClawzError::Database(e.to_string()))?;
-            if let Some(row) = rows.next().map_err(|e| ClawzError::Database(e.to_string()))? {
-                let raw: String = row.get(0).map_err(|e| ClawzError::Database(e.to_string()))?;
+            if let Some(row) = rows
+                .next()
+                .map_err(|e| ClawzError::Database(e.to_string()))?
+            {
+                let raw: String = row
+                    .get(0)
+                    .map_err(|e| ClawzError::Database(e.to_string()))?;
                 let val: Value = serde_json::from_str(&raw)
                     .map_err(|e| ClawzError::Serialization(e.to_string()))?;
                 Ok(Some(val))
@@ -555,17 +561,13 @@ pub async fn create_memory_backend() -> Arc<dyn MemoryBackend> {
     }
 
     let force_sqlite = std::env::var("CLAWZ_SQLITE_MEMORY").is_ok();
-    let standalone =
-        clawz_core::deployment::DeploymentMode::from_env()
-            == clawz_core::deployment::DeploymentMode::Standalone;
+    let standalone = clawz_core::deployment::DeploymentMode::from_env()
+        == clawz_core::deployment::DeploymentMode::Standalone;
 
     if force_sqlite || standalone {
         match SqliteMemoryBackend::open_default().await {
             Ok(backend) => {
-                tracing::info!(
-                    "memory backend: sqlite ({})",
-                    backend.db_path.display()
-                );
+                tracing::info!("memory backend: sqlite ({})", backend.db_path.display());
                 return Arc::new(backend);
             }
             Err(e) => {

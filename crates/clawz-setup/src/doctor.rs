@@ -203,10 +203,7 @@ fn gateway_health_check(gateway_url: &str) -> DoctorCheck {
 
     let api_url = format!("{base}/api/v1/system/health");
     if let Ok(v) = get_json(&client, &api_url) {
-        let status = v
-            .get("status")
-            .and_then(|s| s.as_str())
-            .unwrap_or("ok");
+        let status = v.get("status").and_then(|s| s.as_str()).unwrap_or("ok");
         return DoctorCheck {
             name: "gateway".into(),
             ok: true,
@@ -328,10 +325,7 @@ fn get_text(client: &reqwest::blocking::Client, url: &str) -> Result<String, Str
     Ok(body)
 }
 
-fn get_json(
-    client: &reqwest::blocking::Client,
-    url: &str,
-) -> Result<serde_json::Value, String> {
+fn get_json(client: &reqwest::blocking::Client, url: &str) -> Result<serde_json::Value, String> {
     let body = get_text(client, url)?;
     serde_json::from_str(&body).map_err(|e| format!("parse JSON: {e}"))
 }
@@ -424,12 +418,7 @@ mod tests {
             check_docker: true,
             ..DoctorConfig::default()
         });
-        assert!(
-            report
-                .checks
-                .iter()
-                .any(|c| c.name == "docker compose")
-        );
+        assert!(report.checks.iter().any(|c| c.name == "docker compose"));
     }
 
     #[test]

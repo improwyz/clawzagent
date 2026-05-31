@@ -122,11 +122,7 @@ pub async fn dashboard_overview(State(state): State<AppState>) -> Json<Value> {
         .filter(|a| matches!(a.status, AgentStatus::Running))
         .count();
     let online_nodes = nodes.iter().filter(|n| n.status == "online").count();
-    let pending_proposals = state
-        .approval_workflow
-        .list_pending()
-        .await
-        .len();
+    let pending_proposals = state.approval_workflow.list_pending().await.len();
 
     Json(json!({
         "health": {

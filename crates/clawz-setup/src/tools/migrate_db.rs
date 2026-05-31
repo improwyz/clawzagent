@@ -22,11 +22,12 @@ impl SetupTool for MigrateDbTool {
     }
 
     fn execute(&self, ctx: &ToolContext, input: &ToolInput) -> crate::error::Result<ToolResult> {
-        let dry_run = input.args.get("dry_run").and_then(Value::as_bool).unwrap_or(false);
-        let deployment = ctx
-            .session
-            .deployment
-            .unwrap_or(DeploymentChoice::Micro);
+        let dry_run = input
+            .args
+            .get("dry_run")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        let deployment = ctx.session.deployment.unwrap_or(DeploymentChoice::Micro);
         let spec = HostSpecChecker::collect();
         let plan = DeployPlanner::plan(deployment, InstallStrategy::Prebuilt, &spec, None)
             .map_err(|e| crate::error::SetupError::Internal(e.to_string()))?;

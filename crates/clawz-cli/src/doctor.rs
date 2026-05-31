@@ -80,7 +80,10 @@ fn collect(cfg: &CliConfig) -> DoctorReport {
         detail: if path.exists() {
             path.display().to_string()
         } else {
-            format!("optional — not found at {} (defaults apply)", path.display())
+            format!(
+                "optional — not found at {} (defaults apply)",
+                path.display()
+            )
         },
     });
 

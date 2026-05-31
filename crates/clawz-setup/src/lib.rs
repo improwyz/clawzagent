@@ -6,17 +6,17 @@
 
 mod bootstrap;
 mod config;
+mod deploy;
 pub mod deps;
 pub mod doctor;
+mod error;
 pub mod host_exec;
 pub mod oauth;
-mod deploy;
-mod error;
 mod paths;
-mod stack;
 pub mod prompts;
 mod session;
 mod spec;
+mod stack;
 mod state_machine;
 mod tools;
 mod types;
@@ -27,14 +27,9 @@ pub use deploy::{
     ComposeOverlay, DeployPlan, DeployPlanError, DeployPlanner, StandaloneSourcePlan,
 };
 pub use deps::{DepComponent, DependencyInstaller};
-pub use host_exec::{
-    resolve_repo_root, HostExecOutput, HostExecPolicy, HostScriptRunner,
-};
-pub use stack::{StackAction, StackRunner};
-pub use doctor::{
-    doctor_fix_tools, run_doctor, DoctorCheck, DoctorConfig, DoctorReport,
-};
+pub use doctor::{doctor_fix_tools, run_doctor, DoctorCheck, DoctorConfig, DoctorReport};
 pub use error::{Result, SetupError};
+pub use host_exec::{resolve_repo_root, HostExecOutput, HostExecPolicy, HostScriptRunner};
 pub use oauth::{
     load_oauth_tokens, oauth_complete, oauth_redirect_uri, oauth_start, save_oauth_tokens,
     OAuthStartResult, OAuthTokenBundle, SetupOAuthProvider,
@@ -45,13 +40,13 @@ pub use session::{
     session_to_json,
 };
 pub use spec::{HostSpecChecker, HostSpecReport, CLAWZ_MIN_RUST};
+pub use stack::{StackAction, StackRunner};
 pub use state_machine::SetupStateMachine;
-pub use tools::{
-    ComposeDownTool, ComposeUpTool, ConfirmGate, InitWorkspaceTool, InstallDepsTool,
-    MigrateDbTool, SetupTool, SetupToolRegistry, SpecCheckTool, ToolContext, ToolInput,
-    ToolResult, WriteEnvTool,
-};
 pub use tools::{init_workspace_at, workspace_root};
+pub use tools::{
+    ComposeDownTool, ComposeUpTool, ConfirmGate, InitWorkspaceTool, InstallDepsTool, MigrateDbTool,
+    SetupTool, SetupToolRegistry, SpecCheckTool, ToolContext, ToolInput, ToolResult, WriteEnvTool,
+};
 pub use types::{
     DeploymentChoice, InstallStrategy, SetupArtifact, SetupEvent, SetupPlatform, SetupSession,
     SetupStep,

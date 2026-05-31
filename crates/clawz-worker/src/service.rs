@@ -8,9 +8,9 @@ use clawz_core::deployment::DeploymentMode;
 use clawz_core::error::{ClawzError, Result};
 use clawz_core::session::SessionStore;
 use clawz_core::traits::{AgentScheduler, GovernanceEngine, ToolOrchestrator};
-use clawz_core::types::orchestration::{SpawnConfig, ToolType};
 use clawz_core::types::agent::AgentConfig;
 use clawz_core::types::message::{ChatRequest, Message};
+use clawz_core::types::orchestration::{SpawnConfig, ToolType};
 use clawz_services::dto::{
     A2aInvokeRequest, A2aInvokeResponse, EvaluateGovernanceRequest, EvaluateGovernanceResponse,
     ExecuteToolRequest, ExecuteToolResponse, FanOutRequest, FanOutResponse, OrchestrateRequest,
@@ -21,9 +21,17 @@ use serde_json::{Value, json};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
+use crate::cron::store::FileJobStore;
+use crate::cron::{CreateCronJobRequest, CronRunResult};
 use crate::governance::engine::{ClawzGovernanceEngine, GovernanceEngineConfig};
-use crate::memory::open_session_store;
+use crate::learning::LearningStack;
 use crate::memory::create_memory_backend;
+use crate::memory::open_session_store;
+use crate::memory::transcript_search::TranscriptHit;
+use crate::memory::user_profile::UserProfile;
+use crate::orchestration::factory::{
+    create_scheduler, create_tool_orchestrator, env_docker_network,
+};
 use crate::providers::CostTracker;
 use crate::providers::router::{ProviderRouter, ProviderRouterConfig, ReliabilityConfig};
 use crate::runtime::agent::{AgentRuntime, RuntimeDependencies};
@@ -31,12 +39,6 @@ use crate::runtime::fan_out::{AggregationStrategy, FanOut, FanOutConfig};
 use crate::runtime::team::{Task, Team, TeamRole};
 use crate::runtime::turn_coordinator::{RoomRuntimeProvider, TurnCoordinator};
 use crate::runtime::turn_events::TurnEventBus;
-use crate::orchestration::factory::{create_scheduler, create_tool_orchestrator, env_docker_network};
-use crate::cron::store::FileJobStore;
-use crate::cron::{CreateCronJobRequest, CronRunResult};
-use crate::learning::LearningStack;
-use crate::memory::transcript_search::TranscriptHit;
-use crate::memory::user_profile::UserProfile;
 use crate::tools::registry::ToolRegistry;
 use crate::tools::tool_trait::{ToolConfig, ToolContext};
 use std::time::Duration;
@@ -182,9 +184,7 @@ impl WorkerService {
             Arc::new(CostTracker::new()),
         )
         .with_turn_event_bus(self.turn_event_bus.clone())
-        .with_workspace_loader(Arc::new(
-            crate::workspace::WorkspaceLoader::default_home(),
-        ));
+        .with_workspace_loader(Arc::new(crate::workspace::WorkspaceLoader::default_home()));
 
         if !restrict_tools {
             let names = self.tools.names().await;
@@ -286,10 +286,7 @@ impl WorkerService {
         self.cron_store.list().await
     }
 
-    pub async fn create_cron_job(
-        &self,
-        req: CreateCronJobRequest,
-    ) -> Result<crate::cron::CronJob> {
+    pub async fn create_cron_job(&self, req: CreateCronJobRequest) -> Result<crate::cron::CronJob> {
         self.cron_store.create(req).await
     }
 
@@ -390,10 +387,7 @@ impl WorkerService {
                 cpu_millicores: 500,
                 image: String::new(),
                 env: vec![],
-                labels: vec![(
-                    "owner-agent-id".to_string(),
-                    req.agent_id.clone(),
-                )],
+                labels: vec![("owner-agent-id".to_string(), req.agent_id.clone())],
                 network: env_docker_network(),
             };
             Some(orch.spawn_tool(tool_type, config).await?)

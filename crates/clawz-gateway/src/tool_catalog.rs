@@ -8,16 +8,52 @@ use crate::ToolRecord;
 
 /// Built-in agent tools shipped with ClawZ.
 pub const BUILTIN_TOOLS: &[(&str, &str, &str)] = &[
-    ("web_fetch", "web", "HTTP GET/POST requests with response parsing"),
-    ("web_search", "search", "Search the web via configured search API"),
-    ("browser", "web", "Browser automation via Chrome DevTools Protocol"),
-    ("file_ops", "file", "Read, write, list, and delete workspace files"),
-    ("shell", "code", "Execute shell commands in a sandboxed environment"),
-    ("git", "code", "Git clone, commit, push, and pull operations"),
+    (
+        "web_fetch",
+        "web",
+        "HTTP GET/POST requests with response parsing",
+    ),
+    (
+        "web_search",
+        "search",
+        "Search the web via configured search API",
+    ),
+    (
+        "browser",
+        "web",
+        "Browser automation via Chrome DevTools Protocol",
+    ),
+    (
+        "file_ops",
+        "file",
+        "Read, write, list, and delete workspace files",
+    ),
+    (
+        "shell",
+        "code",
+        "Execute shell commands in a sandboxed environment",
+    ),
+    (
+        "git",
+        "code",
+        "Git clone, commit, push, and pull operations",
+    ),
     ("calculator", "code", "Evaluate mathematical expressions"),
-    ("image_gen", "api", "Generate images via configured image API"),
-    ("pdf_read", "file", "Extract text and metadata from PDF documents"),
-    ("knowledge_base", "database", "Semantic search over uploaded documents"),
+    (
+        "image_gen",
+        "api",
+        "Generate images via configured image API",
+    ),
+    (
+        "pdf_read",
+        "file",
+        "Extract text and metadata from PDF documents",
+    ),
+    (
+        "knowledge_base",
+        "database",
+        "Semantic search over uploaded documents",
+    ),
     ("escalate", "api", "Request human approval or intervention"),
 ];
 
@@ -75,10 +111,7 @@ pub async fn ensure_default_tools(state: &crate::AppState) {
             let _ = crate::postgres_store::persist_tool(pool, record).await;
         }
     }
-    tracing::info!(
-        "seeded {} built-in tools",
-        state.tools.read().await.len()
-    );
+    tracing::info!("seeded {} built-in tools", state.tools.read().await.len());
 }
 
 fn tool_to_catalog_json(t: &ToolRecord) -> Value {

@@ -63,14 +63,12 @@ impl HostSpecChecker {
         let mut warnings = Vec::new();
         if !docker_available {
             warnings.push(
-                "Docker is not available (install Docker or ensure `docker info` succeeds)."
-                    .into(),
+                "Docker is not available (install Docker or ensure `docker info` succeeds).".into(),
             );
         }
         if docker_available && !compose_v2_available {
             warnings.push(
-                "Docker Compose v2 is not available (`docker compose version` failed)."
-                    .into(),
+                "Docker Compose v2 is not available (`docker compose version` failed).".into(),
             );
         }
         if rust_version.is_none() {
@@ -265,10 +263,7 @@ fn sysctl_u64(name: &str) -> Option<u64> {
     if !out.status.success() {
         return None;
     }
-    String::from_utf8_lossy(&out.stdout)
-        .trim()
-        .parse()
-        .ok()
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
 }
 
 #[cfg(target_os = "windows")]
@@ -294,11 +289,7 @@ fn windows_memory_mb() -> Option<u64> {
 fn parse_meminfo_kb(content: &str) -> Option<u64> {
     for line in content.lines() {
         if let Some(rest) = line.strip_prefix("MemTotal:") {
-            let kb: u64 = rest
-                .split_whitespace()
-                .next()?
-                .parse()
-                .ok()?;
+            let kb: u64 = rest.split_whitespace().next()?.parse().ok()?;
             return Some(kb);
         }
     }

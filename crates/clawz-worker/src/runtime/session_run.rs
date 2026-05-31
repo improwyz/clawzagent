@@ -7,9 +7,9 @@ use clawz_core::types::message::{Message, Role};
 use clawz_services::dto::{RunTurnRequest, RunTurnResponse};
 use uuid::Uuid;
 
-use clawz_core::error::Result;
 use crate::runtime::session_commands::{self, SessionCommand};
 use crate::service::WorkerService;
+use clawz_core::error::Result;
 
 /// Execute one user message through session commands or the full multi-turn tool loop.
 pub async fn execute_agent_turn(
@@ -94,19 +94,12 @@ pub async fn execute_agent_turn(
                 .run_multi_turn_in_conversation(transcript, &conversation_id)
                 .await?;
 
-            store
-                .save_transcript(&conversation_id, &messages)
-                .await?;
+            store.save_transcript(&conversation_id, &messages).await?;
 
             let restrict = req.cron_mode || req.background_mode;
             if !restrict {
-                if let Some(proposal) =
-                    crate::workspace::SkillCurator::maybe_propose(&messages)
-                {
-                    let name = format!(
-                        "learned-{}",
-                        chrono::Utc::now().timestamp()
-                    );
+                if let Some(proposal) = crate::workspace::SkillCurator::maybe_propose(&messages) {
+                    let name = format!("learned-{}", chrono::Utc::now().timestamp());
                     let loader = crate::workspace::WorkspaceLoader::default_home();
                     let skill_dir = loader.root().join("skills").join(&name);
                     if std::fs::create_dir_all(&skill_dir).is_ok() {
@@ -124,7 +117,11 @@ pub async fn execute_agent_turn(
                 }
 
                 if let Some(tenant_id) = req.sender_user_id.as_deref() {
-                    if let Err(e) = service.learning().user_profiles().touch_session(tenant_id).await
+                    if let Err(e) = service
+                        .learning()
+                        .user_profiles()
+                        .touch_session(tenant_id)
+                        .await
                     {
                         log::warn!("[session_run] user profile touch failed: {e}");
                     }
@@ -139,12 +136,7 @@ pub async fn execute_agent_turn(
                     if let Err(e) = service
                         .learning()
                         .post_turn_nudge()
-                        .nudge(
-                            runtime.memory(),
-                            agent_id,
-                            &conversation_id,
-                            assistant_text,
-                        )
+                        .nudge(runtime.memory(), agent_id, &conversation_id, assistant_text)
                         .await
                     {
                         log::warn!("[session_run] post-turn memory nudge failed: {e}");
@@ -152,11 +144,13 @@ pub async fn execute_agent_turn(
                 }
             }
 
-            service.turn_event_bus().emit(crate::runtime::turn_events::TurnEvent::TurnComplete {
-                run_id: run_id.clone(),
-                conversation_id: conversation_id.clone(),
-                turn_count: messages.len() as u32,
-            });
+            service
+                .turn_event_bus()
+                .emit(crate::runtime::turn_events::TurnEvent::TurnComplete {
+                    run_id: run_id.clone(),
+                    conversation_id: conversation_id.clone(),
+                    turn_count: messages.len() as u32,
+                });
 
             let content = messages
                 .iter()

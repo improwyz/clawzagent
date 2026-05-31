@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use tokio::sync::OnceCell;
 use tokio::task;
@@ -56,9 +56,7 @@ impl MemoryTree {
             ));
         }
         GLOBAL_TREE
-            .get_or_try_init(|| async {
-                Ok(Arc::new(Self::open_default().await?))
-            })
+            .get_or_try_init(|| async { Ok(Arc::new(Self::open_default().await?)) })
             .await
             .map(Arc::clone)
     }
@@ -67,9 +65,8 @@ impl MemoryTree {
         let path = self.db_path.clone();
         task::spawn_blocking(move || {
             if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    ClawzError::Database(format!("memory tree dir: {e}"))
-                })?;
+                std::fs::create_dir_all(parent)
+                    .map_err(|e| ClawzError::Database(format!("memory tree dir: {e}")))?;
             }
             let conn = Connection::open(&path)
                 .map_err(|e| ClawzError::Database(format!("memory tree open: {e}")))?;
@@ -213,7 +210,12 @@ impl MemoryTree {
     }
 
     /// Keyword match over title + summary for context injection.
-    pub async fn search(&self, agent_id: &str, query: &str, limit: usize) -> Result<Vec<MemoryTreeNode>> {
+    pub async fn search(
+        &self,
+        agent_id: &str,
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<MemoryTreeNode>> {
         let q = query.to_lowercase();
         let mut nodes = self.list_agent(agent_id).await?;
         if q.is_empty() {

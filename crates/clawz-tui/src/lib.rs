@@ -162,7 +162,8 @@ mod tests {
         sm.advance().expect("welcome");
         assert_eq!(sm.current_step(), SetupStep::DeployMode);
         sm.set_deployment(DeploymentChoice::Micro).expect("deploy");
-        sm.set_install_strategy(clawz_setup::InstallStrategy::Prebuilt).expect("strategy");
+        sm.set_install_strategy(clawz_setup::InstallStrategy::Prebuilt)
+            .expect("strategy");
         assert!(sm.session().deployment.is_some());
         let _ = (&mut reader, &mut answers);
         std::env::remove_var("CLAWZ_TUI");

@@ -21,9 +21,7 @@ fn loader() -> clawz_worker::workspace::WorkspaceLoader {
     clawz_worker::workspace::WorkspaceLoader::default_home()
 }
 
-async fn list_skills(
-    State(_state): State<AppState>,
-) -> Result<Json<Value>, GatewayError> {
+async fn list_skills(State(_state): State<AppState>) -> Result<Json<Value>, GatewayError> {
     let snap = loader()
         .load_snapshot()
         .map_err(|e| GatewayError::Internal(e.to_string()))?;

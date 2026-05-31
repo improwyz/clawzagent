@@ -69,7 +69,9 @@ impl LearningStack {
         let inner_skills: Arc<dyn SkillRepository> = match mode {
             DeploymentMode::Standalone => Arc::new(VersionedSkillRepository::in_memory()),
             DeploymentMode::Micro | DeploymentMode::Elastic => {
-                let root = crate::workspace::WorkspaceLoader::default_home().root().to_path_buf();
+                let root = crate::workspace::WorkspaceLoader::default_home()
+                    .root()
+                    .to_path_buf();
                 Arc::new(VersionedSkillRepository::from_enterprise_workspace(root))
             }
         };

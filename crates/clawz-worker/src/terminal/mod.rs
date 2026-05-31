@@ -6,7 +6,7 @@ mod factory;
 mod local;
 mod ssh;
 
-pub use config::{resolve_backend_kind, TerminalBackendKind};
+pub use config::{TerminalBackendKind, resolve_backend_kind};
 pub use factory::{create_terminal_backend, default_workdir};
 pub use local::LocalBackend;
 
@@ -60,7 +60,14 @@ pub trait TerminalBackend: Send + Sync {
             "ls -la -- {}",
             shell_escape(path.to_string_lossy().as_ref())
         );
-        let out = self.exec(&cmd, Some(path.parent().unwrap_or(path)), 30, &HashMap::new()).await?;
+        let out = self
+            .exec(
+                &cmd,
+                Some(path.parent().unwrap_or(path)),
+                30,
+                &HashMap::new(),
+            )
+            .await?;
         if out.success() {
             Ok(out.stdout)
         } else {

@@ -41,8 +41,14 @@ mod tests {
 
     #[test]
     fn parse_kinds() {
-        assert_eq!(TerminalBackendKind::parse("docker"), Some(TerminalBackendKind::Docker));
-        assert_eq!(TerminalBackendKind::parse("LOCAL"), Some(TerminalBackendKind::Local));
+        assert_eq!(
+            TerminalBackendKind::parse("docker"),
+            Some(TerminalBackendKind::Docker)
+        );
+        assert_eq!(
+            TerminalBackendKind::parse("LOCAL"),
+            Some(TerminalBackendKind::Local)
+        );
         assert_eq!(TerminalBackendKind::parse("invalid"), None);
     }
 }

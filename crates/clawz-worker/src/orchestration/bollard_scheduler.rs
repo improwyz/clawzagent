@@ -262,8 +262,8 @@ impl AgentScheduler for BollardScheduler {
             format!("CLAWZ_MESH_IP=127.0.0.1"),
             format!("CLAWZ_MAX_TOOLS={}", spec.max_tools),
         ];
-        if let Ok(url) = std::env::var("CLAWZ_PUBLIC_URL")
-            .or_else(|_| std::env::var("CLAWZ_GATEWAY_URL"))
+        if let Ok(url) =
+            std::env::var("CLAWZ_PUBLIC_URL").or_else(|_| std::env::var("CLAWZ_GATEWAY_URL"))
         {
             env.push(format!("CLAWZ_GATEWAY_URL={url}"));
             env.push(format!("CLAWZ_PUBLIC_URL={url}"));

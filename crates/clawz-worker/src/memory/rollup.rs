@@ -43,9 +43,9 @@ async fn write_rollup_marker() -> Result<()> {
     }
     let path = rollup_log_path();
     if let Some(parent) = path.parent() {
-        tokio::fs::create_dir_all(parent).await.map_err(|e| {
-            clawz_core::error::ClawzError::Internal(format!("rollup dir: {e}"))
-        })?;
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|e| clawz_core::error::ClawzError::Internal(format!("rollup dir: {e}")))?;
     }
     let line = format!("{}\n", Utc::now().to_rfc3339());
     tokio::fs::OpenOptions::new()
@@ -61,12 +61,14 @@ async fn write_rollup_marker() -> Result<()> {
 }
 
 fn rollup_log_path() -> PathBuf {
-    let home = std::env::var("CLAWZ_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-        std::env::var("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(".clawz")
-    });
+    let home = std::env::var("CLAWZ_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::env::var("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(".clawz")
+        });
     home.join("memory_rollups.log")
 }
 

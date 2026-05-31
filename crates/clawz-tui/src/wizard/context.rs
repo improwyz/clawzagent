@@ -23,9 +23,18 @@ impl WizardAnswers {
         println!("├──────────────────────────────────────────────────┤");
         println!("│  Port         : {:<33} │", self.port);
         println!("│  Log level    : {:<33} │", self.log_level);
-        println!("│  API keys     : {:<33} │", crate::mask_key(&self.api_keys));
-        println!("│  Anthropic    : {:<33} │", crate::mask_key(&self.anthropic_key));
-        println!("│  OpenAI       : {:<33} │", crate::mask_key(&self.openai_key));
+        println!(
+            "│  API keys     : {:<33} │",
+            crate::mask_key(&self.api_keys)
+        );
+        println!(
+            "│  Anthropic    : {:<33} │",
+            crate::mask_key(&self.anthropic_key)
+        );
+        println!(
+            "│  OpenAI       : {:<33} │",
+            crate::mask_key(&self.openai_key)
+        );
         println!("│  Agent        : {:<33} │", self.agent_name);
         println!("└──────────────────────────────────────────────────┘");
 
@@ -44,7 +53,10 @@ impl WizardAnswers {
             println!("  export OPENAI_API_KEY={}", self.openai_key);
         }
         if !self.agent_name.is_empty() {
-            println!("  # Agent identity: {} — {} ({})", self.agent_name, self.agent_who, self.agent_role);
+            println!(
+                "  # Agent identity: {} — {} ({})",
+                self.agent_name, self.agent_who, self.agent_role
+            );
         }
         println!("\nDocker Compose: run `./scripts/install.sh` from the ClawZ repo.");
         println!("Source:         `cargo run -p clawz-gateway` (gateway) + worker on :50051");

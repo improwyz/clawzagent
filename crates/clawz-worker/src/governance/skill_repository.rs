@@ -73,17 +73,16 @@ impl VersionedSkillRepository {
 
     fn bundle_from_workspace(&self, agent_id: &str) -> Result<Option<SkillBundle>> {
         let loader = crate::workspace::WorkspaceLoader::new(self.base_path.clone());
-        let snap = loader.load_snapshot().map_err(|e| ClawzError::Internal(e.to_string()))?;
+        let snap = loader
+            .load_snapshot()
+            .map_err(|e| ClawzError::Internal(e.to_string()))?;
         let skill_md = snap
             .skills
             .iter()
             .map(|s| format!("### {}\n{}\n", s.name, s.content))
             .collect::<Vec<_>>()
             .join("\n");
-        if skill_md.is_empty()
-            && snap.agents_md.is_none()
-            && snap.soul_md.is_none()
-        {
+        if skill_md.is_empty() && snap.agents_md.is_none() && snap.soul_md.is_none() {
             return Ok(None);
         }
         Ok(Some(SkillBundle {

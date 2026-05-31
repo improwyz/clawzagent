@@ -48,17 +48,20 @@ impl UserProfileStore {
     }
 
     pub fn default_home() -> Self {
-        let home = std::env::var("CLAWZ_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-            std::env::var("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from("/tmp/clawz"))
-                .join(".clawz")
-        });
+        let home = std::env::var("CLAWZ_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::env::var("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| PathBuf::from("/tmp/clawz"))
+                    .join(".clawz")
+            });
         Self::new(home.join("profiles"))
     }
 
     fn profile_path(&self, tenant_id: &str) -> PathBuf {
-        self.root.join(format!("{}.json", sanitize_tenant(tenant_id)))
+        self.root
+            .join(format!("{}.json", sanitize_tenant(tenant_id)))
     }
 
     pub async fn load(&self, tenant_id: &str) -> Result<UserProfile> {
@@ -125,6 +128,9 @@ mod tests {
         store.save(&p).await.unwrap();
         let loaded = store.load("tenant-a").await.unwrap();
         assert_eq!(loaded.display_name.as_deref(), Some("Alice"));
-        assert_eq!(loaded.preferences.get("theme").map(String::as_str), Some("dark"));
+        assert_eq!(
+            loaded.preferences.get("theme").map(String::as_str),
+            Some("dark")
+        );
     }
 }

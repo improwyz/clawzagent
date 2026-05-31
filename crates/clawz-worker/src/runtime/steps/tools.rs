@@ -193,10 +193,7 @@ impl PipelineStep for ExecuteToolsStep {
                         call.name,
                         call.id
                     );
-                    match tool
-                        .execute(&tool_ctx, call.arguments.clone())
-                        .await
-                    {
+                    match tool.execute(&tool_ctx, call.arguments.clone()).await {
                         Ok(r) => r,
                         Err(e) => {
                             log::error!("[execute_tools] tool '{}' failed: {e}", call.name);

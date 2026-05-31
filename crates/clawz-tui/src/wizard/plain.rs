@@ -1,13 +1,11 @@
 //! Line-oriented setup wizard (`CLAWZ_TUI=plain` or non-TTY stdin).
 
-use clawz_setup::{
-    HostSpecChecker, Result, SetupEvent, SetupStateMachine, SetupStep,
-};
+use clawz_setup::{HostSpecChecker, Result, SetupEvent, SetupStateMachine, SetupStep};
 use std::io::{self, BufRead, Write};
 
 use super::context::WizardAnswers;
 use super::{
-    ensure_secrets, parse_deployment, parse_install_strategy, deployment_label, install_label,
+    deployment_label, ensure_secrets, install_label, parse_deployment, parse_install_strategy,
 };
 
 pub fn run(sm: &mut SetupStateMachine, answers: &mut WizardAnswers) -> Result<()> {
@@ -35,7 +33,9 @@ pub fn run(sm: &mut SetupStateMachine, answers: &mut WizardAnswers) -> Result<()
             SetupStep::AgentIdentity => step_identity(sm, answers, &mut reader)?,
             SetupStep::Skills => {
                 println!("\n--- Skills ---");
-                println!("Optional workspace skills can be added later under ~/.clawz/workspace/skills/");
+                println!(
+                    "Optional workspace skills can be added later under ~/.clawz/workspace/skills/"
+                );
                 sm.advance()?;
             }
             SetupStep::AgentTopology => {
@@ -91,7 +91,12 @@ fn step_deploy_mode(sm: &mut SetupStateMachine, reader: &mut impl BufRead) -> Re
         clawz_setup::SetupError::InvalidTransition(format!("unknown deployment: {raw}"))
     })?;
     sm.set_deployment(choice)?;
-    record_answer(sm, SetupStep::DeployMode, "deployment", deployment_label(choice));
+    record_answer(
+        sm,
+        SetupStep::DeployMode,
+        "deployment",
+        deployment_label(choice),
+    );
     sm.advance()?;
     Ok(())
 }

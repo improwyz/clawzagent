@@ -5,9 +5,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use clawz_core::error::Result;
 use clawz_services::dto::RunTurnRequest;
+use serde::{Deserialize, Serialize};
 
 use crate::memory::create_memory_backend;
 use crate::service::WorkerService;
@@ -22,12 +22,14 @@ fn state_path() -> PathBuf {
     if let Ok(p) = std::env::var("CLAWZ_SUBCONSCIOUS_STATE") {
         return PathBuf::from(p);
     }
-    let home = std::env::var("CLAWZ_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-        std::env::var("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from("."))
-            .join(".clawz")
-    });
+    let home = std::env::var("CLAWZ_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::env::var("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .join(".clawz")
+        });
     home.join("subconscious/state.json")
 }
 
@@ -48,8 +50,9 @@ fn save_state(state: &SubconsciousState) -> Result<()> {
     }
     let json = serde_json::to_string_pretty(state)
         .map_err(|e| clawz_core::error::ClawzError::Serialization(e.to_string()))?;
-    std::fs::write(&path, json)
-        .map_err(|e| clawz_core::error::ClawzError::Internal(format!("write subconscious state: {e}")))?;
+    std::fs::write(&path, json).map_err(|e| {
+        clawz_core::error::ClawzError::Internal(format!("write subconscious state: {e}"))
+    })?;
     Ok(())
 }
 

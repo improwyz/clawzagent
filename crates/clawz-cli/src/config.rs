@@ -36,7 +36,11 @@ impl Default for CliConfig {
 pub fn config_dir() -> PathBuf {
     std::env::var("CLAWZ_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".clawz"))
+        .unwrap_or_else(|_| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".clawz")
+        })
 }
 
 pub fn config_path() -> PathBuf {
@@ -48,8 +52,8 @@ pub fn load() -> Result<CliConfig> {
     if !path.exists() {
         return Ok(CliConfig::default());
     }
-    let data = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let data =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     toml::from_str(&data).context("parse cli.toml")
 }
 

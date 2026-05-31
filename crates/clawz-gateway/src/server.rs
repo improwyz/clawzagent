@@ -80,8 +80,7 @@ impl GatewayServer {
         if let Some(dist) = Self::web_dist_path() {
             tracing::info!("serving dashboard from {}", dist.display());
             router = router.fallback_service(
-                ServeDir::new(&dist)
-                    .not_found_service(ServeFile::new(dist.join("index.html"))),
+                ServeDir::new(&dist).not_found_service(ServeFile::new(dist.join("index.html"))),
             );
         }
 

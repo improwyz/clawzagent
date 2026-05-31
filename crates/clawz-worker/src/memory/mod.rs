@@ -29,30 +29,30 @@ pub mod embedding;
 pub mod improvement;
 pub mod outcome_tracker;
 pub mod post_turn_nudge;
-pub mod rag;
 pub mod postgres_session_store;
+pub mod rag;
 pub mod rollup;
 pub mod session_store;
-pub mod tree;
-pub mod transcript_search;
-pub mod user_profile;
 pub mod sqlite;
 pub mod store;
+pub mod transcript_search;
+pub mod tree;
+pub mod user_profile;
 
 // Re-export the most commonly used types at the module level.
 pub use blackboard::{Blackboard, BlackboardEntry, ChangeEvent};
+pub use compress::{CompressConfig, compress_messages};
 pub use conversation::ConversationStore;
 pub use embedding::{EmbeddingProvider, LocalEmbedding, OpenAIEmbedding, TextChunker};
-pub use rag::{RagConfig, RagPipeline};
-pub use compress::{compress_messages, CompressConfig};
 pub use post_turn_nudge::PostTurnMemoryNudge;
-pub use postgres_session_store::{open_session_store, PostgresSessionStore};
+pub use postgres_session_store::{PostgresSessionStore, open_session_store};
+pub use rag::{RagConfig, RagPipeline};
 pub use session_store::FileSessionStore;
-pub use tree::{MemoryTree, MemoryTreeNode};
-pub use transcript_search::{TranscriptFtsIndex, TranscriptHit};
-pub use user_profile::{UserProfile, UserProfileStore};
-pub use sqlite::{create_memory_backend, SqliteMemoryBackend, DEFAULT_MEMORY_DB};
+pub use sqlite::{DEFAULT_MEMORY_DB, SqliteMemoryBackend, create_memory_backend};
 pub use store::{InMemoryBackend, PostgresMemoryBackend};
+pub use transcript_search::{TranscriptFtsIndex, TranscriptHit};
+pub use tree::{MemoryTree, MemoryTreeNode};
+pub use user_profile::{UserProfile, UserProfileStore};
 
 // Re-export the core trait so callers do not need to reach into clawz_core.
 pub use clawz_core::traits::MemoryBackend;

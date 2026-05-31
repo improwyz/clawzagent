@@ -20,20 +20,14 @@ pub fn try_import_local_cursor() -> Option<OAuthTokenBundle> {
 fn cursor_state_db_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
     if let Ok(home) = std::env::var("HOME") {
-        paths.push(
-            PathBuf::from(&home)
-                .join(".config/Cursor/User/globalStorage/state.vscdb"),
-        );
+        paths.push(PathBuf::from(&home).join(".config/Cursor/User/globalStorage/state.vscdb"));
         paths.push(
             PathBuf::from(&home)
                 .join("Library/Application Support/Cursor/User/globalStorage/state.vscdb"),
         );
     }
     if let Ok(appdata) = std::env::var("APPDATA") {
-        paths.push(
-            PathBuf::from(appdata)
-                .join("Cursor/User/globalStorage/state.vscdb"),
-        );
+        paths.push(PathBuf::from(appdata).join("Cursor/User/globalStorage/state.vscdb"));
     }
     let _ = clawz_home();
     paths
@@ -43,20 +37,21 @@ fn read_tokens_from_sqlite(db_path: &Path) -> Option<OAuthTokenBundle> {
     if !db_path.is_file() {
         return None;
     }
-    let access = query_sqlite_value(db_path, "cursorAuth/accessToken")?;
+    let access = query_sqlite_value(db_path, "cursorAuth/accessToken");
     let refresh = query_sqlite_value(db_path, "cursorAuth/refreshToken");
-    if access.is_empty() {
-        return None;
+    if let Some(access) = access.filter(|t| !t.is_empty()) {
+        return Some(OAuthTokenBundle {
+            provider: "cursor".into(),
+            access_token: access,
+            refresh_token: refresh.filter(|t| !t.is_empty()),
+            id_token: None,
+            account_id: None,
+            expires_at: None,
+            source: "import".into(),
+        });
     }
-    Some(OAuthTokenBundle {
-        provider: "cursor".into(),
-        access_token: access,
-        refresh_token: refresh.filter(|t| !t.is_empty()),
-        id_token: None,
-        account_id: None,
-        expires_at: None,
-        source: "import".into(),
-    })
+    let refresh = refresh.filter(|t| !t.is_empty())?;
+    refresh_cursor_access_token(&refresh).ok()
 }
 
 fn query_sqlite_value(db_path: &Path, key: &str) -> Option<String> {

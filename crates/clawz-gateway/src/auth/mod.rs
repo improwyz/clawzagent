@@ -363,11 +363,12 @@ fn load_api_key_records_from_env() -> Vec<api_key::ApiKeyRecord> {
                 .filter(|t| !t.is_empty())
                 .map(|t| (*t).to_string())
                 .unwrap_or_else(default_tenant_id);
-            let key_hash = if parts[0].len() == 64 && parts[0].chars().all(|c| c.is_ascii_hexdigit()) {
-                parts[0].to_string()
-            } else {
-                api_key::ApiKeyValidator::hash_key(parts[0])
-            };
+            let key_hash =
+                if parts[0].len() == 64 && parts[0].chars().all(|c| c.is_ascii_hexdigit()) {
+                    parts[0].to_string()
+                } else {
+                    api_key::ApiKeyValidator::hash_key(parts[0])
+                };
             Some(api_key::ApiKeyRecord {
                 id: uuid::Uuid::new_v4().to_string(),
                 key_hash,

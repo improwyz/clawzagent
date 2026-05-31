@@ -5,11 +5,11 @@ use std::sync::Arc;
 
 use clawz_core::error::Result;
 
-use super::config::{resolve_backend_kind, TerminalBackendKind};
+use super::TerminalBackend;
+use super::config::{TerminalBackendKind, resolve_backend_kind};
 use super::docker::DockerBackend;
 use super::local::LocalBackend;
 use super::ssh::SshBackend;
-use super::TerminalBackend;
 
 /// Default workspace for terminal sandboxes.
 pub fn default_workdir() -> PathBuf {

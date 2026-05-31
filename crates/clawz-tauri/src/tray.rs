@@ -18,10 +18,7 @@ pub fn refresh_tray_tooltip(app: &AppHandle) {
         shell::ShellMode::Standalone => "standalone",
         shell::ShellMode::Gateway => "gateway",
     };
-    let tip = format!(
-        "ClawZ ({mode}) — {}",
-        cfg.connection_status
-    );
+    let tip = format!("ClawZ ({mode}) — {}", cfg.connection_status);
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         let _ = tray.set_tooltip(Some(tip));
     }

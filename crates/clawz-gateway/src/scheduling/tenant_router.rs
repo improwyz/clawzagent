@@ -28,9 +28,7 @@
 use std::sync::Arc;
 
 use clawz_core::{
-    error::Result,
-    traits::AgentScheduler,
-    types::orchestration::AgentHandle,
+    error::Result, traits::AgentScheduler, types::orchestration::AgentHandle,
     types::tenant::TenantContext,
 };
 

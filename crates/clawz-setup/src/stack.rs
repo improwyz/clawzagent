@@ -57,12 +57,7 @@ impl StackRunner {
         }
     }
 
-    fn stack_up(
-        &self,
-        plan: &DeployPlan,
-        with_web: bool,
-        dry_run: bool,
-    ) -> Result<HostExecOutput> {
+    fn stack_up(&self, plan: &DeployPlan, with_web: bool, dry_run: bool) -> Result<HostExecOutput> {
         if plan.standalone_source.is_some() {
             return Err(SetupError::Internal(
                 "stack_up does not apply to standalone source installs".into(),
@@ -133,9 +128,8 @@ mod tests {
         let runner = HostScriptRunner::from_env().unwrap();
         let stack = StackRunner::new(runner);
         let spec = docker_spec(true);
-        let plan =
-            StackRunner::plan(DeploymentChoice::Micro, InstallStrategy::Build, &spec, None)
-                .unwrap();
+        let plan = StackRunner::plan(DeploymentChoice::Micro, InstallStrategy::Build, &spec, None)
+            .unwrap();
         let out = stack
             .run(StackAction::Up, &plan, false, true)
             .expect("dry-run");

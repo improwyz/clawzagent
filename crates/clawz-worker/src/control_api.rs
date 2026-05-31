@@ -11,6 +11,9 @@ use axum::{
     response::Response,
     routing::{get, post},
 };
+use clawz_core::traits::AgentScheduler;
+use clawz_core::types::orchestration::AgentSpec;
+use clawz_core::types::tenant::{Role, TenantContext, TenantId};
 use clawz_services::dto::{
     A2aInvokeRequest, A2aInvokeResponse, ChannelPollRequest, ChannelPollResponse,
     ChannelSendRequest, ChannelSendResponse, ChannelWebhookRequest, ChannelWebhookResponse,
@@ -19,12 +22,8 @@ use clawz_services::dto::{
     ExecuteToolResponse, FanOutRequest, FanOutResponse, MemoryIngestRequest, MemoryIngestResponse,
     OrchestrateRequest, OrchestrateResponse, ProviderHealthRequest, ProviderHealthResponse,
     RunTurnRequest, RunTurnResponse, SessionSummary, SubconsciousTickRequest,
-    SubconsciousTickResponse,
-    TestChannelRequest, TestChannelResponse,
+    SubconsciousTickResponse, TestChannelRequest, TestChannelResponse,
 };
-use clawz_core::traits::AgentScheduler;
-use clawz_core::types::orchestration::AgentSpec;
-use clawz_core::types::tenant::{Role, TenantContext, TenantId};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -309,11 +308,7 @@ async fn run_cron_job(
     State(state): State<ControlState>,
     Path(id): Path<String>,
 ) -> Result<Json<CronRunResultDto>, (axum::http::StatusCode, String)> {
-    let result = state
-        .service
-        .execute_cron_job(&id)
-        .await
-        .map_err(map_err)?;
+    let result = state.service.execute_cron_job(&id).await.map_err(map_err)?;
     Ok(Json(crate::cron::convert::run_to_dto(result)))
 }
 
@@ -351,10 +346,7 @@ async fn run_subconscious(
 }
 
 fn map_err(e: clawz_core::error::ClawzError) -> (axum::http::StatusCode, String) {
-    (
-        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-        e.to_string(),
-    )
+    (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
 }
 
 #[derive(Debug, Deserialize)]

@@ -39,12 +39,14 @@ impl FileJobStore {
         if let Ok(p) = std::env::var("CLAWZ_CRON_JOBS_FILE") {
             return PathBuf::from(p);
         }
-        let home = std::env::var("CLAWZ_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-            std::env::var("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(".clawz")
-        });
+        let home = std::env::var("CLAWZ_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::env::var("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(".clawz")
+            });
         home.join("cron/jobs.json")
     }
 
@@ -55,9 +57,8 @@ impl FileJobStore {
     pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                ClawzError::Internal(format!("create cron dir: {e}"))
-            })?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| ClawzError::Internal(format!("create cron dir: {e}")))?;
         }
         let file = std::fs::read_to_string(&path)
             .ok()
@@ -74,9 +75,9 @@ impl FileJobStore {
     /// Acquire an exclusive tick lock; skip this tick if another process holds it.
     pub async fn try_acquire_tick_lock(&self) -> Result<CronTickLock> {
         if let Some(parent) = self.lock_path.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                ClawzError::Internal(format!("create cron lock dir: {e}"))
-            })?;
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| ClawzError::Internal(format!("create cron lock dir: {e}")))?;
         }
         OpenOptions::new()
             .write(true)
@@ -95,9 +96,8 @@ impl FileJobStore {
             guard.clone()
         };
         if let Some(parent) = self.path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                ClawzError::Internal(format!("create cron dir: {e}"))
-            })?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| ClawzError::Internal(format!("create cron dir: {e}")))?;
         }
         let json = serde_json::to_string_pretty(&snapshot)
             .map_err(|e| ClawzError::Serialization(e.to_string()))?;
@@ -156,14 +156,14 @@ impl FileJobStore {
 
     pub async fn mark_run(&self, id: &str) -> Result<()> {
         let mut file = self.inner.write().await;
-        let job = file
-            .jobs
-            .iter_mut()
-            .find(|j| j.id == id)
-            .ok_or_else(|| ClawzError::NotFound {
-                entity: "CronJob".into(),
-                id: id.into(),
-            })?;
+        let job =
+            file.jobs
+                .iter_mut()
+                .find(|j| j.id == id)
+                .ok_or_else(|| ClawzError::NotFound {
+                    entity: "CronJob".into(),
+                    id: id.into(),
+                })?;
         job.last_run_at = Some(Utc::now());
         job.updated_at = Utc::now();
         drop(file);

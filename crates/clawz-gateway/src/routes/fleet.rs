@@ -298,21 +298,23 @@ async fn fleet_deploy(
     };
 
     // Schedule on worker fleet API or in-process scheduler (tenant from auth).
-    let auth_ctx = auth.map(|Extension(a)| a).unwrap_or_else(crate::auth::dev_auth_context);
+    let auth_ctx = auth
+        .map(|Extension(a)| a)
+        .unwrap_or_else(crate::auth::dev_auth_context);
     let tenant_ctx = tenant_context_from_auth(&auth_ctx);
     let capabilities = vec!["chat".into(), "tools".into()];
     let mut spec = default_agent_spec();
     spec.capabilities = capabilities.clone();
 
-    let ticket = state.admission.admit(&tenant_ctx).await.map_err(|e| {
-        GatewayError::Internal(format!("admission denied: {e}"))
-    })?;
+    let ticket = state
+        .admission
+        .admit(&tenant_ctx)
+        .await
+        .map_err(|e| GatewayError::Internal(format!("admission denied: {e}")))?;
 
     let schedule_result: Result<(), clawz_core::error::ClawzError> = async {
         if let Some(ref fleet) = state.worker_fleet {
-            let handle = fleet
-                .spawn(&tenant_ctx, spec, &capabilities)
-                .await?;
+            let handle = fleet.spawn(&tenant_ctx, spec, &capabilities).await?;
             tracing::info!(
                 agent_id = %agent_id,
                 handle_id = %handle.id,
