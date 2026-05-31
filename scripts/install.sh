@@ -11,8 +11,9 @@
 # Options:
 #   --docker      Use Docker Compose (default when Docker is available)
 #   --build       Build gateway/worker locally (10–20 min); default is prebuilt pull from GHCR
-#   GITHUB_TOKEN + GITHUB_USER  Required for default install (PAT with read:packages)
-#   --registry R  Image registry (default: ghcr.io/improwyz)
+#   GITHUB_TOKEN + GITHUB_USER  Primary registry (GHCR, read:packages)
+#   DOCKERHUB_* optional fallback when GHCR pull fails (private Hub repos)
+#   --registry R  Primary image registry (default: ghcr.io/improwyz)
 #   --tag TAG     Image tag (default: latest)
 #   --source      Build and run from source with cargo (no Docker)
 #   --with-web    Build the React dashboard in web/

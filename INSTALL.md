@@ -57,7 +57,7 @@ improwyz/clawz/
 
 1. Ensure **Git** (and **Docker** + Compose v2, or install them).
 2. Create `.env` from `.env.example` (random dev secrets when possible).
-3. **Prebuilt (default):** `docker login ghcr.io` → pull `gateway` + `worker` images.
+3. **Prebuilt (default):** `docker login ghcr.io` → pull `gateway` + `worker` (falls back to private Docker Hub if configured).
 4. **Or `--build`:** compile images via `docker-compose.build.yml`.
 5. `docker compose up -d db` → run **`scripts/migrate-db.sh`** → `up -d worker gateway`.
 6. Wait for `GET /health`.
@@ -75,6 +75,8 @@ The installer clones (or uses) the repo, creates `.env` from [.env.example](.env
 ```bash
 export GITHUB_TOKEN=ghp_xxxxxxxx
 export GITHUB_USER=your_github_username
+export DOCKERHUB_USERNAME=your_namespace
+export DOCKERHUB_TOKEN=dckr_pat_xxxxxxxx
 ```
 
 **Maintainers only** (slow local compile): `./install.sh --build`

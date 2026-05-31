@@ -162,7 +162,7 @@ improwyz/clawz/
 | Platform | Command |
 |----------|---------|
 | **Linux / macOS (curl)** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh \| bash` |
-| **Linux / macOS (git + GHCR)** | `export GITHUB_TOKEN=ghp_xxx GITHUB_USER=you && git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
+| **Linux / macOS (git + registries)** | `export GITHUB_TOKEN=ghp_xxx GITHUB_USER=you && git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
 | **Linux / macOS (install + wizard)** | `./scripts/install.sh --wizard` |
 | **Windows (PowerShell)** | `git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz; & "$env:USERPROFILE\clawz\scripts\install.ps1 -Docker -Prebuilt"` |
 | **Windows (install + wizard)** | `.\scripts\install.ps1 -Docker -Prebuilt -Wizard` |
@@ -189,7 +189,7 @@ Curl requires the repo to be **public** (or use the git one-liner with your cred
 | — | `-InstallDocker` | Attempt Docker Desktop install via **winget** (Windows) |
 | — | `-Prebuilt` | Explicit prebuilt pull (default when not using `-Build`) |
 
-Set `GITHUB_TOKEN` (PAT with `read:packages`) and `GITHUB_USER` before the default prebuilt install. See [docs/private-registry.md](docs/private-registry.md).
+Set `GITHUB_TOKEN` (`read:packages`) and `GITHUB_USER` for GHCR; optional `DOCKERHUB_*` for Hub fallback. See [docs/private-registry.md](docs/private-registry.md).
 
 **Operator CLI** (from repo: `cargo build -p clawz-cli --release`):
 
@@ -226,7 +226,7 @@ docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml logs -f gate
 ```
 
 Copy `.env.example` to `.env` before production and set real secrets (`CLAWZ_JWT_SECRET`, `CLAWZ_WORKER_TOKEN`, disable `CLAWZ_DISABLE_AUTH`).  
-Prebuilt images: `docker login ghcr.io` then install — see [docs/private-registry.md](docs/private-registry.md).
+Prebuilt images: `docker login` (Docker Hub private repos) — see [docs/private-registry.md](docs/private-registry.md).
 
 Full install guide: **[INSTALL.md](INSTALL.md)** (all platforms, production checklist, troubleshooting).
 
@@ -254,7 +254,7 @@ cp .env.example .env
 #### 2. Docker Compose (recommended)
 
 ```bash
-docker login ghcr.io
+docker login
 docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d
 curl http://localhost:3000/api/v1/system/health
 ```

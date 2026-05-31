@@ -301,8 +301,9 @@ The `DeploymentMode` enum (clawz-core::deployment) controls which subsystems act
 For local development, use the one-click installer (Docker Compose **micro/fleet** by default):
 
 ```bash
-docker login ghcr.io              # required for private prebuilt images on GHCR
+docker login ghcr.io              # primary: GitHub PAT (read:packages)
 export GITHUB_TOKEN=ghp_xxx GITHUB_USER=you
+export DOCKERHUB_USERNAME=sajav DOCKERHUB_TOKEN=dckr_pat_xxx  # optional Hub fallback
 git clone https://github.com/improwyz/clawz.git ~/clawz && cd ~/clawz
 ./scripts/install.sh              # prebuilt pull → db → migrate → worker + gateway
 ./scripts/install.sh --build      # local image build (docker-compose.build.yml)

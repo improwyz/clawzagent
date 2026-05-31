@@ -1,4 +1,4 @@
-# Overlay: pull platform images from a registry (private GHCR recommended).
+# Overlay: pull platform images (GHCR primary; installer may fall back to Docker Hub).
 # Usage: docker login ghcr.io && docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml pull
 
 services:
