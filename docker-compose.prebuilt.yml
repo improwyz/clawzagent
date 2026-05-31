@@ -3,17 +3,17 @@
 
 services:
   gateway:
-    image: ${CLAWZ_REGISTRY:-ghcr.io/improwyz}/clawz-gateway:${CLAWZ_IMAGE_TAG:-latest}
+    image: ${CLAWZ_GATEWAY_IMAGE:-${CLAWZ_REGISTRY:-ghcr.io/improwyz}/clawz-gateway:${CLAWZ_IMAGE_TAG:-latest}}
     pull_policy: if_not_present
 
   worker:
-    image: ${CLAWZ_REGISTRY:-ghcr.io/improwyz}/clawz-worker:${CLAWZ_IMAGE_TAG:-latest}
+    image: ${CLAWZ_WORKER_IMAGE:-${CLAWZ_REGISTRY:-ghcr.io/improwyz}/clawz-worker:${CLAWZ_IMAGE_TAG:-latest}}
     pull_policy: if_not_present
 
   dashboard:
     profiles:
       - web
-    image: ${CLAWZ_REGISTRY:-ghcr.io/improwyz}/clawz-dashboard:${CLAWZ_IMAGE_TAG:-latest}
+    image: ${CLAWZ_DASHBOARD_IMAGE:-${CLAWZ_REGISTRY:-ghcr.io/improwyz}/clawz-dashboard:${CLAWZ_IMAGE_TAG:-latest}}
     pull_policy: if_not_present
     ports:
       - "4173:80"

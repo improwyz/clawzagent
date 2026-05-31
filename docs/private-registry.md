@@ -5,7 +5,7 @@ ClawZ publishes the same platform images to **two private registries**:
 | Priority | Registry | Image path |
 |----------|----------|------------|
 | **Primary** | GitHub Container Registry (GHCR) | `ghcr.io/improwyz/clawz-{gateway,worker,agent,dashboard}:<tag>` |
-| **Fallback** | Docker Hub (private repos) | `docker.io/<namespace>/clawz-{gateway,worker,agent,dashboard}:<tag>` |
+| **Fallback** | Docker Hub (private repos) | `docker.io/<namespace>/clawz-{gateway,worker,agent,dashboard}:<tag>` **or** one repo: `docker.io/<namespace>/clawz:gateway-<tag>`, … |
 
 **Default install** pulls from **GHCR** first. If that fails (auth, outage, or missing manifest), the installer automatically retries **Docker Hub** when fallback credentials are configured.
 
@@ -70,7 +70,27 @@ Use an **access token**, not your account password:
 echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 ```
 
-Create **private** repositories on hub.docker.com: `clawz-gateway`, `clawz-worker`, `clawz-agent`, `clawz-dashboard`.
+**Warning:** If you `docker push` to a repository that does not exist yet, Docker Hub creates it as **public** by default. Always create private repos first (UI or `./scripts/publish-dockerhub.sh`), and use a token with **Read + Write + Delete** so the publish script can enforce `is_private: true` via the Hub API. Read-only tokens can log in and push but will leak images publicly.
+
+Create **private** repositories on hub.docker.com (or let `publish-dockerhub.sh` create them):
+
+- **Four repos:** `clawz-gateway`, `clawz-worker`, `clawz-agent`, `clawz-dashboard`
+- **One repo (monorepo):** `clawz` with component tags `gateway-latest`, `worker-latest`, `agent-latest`, `dashboard-latest`
+
+Monorepo install/publish:
+
+```bash
+export CLAWZ_HUB_MONOREPO=clawz
+export CLAWZ_REGISTRY_FALLBACK=docker.io/your_namespace
+CLAWZ_HUB_MONOREPO=clawz ./scripts/publish-dockerhub.sh
+```
+
+Verify privacy before sharing credentials:
+
+```bash
+export DOCKERHUB_USERNAME=your_namespace DOCKERHUB_TOKEN=dckr_pat_xxxx
+SKIP_BUILD=1 ./scripts/publish-dockerhub.sh   # creates/patches repos only; exits if not private
+```
 
 ---
 
@@ -103,7 +123,7 @@ export DOCKERHUB_TOKEN=dckr_pat_xxxx
 ./scripts/publish-dockerhub.sh
 ```
 
-The script creates **private** repositories if missing, enforces `is_private: true`, then builds and pushes all four images with tags `main` and `latest` (override with `CLAWZ_IMAGE_TAG`).
+The script **refuses to push** until all four repositories exist and Hub API reports `is_private: true`. It creates private repos when the token has write scope, patches public repos to private, then builds and pushes with tags `main` and `latest` (override with `CLAWZ_IMAGE_TAG`).
 
 ---
 
@@ -116,7 +136,8 @@ The script creates **private** repositories if missing, enforces `is_private: tr
 | `DOCKERHUB_USERNAME` | Hub namespace for fallback |
 | `DOCKERHUB_TOKEN` | Hub access token for fallback |
 | `CLAWZ_REGISTRY` | Primary registry path (default `ghcr.io/improwyz`) |
-| `CLAWZ_REGISTRY_FALLBACK` | Explicit fallback (default `docker.io/$DOCKERHUB_USERNAME` when set) |
+| `CLAWZ_REGISTRY_FALLBACK` | Explicit fallback (default `docker.io/$DOCKERHUB_USERNAME` when set). Use `docker.io/$USER/clawz` to auto-enable monorepo |
+| `CLAWZ_HUB_MONOREPO` | Hub repo name for single-repo layout (e.g. `clawz` → `clawz:gateway-latest`) |
 | `CLAWZ_IMAGE_TAG` | `latest`, `main`, `v1.0.2`, or `sha-…` |
 | `CLAWZ_AGENT_IMAGE` | Set automatically after successful pull |
 
@@ -157,5 +178,6 @@ docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d
 | GHCR `denied` / `401` | Fix `GITHUB_TOKEN` scopes; grant package Read |
 | GHCR `manifest unknown` | Wait for CI or tag a release; or rely on Hub fallback |
 | Fallback not attempted | Set `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` |
+| Images appeared on public Hub repos | Token lacked repo write scope; `docker push` auto-created **public** repos. Delete them, create **private** repos (UI or new token + `SKIP_BUILD=1 ./scripts/publish-dockerhub.sh`), then publish again |
 | Hub `pull access denied` | `docker login`; private repo + collaborator access |
 | Both fail | `./install.sh --build` |

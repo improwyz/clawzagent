@@ -59,7 +59,7 @@ load_env_file() {
   fi
   export CLAWZ_REGISTRY="${CLAWZ_REGISTRY:-ghcr.io/improwyz}"
   export CLAWZ_IMAGE_TAG="${CLAWZ_IMAGE_TAG:-latest}"
-  export CLAWZ_AGENT_IMAGE="${CLAWZ_AGENT_IMAGE:-${CLAWZ_REGISTRY}/clawz-agent:${CLAWZ_IMAGE_TAG}}"
+  clawz_export_compose_images "${CLAWZ_REGISTRY}" multirepo
 }
 
 require_docker() {
@@ -332,8 +332,9 @@ run_doctor() {
   log "Compose status:"
   compose_prebuilt ps || true
   echo ""
-  local gw_image="${CLAWZ_REGISTRY}/clawz-gateway:${CLAWZ_IMAGE_TAG}"
-  local wk_image="${CLAWZ_REGISTRY}/clawz-worker:${CLAWZ_IMAGE_TAG}"
+  clawz_export_compose_images "${CLAWZ_REGISTRY}"
+  local gw_image="${CLAWZ_GATEWAY_IMAGE}"
+  local wk_image="${CLAWZ_WORKER_IMAGE}"
   log "Image digests (if present locally):"
   log "  gateway: $(image_digest "$gw_image")"
   log "  worker:  $(image_digest "$wk_image")"

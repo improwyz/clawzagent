@@ -177,16 +177,81 @@ registry_dockerhub_user() {
     echo "$DOCKERHUB_USERNAME"
     return 0
   fi
-  if [[ "${CLAWZ_REGISTRY_FALLBACK:-}" =~ ^docker\.io/([^/]+)$ ]]; then
+  if [[ "${CLAWZ_REGISTRY_FALLBACK:-}" =~ ^docker\.io/([^/]+)(/clawz)?$ ]]; then
     echo "${BASH_REMATCH[1]}"
     return 0
   fi
   return 1
 }
 
+# docker.io/user/clawz → docker.io/user and enables monorepo tags (clawz:gateway-latest).
+clawz_normalize_registry_path() {
+  local path="$1"
+  if [[ "$path" =~ ^(docker\.io/[^/]+)/clawz$ ]]; then
+    export CLAWZ_HUB_MONOREPO="${CLAWZ_HUB_MONOREPO:-clawz}"
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  echo "$path"
+}
+
+clawz_hub_monorepo_name() {
+  echo "${CLAWZ_HUB_MONOREPO:-clawz}"
+}
+
+clawz_image_layout_for_registry() {
+  local registry="$1"
+  local forced="${2:-}"
+  if [[ "$forced" == "monorepo" || "$forced" == "multirepo" ]]; then
+    echo "$forced"
+    return 0
+  fi
+  if [[ "${CLAWZ_IMAGE_LAYOUT:-}" == "monorepo" || "${CLAWZ_IMAGE_LAYOUT:-}" == "multirepo" ]]; then
+    echo "${CLAWZ_IMAGE_LAYOUT}"
+    return 0
+  fi
+  if [[ -n "${CLAWZ_HUB_MONOREPO:-}" ]]; then
+    local hub_user
+    hub_user="$(registry_dockerhub_user)" || true
+    if [[ -n "$hub_user" && "$registry" == "docker.io/${hub_user}" ]]; then
+      echo monorepo
+      return 0
+    fi
+  fi
+  echo multirepo
+}
+
+clawz_component_image() {
+  local component="$1"
+  local registry="$2"
+  local tag="${3:-${CLAWZ_IMAGE_TAG:-latest}}"
+  local layout_force="${4:-}"
+  local layout
+  layout="$(clawz_image_layout_for_registry "$registry" "$layout_force")"
+  if [[ "$layout" == "monorepo" ]]; then
+    echo "${registry}/$(clawz_hub_monorepo_name):${component}-${tag}"
+  else
+    echo "${registry}/clawz-${component}:${tag}"
+  fi
+}
+
+clawz_export_compose_images() {
+  local registry="$1"
+  local layout="${2:-}"
+  export CLAWZ_GATEWAY_IMAGE="$(clawz_component_image gateway "$registry" "${CLAWZ_IMAGE_TAG}" "$layout")"
+  export CLAWZ_WORKER_IMAGE="$(clawz_component_image worker "$registry" "${CLAWZ_IMAGE_TAG}" "$layout")"
+  export CLAWZ_DASHBOARD_IMAGE="$(clawz_component_image dashboard "$registry" "${CLAWZ_IMAGE_TAG}" "$layout")"
+  export CLAWZ_AGENT_IMAGE="$(clawz_component_image agent "$registry" "${CLAWZ_IMAGE_TAG}" "$layout")"
+  if [[ -n "$layout" ]]; then
+    log "Image refs (${layout}): ${CLAWZ_GATEWAY_IMAGE}"
+  fi
+}
+
 clawz_registry_fallback() {
+  local path
   if [[ -n "${CLAWZ_REGISTRY_FALLBACK:-}" ]]; then
-    echo "$CLAWZ_REGISTRY_FALLBACK"
+    path="$(clawz_normalize_registry_path "${CLAWZ_REGISTRY_FALLBACK}")"
+    echo "$path"
     return 0
   fi
   local hub_user
@@ -235,6 +300,7 @@ registry_login_hint() {
   err "  export DOCKERHUB_USERNAME=your_namespace"
   err "  export DOCKERHUB_TOKEN=dckr_pat_xxxx"
   err "  export CLAWZ_REGISTRY_FALLBACK=docker.io/\${DOCKERHUB_USERNAME}"
+  err "  # one private Hub repo: export CLAWZ_HUB_MONOREPO=clawz"
   err ""
   err "Or: ./install.sh --build  (local compile, no registry)"
   err "Docs: docs/private-registry.md"
@@ -294,9 +360,9 @@ pull_prebuilt_images() {
   fi
 
   export CLAWZ_REGISTRY="$primary_registry"
+  clawz_export_compose_images "$primary_registry" multirepo
   log "Pulling from primary registry ${CLAWZ_REGISTRY} (tag ${CLAWZ_IMAGE_TAG})..."
   if _compose_pull_prebuilt "$pull_log" "$pull_services" "${compose_profile_args[@]}"; then
-    export CLAWZ_AGENT_IMAGE="${CLAWZ_REGISTRY}/clawz-agent:${CLAWZ_IMAGE_TAG}"
     return 0
   fi
 
@@ -311,10 +377,10 @@ pull_prebuilt_images() {
   warn "Primary registry (${primary_registry}) failed — trying fallback (${fallback_registry})..."
   login_dockerhub || true
   export CLAWZ_REGISTRY="$fallback_registry"
+  clawz_export_compose_images "$fallback_registry"
   : >"$pull_log"
-  log "Pulling from fallback registry ${CLAWZ_REGISTRY} (tag ${CLAWZ_IMAGE_TAG})..."
+  log "Pulling from fallback registry ${CLAWZ_REGISTRY} (tag ${CLAWZ_IMAGE_TAG}, layout $(clawz_image_layout_for_registry "$fallback_registry"))..."
   if _compose_pull_prebuilt "$pull_log" "$pull_services" "${compose_profile_args[@]}"; then
-    export CLAWZ_AGENT_IMAGE="${CLAWZ_REGISTRY}/clawz-agent:${CLAWZ_IMAGE_TAG}"
     return 0
   fi
 
@@ -348,10 +414,12 @@ install_with_docker() {
 
   export CLAWZ_REGISTRY="${CLAWZ_REGISTRY:-ghcr.io/improwyz}"
   export CLAWZ_IMAGE_TAG="${CLAWZ_IMAGE_TAG:-latest}"
-  if [[ -z "${CLAWZ_REGISTRY_FALLBACK:-}" && -n "${DOCKERHUB_USERNAME:-}" ]]; then
+  if [[ -n "${CLAWZ_REGISTRY_FALLBACK:-}" ]]; then
+    export CLAWZ_REGISTRY_FALLBACK="$(clawz_normalize_registry_path "${CLAWZ_REGISTRY_FALLBACK}")"
+  elif [[ -n "${DOCKERHUB_USERNAME:-}" ]]; then
     export CLAWZ_REGISTRY_FALLBACK="docker.io/${DOCKERHUB_USERNAME}"
   fi
-  export CLAWZ_AGENT_IMAGE="${CLAWZ_AGENT_IMAGE:-${CLAWZ_REGISTRY}/clawz-agent:${CLAWZ_IMAGE_TAG}}"
+  clawz_export_compose_images "${CLAWZ_REGISTRY}" multirepo
 
   local compose_mode="prebuilt"
   if [[ "$use_build" == "1" ]]; then
