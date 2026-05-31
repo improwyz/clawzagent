@@ -41,6 +41,9 @@ Thumbs.db
 !/docs/clawz-e2e-user-test-cases.csv
 !/docs/USER-MANUAL.md
 !/docs/ADMINISTRATION-MANUAL.md
+# Architecture Decision Records ship with the repo.
+!/docs/adr/
+!/docs/adr/**
 
 # Node
 node_modules/

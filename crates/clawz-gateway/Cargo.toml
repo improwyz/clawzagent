@@ -14,10 +14,10 @@ clawz-tui = { path = "../clawz-tui", version = "1.0.1" }
 clawz-setup = { path = "../clawz-setup" }
 sqlx = { workspace = true }
 
-# HTTP server
-axum = { version = "0.8", features = ["ws", "macros", "json"] }
-tower = "0.5"
-tower-http = { version = "0.6", features = ["cors", "trace", "fs"] }
+# HTTP server (versions centralized in [workspace.dependencies])
+axum = { workspace = true, features = ["ws"] }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["fs"] }
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -57,5 +57,5 @@ log = "0.4"
 
 [dev-dependencies]
 tokio-test = "0.4"
-tower = { version = "0.5", features = ["util"] }
+tower = { workspace = true, features = ["util"] }
 http-body-util = "0.1"
