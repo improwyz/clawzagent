@@ -99,7 +99,7 @@ impl TenantRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clawz_core::types::orchestration::HealthStatus;
+    use clawz_core::types::orchestration::{AgentSpec, HealthStatus};
 
     #[test]
     fn tenant_router_module_loads() {
