@@ -23,6 +23,9 @@
 pub mod api_key;
 pub mod jwt;
 
+use std::sync::Arc;
+use std::sync::LazyLock;
+
 use axum::{
     body::Body,
     extract::Request,
@@ -30,6 +33,33 @@ use axum::{
     middleware::Next,
     response::Response,
 };
+use parking_lot::RwLock;
+
+/// Cache of API-key records parsed from `VALID_API_KEYS`, keyed by the raw env
+/// value so a runtime change is picked up on the next request.
+///
+/// Without this the auth middleware re-split the env var and re-hashed every
+/// plain key (SHA-256) on *every* authenticated request. The cache parses once
+/// and reuses the result until the env value changes.
+type ApiKeyCache = Option<(Option<String>, Arc<Vec<api_key::ApiKeyRecord>>)>;
+static API_KEY_CACHE: LazyLock<RwLock<ApiKeyCache>> = LazyLock::new(|| RwLock::new(None));
+
+/// Return the parsed API-key records, parsing from the environment only when the
+/// `VALID_API_KEYS` value differs from what is cached (fail-safe on change).
+fn cached_api_key_records() -> Arc<Vec<api_key::ApiKeyRecord>> {
+    let current = std::env::var("VALID_API_KEYS").ok();
+    {
+        let guard = API_KEY_CACHE.read();
+        if let Some((cached_raw, records)) = guard.as_ref() {
+            if *cached_raw == current {
+                return records.clone();
+            }
+        }
+    }
+    let records = Arc::new(load_api_key_records_from_env());
+    *API_KEY_CACHE.write() = Some((current, records.clone()));
+    records
+}
 
 fn default_tenant_id() -> String {
     std::env::var("CLAWZ_TENANT_ID").unwrap_or_else(|_| "default".to_string())
@@ -274,9 +304,11 @@ async fn try_api_key(
     // In a real deployment the valid keys would come from a database or
     // shared state injected via an extension. For now we look up an
     // environment variable list: VALID_API_KEYS=<hash1>:<user_id>:<role>,...
-    let records = load_api_key_records_from_env();
+    // Records are cached (keyed by the env value) so we don't re-parse and
+    // re-hash on every request; see `cached_api_key_records`.
+    let records = cached_api_key_records();
     // Dependency: api_key sub-module for validation logic.
-    match api_key::ApiKeyValidator::validate(&raw_key, &records) {
+    match api_key::ApiKeyValidator::validate(&raw_key, records.as_slice()) {
         Some(record) => {
             let ctx = AuthContext {
                 user_id: record.user_id.clone(),
@@ -406,4 +438,18 @@ fn load_api_key_records_from_env() -> Vec<api_key::ApiKeyRecord> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_key_cache_reuses_parsed_records() {
+        // VALID_API_KEYS is unset in the lib test process, so repeated calls
+        // must return the same cached Arc rather than re-parsing each time.
+        let a = cached_api_key_records();
+        let b = cached_api_key_records();
+        assert!(Arc::ptr_eq(&a, &b));
+    }
 }
