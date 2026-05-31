@@ -60,7 +60,7 @@ pub async fn dispatch_parsed_messages(
         {
             tracing::info!(
                 channel_id = %record.id,
-                peer = %msg.from,
+                peer = %redact_peer(&msg.from),
                 "inbound blocked — peer not paired"
             );
             continue;
@@ -241,6 +241,17 @@ fn verify_hmac_sha256_hex(secret: &str, body: &[u8], signature_hex: &str) -> boo
         diff |= a ^ b;
     }
     diff == 0
+}
+
+/// Redact a peer identifier (phone/email/handle) for logs.
+///
+/// Returns a stable, non-reversible short hash so operators can correlate
+/// repeated events from the same peer without logging raw PII.
+fn redact_peer(peer: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(peer.as_bytes());
+    let hex: String = digest.iter().take(6).map(|b| format!("{b:02x}")).collect();
+    format!("peer:{hex}")
 }
 
 /// Decode a hex string into bytes (returns `None` on malformed input).
