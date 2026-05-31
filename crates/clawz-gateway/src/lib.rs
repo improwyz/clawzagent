@@ -364,6 +364,14 @@ pub struct DeploymentRecord {
 ///
 /// Audit entries capture who did what, to which resource, and when.
 /// They are immutable and append-only.
+///
+/// Layering note: this is the **resource-centric API** audit row (actor,
+/// action, resource_type/id). It is intentionally distinct from
+/// `clawz_worker::governance::audit::AuditEntry`, which is an **agent-centric,
+/// SHA-256 hash-chained** governance record (`prev_hash`/`current_hash`,
+/// `AuditResult`). Merging them is unsafe: the worker entry's shape feeds its
+/// tamper-evidence hash. Different types that share a name, not duplicates.
+/// See ADR 0002.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEntry {
     /// Unique identifier for this audit entry.
