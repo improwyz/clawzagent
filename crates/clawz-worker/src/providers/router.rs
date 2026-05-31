@@ -14,9 +14,10 @@
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use clawz_core::{
+    circuit_breaker::{CircuitBreaker, CircuitBreakerConfig},
     error::ClawzError,
     types::{
         cost::BudgetConfig,
@@ -194,78 +195,22 @@ fn default_cb_timeout() -> u64 {
 }
 
 // ── Circuit breaker ───────────────────────────────────────────────────────────
+//
+// Per-provider failure isolation uses `clawz_core::CircuitBreaker` (the
+// canonical, lock-free breaker) instead of a private copy. `breaker_for` builds
+// one from the router's reliability settings.
+//
+// Behavior note vs. the previous private breaker: in the HalfOpen state a single
+// failed probe re-opens the circuit (standard half-open semantics), where the
+// old breaker reset the failure counter on half-open and allowed `threshold`
+// fresh failures first. See ADR / Phase 4 dedup notes.
 
-/// Finite-state machine for per-provider circuit breaker.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CircuitState {
-    /// Normal operation — requests allowed.
-    Closed,
-    /// Failure threshold exceeded — requests blocked until timeout elapses.
-    Open { opened_at: Instant },
-    /// Probing after timeout — one successful request will close the circuit.
-    HalfOpen,
-}
-
-/// Per-provider failure-tracking circuit breaker.
-#[derive(Debug)]
-struct CircuitBreaker {
-    state: CircuitState,
-    failure_count: u32,
-    success_count: u32,
-    threshold: u32,
-    timeout: Duration,
-}
-
-impl CircuitBreaker {
-    fn new(threshold: u32, timeout_secs: u64) -> Self {
-        Self {
-            state: CircuitState::Closed,
-            failure_count: 0,
-            success_count: 0,
-            threshold,
-            timeout: Duration::from_secs(timeout_secs),
-        }
-    }
-
-    /// Returns `true` if the circuit is open (requests should NOT proceed).
-    fn is_open(&mut self) -> bool {
-        match &self.state {
-            CircuitState::Closed | CircuitState::HalfOpen => false,
-            CircuitState::Open { opened_at } => {
-                if opened_at.elapsed() >= self.timeout {
-                    log::info!("Circuit breaker half-opening");
-                    self.state = CircuitState::HalfOpen;
-                    self.failure_count = 0;
-                    false
-                } else {
-                    true
-                }
-            }
-        }
-    }
-
-    fn record_success(&mut self) {
-        self.failure_count = 0;
-        self.success_count += 1;
-        if self.state == CircuitState::HalfOpen {
-            log::info!("Circuit breaker closing after successful probe");
-            self.state = CircuitState::Closed;
-        }
-    }
-
-    fn record_failure(&mut self) {
-        self.failure_count += 1;
-        self.success_count = 0;
-        if self.failure_count >= self.threshold {
-            log::warn!(
-                "Circuit breaker opening after {} failures",
-                self.failure_count
-            );
-            self.state = CircuitState::Open {
-                opened_at: Instant::now(),
-            };
-        }
-    }
+/// Construct a per-provider circuit breaker from the router's reliability config.
+fn breaker_for(reliability: &ReliabilityConfig) -> CircuitBreaker {
+    CircuitBreaker::new(CircuitBreakerConfig {
+        failure_threshold: reliability.circuit_breaker_threshold,
+        recovery_timeout: Duration::from_secs(reliability.circuit_breaker_timeout_secs),
+    })
 }
 
 // ── ProviderRouter ────────────────────────────────────────────────────────────
@@ -304,13 +249,7 @@ impl ProviderRouter {
         // Pre-populate circuit breakers for known providers
         let mut breakers: HashMap<String, CircuitBreaker> = HashMap::new();
         for name in config.providers.keys() {
-            breakers.insert(
-                name.clone(),
-                CircuitBreaker::new(
-                    config.reliability.circuit_breaker_threshold,
-                    config.reliability.circuit_breaker_timeout_secs,
-                ),
-            );
+            breakers.insert(name.clone(), breaker_for(&config.reliability));
         }
 
         Ok(Self {
@@ -348,13 +287,10 @@ impl ProviderRouter {
             // Check circuit breaker
             {
                 let mut breakers = self.circuit_breakers.write().await;
-                let breaker = breakers.entry(provider_name.clone()).or_insert_with(|| {
-                    CircuitBreaker::new(
-                        self.reliability.circuit_breaker_threshold,
-                        self.reliability.circuit_breaker_timeout_secs,
-                    )
-                });
-                if breaker.is_open() {
+                let breaker = breakers
+                    .entry(provider_name.clone())
+                    .or_insert_with(|| breaker_for(&self.reliability));
+                if !breaker.allow_request() {
                     log::warn!("Circuit open for provider {provider_name}, skipping");
                     last_err = Some(ClawzError::Provider(format!(
                         "circuit open for {provider_name}"
@@ -409,13 +345,10 @@ impl ProviderRouter {
         // Check circuit breaker
         {
             let mut breakers = self.circuit_breakers.write().await;
-            let breaker = breakers.entry(provider_name.clone()).or_insert_with(|| {
-                CircuitBreaker::new(
-                    self.reliability.circuit_breaker_threshold,
-                    self.reliability.circuit_breaker_timeout_secs,
-                )
-            });
-            if breaker.is_open() {
+            let breaker = breakers
+                .entry(provider_name.clone())
+                .or_insert_with(|| breaker_for(&self.reliability));
+            if !breaker.allow_request() {
                 return Err(ClawzError::Provider(format!(
                     "circuit open for {provider_name}"
                 )));
@@ -725,51 +658,9 @@ mod tests {
         assert_eq!(config.resolved_api_key(), "sk-literal-key");
     }
 
-    #[test]
-    fn test_circuit_breaker_opens_after_threshold() {
-        let mut cb = CircuitBreaker::new(3, 30);
-        cb.record_failure();
-        cb.record_failure();
-        assert!(!cb.is_open()); // not yet
-        cb.record_failure(); // 3rd failure
-        assert!(cb.is_open());
-    }
-
-    #[test]
-    fn test_circuit_breaker_success_resets() {
-        let mut cb = CircuitBreaker::new(3, 30);
-        cb.record_failure();
-        cb.record_failure();
-        cb.record_success(); // resets failure count
-        cb.record_failure();
-        assert!(!cb.is_open()); // still only 1 failure
-    }
-
-    #[test]
-    fn test_circuit_breaker_half_open_after_timeout_then_closes() {
-        // 0s timeout means the open circuit immediately transitions to
-        // HalfOpen on the next check (pins open -> half-open -> closed).
-        let mut cb = CircuitBreaker::new(1, 0);
-        cb.record_failure();
-        assert!(matches!(cb.state, CircuitState::Open { .. }));
-        // Probe allowed: Open + elapsed >= timeout transitions to HalfOpen.
-        assert!(!cb.is_open());
-        assert_eq!(cb.state, CircuitState::HalfOpen);
-        // A successful probe closes the breaker.
-        cb.record_success();
-        assert_eq!(cb.state, CircuitState::Closed);
-    }
-
-    #[test]
-    fn test_circuit_breaker_half_open_failure_reopens() {
-        let mut cb = CircuitBreaker::new(1, 0);
-        cb.record_failure();
-        assert!(!cb.is_open()); // -> HalfOpen, failure_count reset to 0
-        assert_eq!(cb.state, CircuitState::HalfOpen);
-        // A failed probe re-opens the circuit (threshold 1).
-        cb.record_failure();
-        assert!(matches!(cb.state, CircuitState::Open { .. }));
-    }
+    // Circuit-breaker FSM behavior (open / half-open / close / reopen) is now
+    // owned and tested by `clawz_core::circuit_breaker`; the router only
+    // constructs and consults the shared breaker via `breaker_for`.
 
     #[test]
     fn test_get_adapter_known_providers() {
