@@ -30,6 +30,7 @@ pub mod connector_scheduler;
 pub mod connectors;
 pub mod db_bootstrap;
 pub mod deploy;
+pub mod idempotency;
 pub mod mcp;
 pub mod password;
 pub mod postgres_platform_store;

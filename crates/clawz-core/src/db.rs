@@ -821,6 +821,32 @@ CREATE TABLE IF NOT EXISTS gateway_channels (
 );
 
 CREATE INDEX IF NOT EXISTS idx_gateway_channels_tenant ON gateway_channels(tenant_id);
+
+-- Distributed (cross-fleet) rate-limit counters: fixed-window hit counts keyed
+-- by "{class}:{actor}". The per-node in-memory bucket is the fast path; this
+-- table enforces a shared quota across all gateway nodes (fail-open on error).
+CREATE TABLE IF NOT EXISTS rate_limit_counters (
+    bucket       TEXT NOT NULL,
+    window_start BIGINT NOT NULL,
+    hits         BIGINT NOT NULL DEFAULT 0,
+    PRIMARY KEY (bucket, window_start)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rate_limit_counters_window ON rate_limit_counters(window_start);
+
+-- Idempotency keys for non-idempotent POSTs: stores the first response so a
+-- retried request with the same Idempotency-Key replays it instead of acting
+-- twice. Rows are pruned past their TTL.
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    id           TEXT PRIMARY KEY,
+    method       TEXT NOT NULL,
+    path         TEXT NOT NULL,
+    status_code  INT NOT NULL,
+    response     JSONB NOT NULL DEFAULT '{}',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_idempotency_keys_created ON idempotency_keys(created_at);
 "#;
 
 // ── run_migrations ────────────────────────────────────────────────────────────
@@ -828,9 +854,20 @@ CREATE INDEX IF NOT EXISTS idx_gateway_channels_tenant ON gateway_channels(tenan
 /// Execute all DDL migrations against the connected pool.
 /// This is idempotent (uses `IF NOT EXISTS` everywhere).
 pub async fn run_migrations(pool: &PgPool) -> Result<()> {
-    for statement in MIGRATIONS_SQL.split(';') {
+    // Strip `--` line comments before splitting on `;`. A naive split would
+    // break a statement whenever a comment contains a semicolon; the controlled
+    // DDL below has no string literals containing `--`, so this is safe.
+    let cleaned: String = MIGRATIONS_SQL
+        .lines()
+        .map(|line| match line.find("--") {
+            Some(idx) => &line[..idx],
+            None => line,
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    for statement in cleaned.split(';') {
         let trimmed = statement.trim();
-        if trimmed.is_empty() || trimmed.starts_with("--") {
+        if trimmed.is_empty() {
             continue;
         }
         sqlx::query(trimmed)

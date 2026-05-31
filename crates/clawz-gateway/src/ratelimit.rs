@@ -6,14 +6,16 @@
 //! strictly than general API traffic. Exceeding the budget returns `429` with a
 //! `Retry-After` and `X-RateLimit-*` headers.
 //!
-//! This is the per-node "fast path"; a distributed (Postgres-backed) counter for
-//! cross-fleet quota enforcement is a planned follow-up. Limits are env-tunable
-//! (`CLAWZ_RATELIMIT_PER_MIN`, `CLAWZ_RATELIMIT_AUTH_PER_MIN`) and the layer can
-//! be disabled with `CLAWZ_RATELIMIT_DISABLED=1`.
+//! This is the per-node "fast path". When a Postgres pool is registered (via
+//! [`set_distributed_pool`]), a fixed-window counter additionally enforces a
+//! shared cross-fleet quota (fail-open on DB error). Limits are env-tunable
+//! (`CLAWZ_RATELIMIT_PER_MIN`, `CLAWZ_RATELIMIT_AUTH_PER_MIN`,
+//! `CLAWZ_RATELIMIT_DISTRIBUTED_PER_MIN`) and the layer can be disabled with
+//! `CLAWZ_RATELIMIT_DISABLED=1`.
 
 use std::collections::HashMap;
-use std::sync::LazyLock;
-use std::time::Instant;
+use std::sync::{LazyLock, OnceLock};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use axum::{
     extract::Request,
@@ -22,6 +24,17 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use parking_lot::Mutex;
+use sqlx::PgPool;
+
+/// Optional Postgres pool for distributed (cross-fleet) quota enforcement.
+/// Registered once at bootstrap when `DATABASE_URL` is configured; when unset
+/// the limiter is per-node only.
+static DISTRIBUTED_POOL: OnceLock<PgPool> = OnceLock::new();
+
+/// Register the Postgres pool used for cross-fleet rate-limit counters.
+pub fn set_distributed_pool(pool: PgPool) {
+    let _ = DISTRIBUTED_POOL.set(pool);
+}
 
 /// A single actor's token bucket.
 struct Bucket {
@@ -125,6 +138,57 @@ fn check(store_key: &str, policy: &Policy) -> Result<u64, u64> {
     }
 }
 
+/// Cross-fleet quota check via a Postgres fixed-window counter.
+///
+/// No-op (allows) when no pool is registered. The per-node bucket is the fast
+/// path; this enforces a shared ceiling across all gateway nodes. On any DB
+/// error it **fails open** (allows + logs) so a database blip can't take the
+/// API down. `Err(retry_after_secs)` means the shared quota is exhausted.
+async fn distributed_check(bucket: &str, policy: &Policy) -> Result<(), u64> {
+    let Some(pool) = DISTRIBUTED_POOL.get() else {
+        return Ok(());
+    };
+    // Default the cross-fleet ceiling well above the per-node cap so it only
+    // catches egregious distributed abuse; fully env-tunable.
+    let limit = env_f64(
+        "CLAWZ_RATELIMIT_DISTRIBUTED_PER_MIN",
+        policy.capacity * 10.0,
+    ) as i64;
+    let window = policy.window_secs as u64;
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let window_start = (now / window * window) as i64;
+    let res = sqlx::query_scalar::<_, i64>(
+        "INSERT INTO rate_limit_counters (bucket, window_start, hits) VALUES ($1, $2, 1) \
+         ON CONFLICT (bucket, window_start) DO UPDATE SET hits = rate_limit_counters.hits + 1 \
+         RETURNING hits",
+    )
+    .bind(bucket)
+    .bind(window_start)
+    .fetch_one(pool)
+    .await;
+    match res {
+        Ok(hits) if hits > limit => Err((window - (now % window)).max(1)),
+        Ok(_) => Ok(()),
+        Err(e) => {
+            tracing::warn!("distributed rate-limit check failed (fail-open): {e}");
+            Ok(())
+        }
+    }
+}
+
+/// Build the standard `429 Too Many Requests` response with rate-limit headers.
+fn too_many(limit: u64, retry_after: u64) -> Response {
+    let mut resp = (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded\n").into_response();
+    let h = resp.headers_mut();
+    h.insert(header::RETRY_AFTER, HeaderValue::from(retry_after));
+    h.insert("x-ratelimit-limit", HeaderValue::from(limit));
+    h.insert("x-ratelimit-remaining", HeaderValue::from(0u64));
+    resp
+}
+
 /// Paths exempt from rate limiting (liveness + docs).
 fn exempt(path: &str) -> bool {
     path == "/health" || path.starts_with("/api/docs")
@@ -152,20 +216,18 @@ pub async fn rate_limit(request: Request, next: Next) -> Response {
 
     match check(&store_key, &policy) {
         Ok(remaining) => {
+            // Per-node bucket passed; enforce the cross-fleet quota too (no-op
+            // when no DB pool is registered; fails open on DB error).
+            if let Err(retry_after) = distributed_check(&store_key, &policy).await {
+                return too_many(limit, retry_after);
+            }
             let mut resp = next.run(request).await;
             let h = resp.headers_mut();
             h.insert("x-ratelimit-limit", HeaderValue::from(limit));
             h.insert("x-ratelimit-remaining", HeaderValue::from(remaining));
             resp
         }
-        Err(retry_after) => {
-            let mut resp = (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded\n").into_response();
-            let h = resp.headers_mut();
-            h.insert(header::RETRY_AFTER, HeaderValue::from(retry_after));
-            h.insert("x-ratelimit-limit", HeaderValue::from(limit));
-            h.insert("x-ratelimit-remaining", HeaderValue::from(0u64));
-            resp
-        }
+        Err(retry_after) => too_many(limit, retry_after),
     }
 }
 
@@ -191,5 +253,34 @@ mod tests {
         assert_eq!(class, "auth");
         let (class, _) = policy_for("/api/v1/agents");
         assert_eq!(class, "api");
+    }
+
+    /// Exercises the distributed (Postgres) counter end-to-end. Skips unless
+    /// DATABASE_URL is set, so the normal lib test run is unaffected.
+    #[tokio::test]
+    async fn distributed_counter_enforces_shared_quota() {
+        let Ok(url) = std::env::var("DATABASE_URL") else {
+            return; // no DB configured in this run; nothing to assert
+        };
+        let pool = PgPool::connect(&url).await.expect("connect");
+        clawz_core::db::run_migrations(&pool)
+            .await
+            .expect("migrate");
+        set_distributed_pool(pool);
+        // A low ceiling + unique bucket keep the test isolated and fast.
+        unsafe {
+            std::env::set_var("CLAWZ_RATELIMIT_DISTRIBUTED_PER_MIN", "2");
+        }
+        let policy = Policy {
+            capacity: 100.0,
+            window_secs: 60.0,
+        };
+        let bucket = format!("test:{}", uuid::Uuid::new_v4());
+        assert!(distributed_check(&bucket, &policy).await.is_ok()); // hits=1
+        assert!(distributed_check(&bucket, &policy).await.is_ok()); // hits=2
+        assert!(distributed_check(&bucket, &policy).await.is_err()); // hits=3 > 2
+        unsafe {
+            std::env::remove_var("CLAWZ_RATELIMIT_DISTRIBUTED_PER_MIN");
+        }
     }
 }

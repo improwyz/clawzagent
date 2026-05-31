@@ -94,6 +94,9 @@ impl GatewayServer {
 
         router
             .layer(middleware::from_fn(security_headers))
+            // Idempotency-Key replay for mutating requests (no-op unless a DB
+            // pool is registered and the request carries the header).
+            .layer(middleware::from_fn(crate::idempotency::idempotency))
             .layer(TraceLayer::new_for_http())
             .layer(cors)
             // Cap inbound request bodies to bound memory use / reject oversized
