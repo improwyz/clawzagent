@@ -70,6 +70,32 @@ fn require_member(room: &RoomRecord, user_id: &str) -> Result<(), GatewayError> 
     }
 }
 
+/// The caller's role in the room, if they are a participant.
+fn member_role<'a>(room: &'a RoomRecord, user_id: &str) -> Option<&'a str> {
+    room.participants
+        .iter()
+        .find(|p| p.participant_id == user_id)
+        .map(|p| p.role.as_str())
+}
+
+/// Authorize granting `role` to a participant.
+///
+/// Only existing room owners may grant the privileged "owner" role; this closes
+/// a privilege-escalation path where any member could invite a participant as
+/// "owner".
+fn authorize_role_grant(
+    room: &RoomRecord,
+    caller_id: &str,
+    role: &str,
+) -> Result<(), GatewayError> {
+    if role == "owner" && member_role(room, caller_id) != Some("owner") {
+        return Err(GatewayError::Unauthorized(
+            "only a room owner can grant the owner role".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn next_seq(room: &RoomRecord) -> u64 {
     room.messages
         .iter()
@@ -497,6 +523,7 @@ async fn invite_participant(
         .ok_or_else(|| GatewayError::not_found("Room", &id))?;
     require_tenant_room(room, &tenant_id)?;
     require_member(room, &user_id)?;
+    authorize_role_grant(room, &user_id, &role)?;
 
     if room.participants.iter().any(|p| p.participant_id == pid) {
         return Err(GatewayError::Unprocessable(
