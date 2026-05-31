@@ -39,6 +39,7 @@ pub mod routes;
 pub mod scheduling;
 pub mod secrets;
 pub mod server;
+pub mod ssrf;
 pub mod shutdown;
 pub mod telephony;
 pub mod tool_catalog;
