@@ -269,10 +269,12 @@ mod tests {
 
     #[test]
     fn test_kv_client_from_enabled_config() {
-        let mut cfg = CloudflareConfig::default();
-        cfg.enabled = true;
-        cfg.account_id = "acc123".into();
-        cfg.api_token = "tok456".into();
+        let mut cfg = CloudflareConfig {
+            enabled: true,
+            account_id: "acc123".into(),
+            api_token: "tok456".into(),
+            ..Default::default()
+        };
         cfg.kv.enabled = true;
         cfg.kv.namespace_id = Some("ns-abc".into());
         let client = KvClient::from_config(&cfg).unwrap();

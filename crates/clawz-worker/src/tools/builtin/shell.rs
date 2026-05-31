@@ -276,18 +276,8 @@ impl Tool for ShellTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::ToolConfig;
     #[allow(unused_imports)]
     use serde_json::Value;
-
-    fn make_ctx() -> ToolContext {
-        ToolContext {
-            agent_id: "a".into(),
-            conversation_id: "c".into(),
-            user_id: None,
-            config: ToolConfig::default(),
-        }
-    }
 
     #[test]
     fn test_shell_name() {

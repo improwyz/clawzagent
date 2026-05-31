@@ -239,8 +239,9 @@ mod tests {
     fn user_config_setup_complete() {
         let dir = TempDir::new().expect("tempdir");
         let path = dir.path().join("config.json");
-        let mut cfg = ClawzUserConfig::default();
-        cfg.setup_complete = true;
+        let cfg = ClawzUserConfig {
+            setup_complete: true,
+        };
         cfg.save_to(&path).expect("save");
         let loaded = ClawzUserConfig::load_from(&path).expect("load");
         assert!(loaded.setup_complete);

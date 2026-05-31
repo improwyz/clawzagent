@@ -229,7 +229,7 @@ pub fn get_platform_tier() -> PlatformInfo {
         .map(|s| {
             let tier = s.platform_tier;
             PlatformInfo {
-                tier: format!("{:?}", tier),
+                tier: format!("{tier:?}"),
                 tier_name: tier.name().to_string(),
                 binary_budget_bytes: tier.binary_budget(),
                 ram_budget_bytes: tier.ram_budget(),
@@ -265,7 +265,7 @@ pub fn health_check() -> Result<String, String> {
         .map(|s| s.version.clone())
         .unwrap_or_else(|| "0.0.0".to_string());
 
-    Ok(format!("ClawZ {} — tier {} — {}", version, tier, rt_status))
+    Ok(format!("ClawZ {version} — tier {tier} — {rt_status}"))
 }
 
 #[tauri::command]

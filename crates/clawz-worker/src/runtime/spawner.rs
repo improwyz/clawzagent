@@ -273,10 +273,6 @@ mod tests {
         TenantContext::new("test-tenant".into(), clawz_core::types::TenantRole::Agent)
     }
 
-    fn make_policy() -> ScalePolicy {
-        ScalePolicy::new(3.0, 1.0, 5)
-    }
-
     #[tokio::test]
     async fn spawner_evaluates_workload_and_decides_scale_up() {
         let policy = ScalePolicy::new(3.0, 1.0, 5);

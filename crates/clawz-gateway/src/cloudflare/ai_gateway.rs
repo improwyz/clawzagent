@@ -299,8 +299,10 @@ mod tests {
 
     #[test]
     fn test_ai_gateway_from_enabled_config_missing_gateway_id() {
-        let mut cfg = CloudflareConfig::default();
-        cfg.enabled = true;
+        let mut cfg = CloudflareConfig {
+            enabled: true,
+            ..Default::default()
+        };
         cfg.ai_gateway.enabled = true;
         cfg.ai_gateway.gateway_id = None;
         assert!(AiGateway::from_config(&cfg).is_none());
@@ -308,10 +310,12 @@ mod tests {
 
     #[test]
     fn test_ai_gateway_from_enabled_config() {
-        let mut cfg = CloudflareConfig::default();
-        cfg.enabled = true;
-        cfg.account_id = "acc123".into();
-        cfg.api_token = "tok456".into();
+        let mut cfg = CloudflareConfig {
+            enabled: true,
+            account_id: "acc123".into(),
+            api_token: "tok456".into(),
+            ..Default::default()
+        };
         cfg.ai_gateway.enabled = true;
         cfg.ai_gateway.gateway_id = Some("my-gw".into());
         let gw = AiGateway::from_config(&cfg).unwrap();

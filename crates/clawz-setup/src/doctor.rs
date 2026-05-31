@@ -398,7 +398,7 @@ mod tests {
         assert!(tools.contains(&"install_deps"));
         assert!(tools.contains(&"compose_up"));
         assert!(tools.contains(&"doctor_run"));
-        assert!(!tools.iter().any(|t| *t == "write_env"));
+        assert!(!tools.contains(&"write_env"));
     }
 
     #[test]
@@ -407,9 +407,9 @@ mod tests {
         let names: Vec<_> = report.checks.iter().map(|c| c.name.as_str()).collect();
         assert!(names.contains(&"host spec"));
         assert!(names.contains(&"CLAWZ_MODE"));
-        assert!(!names.iter().any(|n| *n == "gateway"));
-        assert!(!names.iter().any(|n| *n == "worker"));
-        assert!(!names.iter().any(|n| *n == "docker compose"));
+        assert!(!names.contains(&"gateway"));
+        assert!(!names.contains(&"worker"));
+        assert!(!names.contains(&"docker compose"));
     }
 
     #[test]

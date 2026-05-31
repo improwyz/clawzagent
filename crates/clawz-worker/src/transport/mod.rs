@@ -114,32 +114,40 @@ mod tests {
 
     #[tokio::test]
     async fn factory_grpc() {
-        let mut config = TransportConfig::default();
-        config.mode = TransportMode::Grpc;
+        let config = TransportConfig {
+            mode: TransportMode::Grpc,
+            ..Default::default()
+        };
         let transport = create_transport(&config).unwrap();
         assert_eq!(transport.name(), "grpc-tcp");
     }
 
     #[tokio::test]
     async fn factory_quic() {
-        let mut config = TransportConfig::default();
-        config.mode = TransportMode::Quic;
+        let config = TransportConfig {
+            mode: TransportMode::Quic,
+            ..Default::default()
+        };
         let transport = create_transport(&config).unwrap();
         assert_eq!(transport.name(), "quic");
     }
 
     #[test]
     fn factory_wss() {
-        let mut config = TransportConfig::default();
-        config.mode = TransportMode::Wss;
+        let config = TransportConfig {
+            mode: TransportMode::Wss,
+            ..Default::default()
+        };
         let transport = create_transport(&config).unwrap();
         assert_eq!(transport.name(), "wss");
     }
 
     #[test]
     fn factory_in_process() {
-        let mut config = TransportConfig::default();
-        config.mode = TransportMode::InProcess;
+        let config = TransportConfig {
+            mode: TransportMode::InProcess,
+            ..Default::default()
+        };
         let transport = create_transport(&config).unwrap();
         assert_eq!(transport.name(), "in-process");
     }

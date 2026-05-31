@@ -861,7 +861,6 @@ fn is_model_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     /// Helper: write a minimal GGUF v3 file with STRING KV pairs for testing.
     fn write_gguf_v3(path: &Path, kv_pairs: &[(&str, &str)]) {

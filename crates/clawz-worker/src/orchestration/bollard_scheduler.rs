@@ -487,10 +487,11 @@ mod tests {
     }
 
     fn test_spec() -> AgentSpec {
-        let mut spec = AgentSpec::default();
-        spec.image = "alpine:latest".to_string();
-        spec.capabilities = vec!["chat".to_string(), "search".to_string()];
-        spec
+        AgentSpec {
+            image: "alpine:latest".to_string(),
+            capabilities: vec!["chat".to_string(), "search".to_string()],
+            ..Default::default()
+        }
     }
 
     /// Helper that skips Docker-dependent tests when the daemon is unavailable.
@@ -561,8 +562,10 @@ mod tests {
             }
         };
         let ctx = test_context();
-        let mut spec = AgentSpec::default();
-        spec.image = "alpine:latest".to_string();
+        let spec = AgentSpec {
+            image: "alpine:latest".to_string(),
+            ..Default::default()
+        };
 
         scheduler.spawn_agent(&ctx, spec.clone()).await.unwrap();
         scheduler.spawn_agent(&ctx, spec.clone()).await.unwrap();
@@ -623,8 +626,10 @@ mod tests {
         };
         let ctx1 = TenantContext::new(TenantId::new("tenant-1"), Role::Operator);
         let ctx2 = TenantContext::new(TenantId::new("tenant-2"), Role::Operator);
-        let mut spec = AgentSpec::default();
-        spec.image = "alpine:latest".to_string();
+        let spec = AgentSpec {
+            image: "alpine:latest".to_string(),
+            ..Default::default()
+        };
 
         scheduler.spawn_agent(&ctx1, spec.clone()).await.unwrap();
         scheduler.spawn_agent(&ctx1, spec.clone()).await.unwrap();
@@ -654,8 +659,10 @@ mod tests {
             return;
         };
         let ctx = test_context();
-        let mut spec = AgentSpec::default();
-        spec.image = "alpine:latest".to_string();
+        let spec = AgentSpec {
+            image: "alpine:latest".to_string(),
+            ..Default::default()
+        };
 
         let handle = scheduler.spawn_agent(&ctx, spec).await.unwrap();
         let health = scheduler.health(&handle).await.unwrap();
@@ -690,8 +697,10 @@ mod tests {
         };
         let ctx1 = TenantContext::new(TenantId::new("tenant-1"), Role::Operator);
         let ctx2 = TenantContext::new(TenantId::new("tenant-2"), Role::Operator);
-        let mut spec = AgentSpec::default();
-        spec.image = "alpine:latest".to_string();
+        let spec = AgentSpec {
+            image: "alpine:latest".to_string(),
+            ..Default::default()
+        };
 
         scheduler.spawn_agent(&ctx1, spec.clone()).await.unwrap();
 
@@ -723,8 +732,10 @@ mod tests {
             }
         };
         let ctx = test_context();
-        let mut spec = AgentSpec::default();
-        spec.image = "alpine:latest".to_string();
+        let spec = AgentSpec {
+            image: "alpine:latest".to_string(),
+            ..Default::default()
+        };
 
         let mut handles = vec![];
         for _ in 0..5 {

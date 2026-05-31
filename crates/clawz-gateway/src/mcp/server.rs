@@ -599,7 +599,7 @@ mod tests {
         let resp = dispatch(make_req("tools/list", None), test_state()).await;
         assert!(resp.error.is_none());
         let tools = &resp.result.unwrap()["tools"];
-        assert!(tools.as_array().unwrap().len() > 0);
+        assert!(!tools.as_array().unwrap().is_empty());
     }
 
     /// Verify that `tools/call` invokes a tool and wraps the result in text
@@ -626,7 +626,7 @@ mod tests {
         let resp = dispatch(make_req("resources/list", None), test_state()).await;
         assert!(resp.error.is_none());
         let resources = &resp.result.unwrap()["resources"];
-        assert!(resources.as_array().unwrap().len() > 0);
+        assert!(!resources.as_array().unwrap().is_empty());
     }
 
     /// Verify that `resources/read` successfully fetches a known resource.
