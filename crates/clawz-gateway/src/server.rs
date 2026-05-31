@@ -75,7 +75,8 @@ impl GatewayServer {
 
         let webhooks = Router::new()
             .merge(crate::routes::telephony::routes())
-            .merge(crate::routes::webhooks::routes());
+            .merge(crate::routes::webhooks::routes())
+            .layer(middleware::from_fn(crate::ratelimit::rate_limit));
 
         let mut router = Router::new()
             .route("/health", get(health))
@@ -136,6 +137,8 @@ impl GatewayServer {
             .nest("/dashboard", crate::routes::dashboard::routes())
             .route("/mcp", post(crate::mcp::handle_mcp_request))
             .layer(middleware::from_fn(crate::auth::auth_middleware))
+            // Outermost: reject floods before auth/handlers run.
+            .layer(middleware::from_fn(crate::ratelimit::rate_limit))
     }
 
     /// Bind and serve the gateway on the given address.

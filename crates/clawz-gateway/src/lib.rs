@@ -35,6 +35,7 @@ pub mod password;
 pub mod postgres_platform_store;
 pub mod postgres_store;
 pub mod prism_check;
+pub mod ratelimit;
 pub mod routes;
 pub mod scheduling;
 pub mod secrets;
