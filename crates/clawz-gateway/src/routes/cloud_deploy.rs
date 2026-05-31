@@ -141,5 +141,14 @@ async fn destroy_deployment(
         .destroy(&provider_id, &deployment_id)
         .await
         .map_err(|e| GatewayError::Internal(e.to_string()))?;
+    state
+        .append_audit(
+            "system",
+            "cloud.destroy",
+            "deployment",
+            &deployment_id,
+            Some(format!("provider={provider_id}")),
+        )
+        .await;
     Ok(StatusCode::NO_CONTENT)
 }

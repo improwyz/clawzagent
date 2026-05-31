@@ -96,6 +96,11 @@ impl GatewayServer {
             .layer(middleware::from_fn(security_headers))
             .layer(TraceLayer::new_for_http())
             .layer(cors)
+            // Cap inbound request bodies to bound memory use / reject oversized
+            // payloads. Only affects request bodies (not streaming responses or
+            // WS, which carry no upgrade-request body). Tunable via
+            // CLAWZ_MAX_BODY_BYTES; defaults to axum's historical 2 MiB.
+            .layer(axum::extract::DefaultBodyLimit::max(max_body_bytes()))
             .with_state(state)
     }
 
@@ -209,6 +214,19 @@ fn validate_release_config() {
             "CLAWZ_DISABLE_AUTH must not be enabled in release builds"
         );
     }
+}
+
+/// Maximum inbound request body size in bytes.
+///
+/// Reads `CLAWZ_MAX_BODY_BYTES`; falls back to 2 MiB (axum's historical default)
+/// so behavior is preserved unless an operator opts into a different cap.
+fn max_body_bytes() -> usize {
+    const DEFAULT: usize = 2 * 1024 * 1024;
+    std::env::var("CLAWZ_MAX_BODY_BYTES")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(DEFAULT)
 }
 
 /// Build the CORS layer from `CLAWZ_CORS_ALLOWED_ORIGINS` (comma-separated origins).

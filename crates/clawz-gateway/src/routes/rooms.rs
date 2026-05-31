@@ -548,6 +548,20 @@ async fn invite_participant(
             .map_err(|e| GatewayError::Internal(e.to_string()))?;
     }
 
+    // Audit the privilege-sensitive grant (see authorize_role_grant / IDOR fix).
+    state
+        .append_audit(
+            user_id.clone(),
+            "room.participant.invite",
+            "room",
+            id.clone(),
+            Some(format!(
+                "participant_id={} role={}",
+                participant.participant_id, participant.role
+            )),
+        )
+        .await;
+
     Ok(Json(json!({ "participant": participant })))
 }
 
