@@ -283,12 +283,7 @@ mod tests {
             .route("/", get(|| async { "ok" }))
             .layer(middleware::from_fn(security_headers));
         let res = app
-            .oneshot(
-                HttpRequest::builder()
-                    .uri("/")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
+            .oneshot(HttpRequest::builder().uri("/").body(Body::empty()).unwrap())
             .await
             .unwrap();
         let h = res.headers();

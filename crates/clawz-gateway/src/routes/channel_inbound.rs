@@ -320,7 +320,10 @@ mod webhook_auth_tests {
         let sig = sign("s3cr3t", body);
         let cfg = serde_json::json!({ "signing_secret": "s3cr3t" });
         let mut h = HeaderMap::new();
-        h.insert("x-hub-signature-256", format!("sha256={sig}").parse().unwrap());
+        h.insert(
+            "x-hub-signature-256",
+            format!("sha256={sig}").parse().unwrap(),
+        );
         assert!(matches!(
             classify_webhook_auth(&cfg, &h, body),
             WebhookAuth::Valid

@@ -93,7 +93,10 @@ mod tests {
             assert!(is_blocked_ip(ip.parse().unwrap()), "{ip} should be blocked");
         }
         for ip in ["8.8.8.8", "1.1.1.1", "93.184.216.34"] {
-            assert!(!is_blocked_ip(ip.parse().unwrap()), "{ip} should be allowed");
+            assert!(
+                !is_blocked_ip(ip.parse().unwrap()),
+                "{ip} should be allowed"
+            );
         }
     }
 }

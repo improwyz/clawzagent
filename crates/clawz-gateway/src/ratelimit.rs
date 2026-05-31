@@ -159,8 +159,7 @@ pub async fn rate_limit(request: Request, next: Next) -> Response {
             resp
         }
         Err(retry_after) => {
-            let mut resp =
-                (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded\n").into_response();
+            let mut resp = (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded\n").into_response();
             let h = resp.headers_mut();
             h.insert(header::RETRY_AFTER, HeaderValue::from(retry_after));
             h.insert("x-ratelimit-limit", HeaderValue::from(limit));
