@@ -846,11 +846,17 @@ impl IntoResponse for GatewayError {
                 (StatusCode::UNAUTHORIZED, "unauthorized", msg.clone())
             }
             GatewayError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone()),
-            GatewayError::Internal(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "internal_error",
-                msg.clone(),
-            ),
+            GatewayError::Internal(detail) => {
+                // Avoid leaking internals to clients: log the detail with a
+                // correlation id and return only that reference to the caller.
+                let correlation_id = Uuid::new_v4();
+                tracing::error!(%correlation_id, error = %detail, "internal error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal_error",
+                    format!("internal error (ref: {correlation_id})"),
+                )
+            }
             GatewayError::NotImplemented => (
                 StatusCode::NOT_IMPLEMENTED,
                 "not_implemented",
