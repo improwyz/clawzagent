@@ -117,6 +117,8 @@ pub async fn auth_middleware(
     mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    // Auth bypass is a debug-only convenience; it is compiled out of release builds.
+    #[cfg(debug_assertions)]
     if std::env::var("CLAWZ_DISABLE_AUTH").ok().as_deref() == Some("1") {
         request.extensions_mut().insert(dev_auth_context());
         return Ok(next.run(request).await);
@@ -130,12 +132,12 @@ pub async fn auth_middleware(
         return Ok(next.run(request).await);
     }
 
-    // Dependency: `JWT_SECRET` is expected to be set in production.
-    // Fallback to a well-known dev value so the gateway starts without extra
-    // configuration in local development.
-    let secret = std::env::var("CLAWZ_JWT_SECRET")
-        .or_else(|_| std::env::var("JWT_SECRET"))
-        .unwrap_or_else(|_| "changeme".to_string());
+    let secret = match jwt_secret() {
+        Some(s) => s,
+        // Release builds validate this at startup; if we reach here without a
+        // configured secret, fail closed rather than trust a default.
+        None => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
 
     // --- 1. Try Bearer JWT ---
     if let Some(auth_header) = request
@@ -196,13 +198,13 @@ pub fn resolve_request_auth(
     headers: &HeaderMap,
     api_key_query: Option<&str>,
 ) -> Result<AuthContext, StatusCode> {
+    // Auth bypass is a debug-only convenience; it is compiled out of release builds.
+    #[cfg(debug_assertions)]
     if std::env::var("CLAWZ_DISABLE_AUTH").ok().as_deref() == Some("1") {
         return Ok(dev_auth_context());
     }
 
-    let secret = std::env::var("CLAWZ_JWT_SECRET")
-        .or_else(|_| std::env::var("JWT_SECRET"))
-        .unwrap_or_else(|_| "changeme".to_string());
+    let secret = jwt_secret().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if let Some(auth_header) = headers.get("Authorization").and_then(|v| v.to_str().ok()) {
         if let Some(token) = auth_header.strip_prefix("Bearer ") {
@@ -311,6 +313,28 @@ fn extract_api_key_param(query: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Resolve the JWT signing secret.
+///
+/// In debug builds this falls back to a well-known dev value for local
+/// convenience. In release builds the secret must be configured (enforced at
+/// startup by the gateway), so there is no fallback and `None` is returned.
+fn jwt_secret() -> Option<String> {
+    if let Ok(s) = std::env::var("CLAWZ_JWT_SECRET") {
+        return Some(s);
+    }
+    if let Ok(s) = std::env::var("JWT_SECRET") {
+        return Some(s);
+    }
+    #[cfg(debug_assertions)]
+    {
+        Some("changeme".to_string())
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        None
+    }
 }
 
 /// Minimal percent-decode (only `%XX` sequences and `+` → space).
