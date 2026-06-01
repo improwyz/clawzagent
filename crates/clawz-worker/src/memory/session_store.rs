@@ -104,6 +104,9 @@ impl SessionStore for FileSessionStore {
         file.write_all(body.as_bytes())
             .await
             .map_err(|e| ClawzError::Internal(format!("write transcript: {e}")))?;
+        file.flush()
+            .await
+            .map_err(|e| ClawzError::Internal(format!("flush transcript: {e}")))?;
         Ok(())
     }
 
