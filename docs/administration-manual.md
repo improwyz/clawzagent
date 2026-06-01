@@ -386,7 +386,14 @@ Dashboard branding uses assets in `web/public/branding/`. Customize for white-la
 
 ### Audit controls
 
-Governance audit entries form a SHA-256 chain. Verify integrity before legal submission. Export entries via `GET /api/v1/governance/audit` with appropriate credentials.
+Two complementary audit trails exist. The **worker governance** log forms a
+tamper-evident SHA-256 hash chain (`prev_hash`/`current_hash`) — verify
+integrity before legal submission. The **gateway** keeps a resource-centric
+audit (`AppState::append_audit`, in-memory + best-effort Postgres) covering
+login/register, agent create/delete/onboard, policy create, deployments, and —
+new in v1.1 — **room role grants** and **cloud-deployment teardown**. Export
+governance entries via `GET /api/v1/governance/audit` with appropriate
+credentials. Blocked-webhook logs redact the peer identifier (PII).
 
 ```mermaid
 flowchart LR
@@ -418,11 +425,13 @@ Native JWT login exists at `/api/v1/system/auth/login`. WebAuthn endpoint is ava
 
 ### Authorization
 
-Every protected route passes through `auth_middleware`. Public routes are limited to health, setup (partial), and signed webhooks.
+Every protected route passes through `auth_middleware`. Public routes are limited to health, setup (partial), and signed webhooks. Beyond tenant ownership, privilege-sensitive operations are guarded by minimal RBAC (v1.1): only existing room **owners** may grant the `owner` role on participant invites (closes a privilege-escalation/IDOR path). **CORS** is locked to an origin allowlist via `CLAWZ_CORS_ALLOWED_ORIGINS` (permissive only behind an explicit dev flag), and standard security headers (HSTS in release, `X-Content-Type-Options`, `X-Frame-Options: DENY`, referrer-policy, CSP) are set on every response.
 
 ### Secrets management
 
 Never commit `.env`. Rotate `CLAWZ_JWT_SECRET`, `CLAWZ_WORKER_TOKEN`, and provider keys on compromise. Use separate secrets per environment.
+
+**Fail-closed in release (v1.1):** release builds refuse to boot without real secrets — a missing `CLAWZ_JWT_SECRET` or `CLAWZ_SECRETS_KEY` panics at startup with a clear message, the `"changeme"`/`dev-insecure-key` fallbacks are compiled out, and `CLAWZ_DISABLE_AUTH` is debug-only. Secrets at rest use a salted KDF (no bare SHA-256), with `enc:v2:` payloads for new values. Outbound connector/OAuth fetches pass through an **SSRF guard** (custom DNS resolver rejecting private/loopback/link-local ranges; redirects disabled).
 
 ### Data retention
 
@@ -458,7 +467,25 @@ PRISM-G **Infrastructure** dimension enforces resource bounds. Tool calls pass t
 
 ### Rate limits
 
-Provider rate limits and gateway admission protect shared infrastructure. Tune mesh gossip and heartbeat intervals in elastic mode.
+Three layers protect shared infrastructure:
+
+1. **Per-node request-rate limiting** (v1.1, `ratelimit.rs`) — an in-memory
+   per-actor token bucket on the hot path. Actor = API key (hashed) → forwarded
+   client IP → shared anonymous bucket. Env: `CLAWZ_RATELIMIT_PER_MIN`
+   (default 600/min), `CLAWZ_RATELIMIT_AUTH_PER_MIN` (default 30/min for
+   auth/setup paths). Disable with `CLAWZ_RATELIMIT_DISABLED=1`. Responses
+   carry `X-RateLimit-Limit`/`-Remaining`; `429` adds `Retry-After`.
+2. **Distributed (cross-fleet) quota** — when `DATABASE_URL` is set, an atomic
+   windowed counter in Postgres (`rate_limit_counters`) enforces a shared
+   ceiling across all gateway nodes. Env: `CLAWZ_RATELIMIT_DISTRIBUTED_PER_MIN`
+   (default 10× the per-node cap). **Fails open** on DB error so a database blip
+   cannot take the API down.
+3. **Admission control** (`scheduling/admission.rs`, per-tenant concurrency) and
+   **provider** rate limits downstream.
+
+Also enforce **request body-size limits** via `CLAWZ_MAX_BODY_BYTES` (default
+2 MiB → `413` on excess). Tune mesh gossip and heartbeat intervals in elastic
+mode separately.
 
 ### Human approval gates
 
@@ -466,7 +493,7 @@ Configure council quorum and approver lists. Untrusted agents always require app
 
 ### Abuse prevention
 
-Monitor for anomalous API key usage. Revoke keys immediately on leak. Use pairing for DM channels.
+Monitor for anomalous API key usage. Revoke keys immediately on leak. Use pairing for DM channels. The per-actor rate limiter, distributed quota, body-size cap, webhook HMAC verification, and SSRF guard (above) are the first line of defense; watch for sustained `429`/`401` bursts as early-abuse signals. Idempotency keys (see API reference) prevent duplicate side effects from client retries.
 
 ---
 

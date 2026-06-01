@@ -440,7 +440,11 @@ Each tool call runs through the same governance engine as messages. Expect delay
 
 ### Rate limits
 
-Heavy automation may hit admission or provider rate limits. Back off exponentially and contact administrators to raise quotas if your use case is approved.
+Heavy automation may hit per-actor request limits, admission, or provider rate limits. On a `429`, read the `Retry-After` header (seconds to wait) and back off exponentially; `X-RateLimit-Limit` and `X-RateLimit-Remaining` show your current budget. Auth/login endpoints are limited more strictly than normal API calls. Contact administrators to raise quotas (`CLAWZ_RATELIMIT_*`) if your use case is approved. Request bodies are capped (default 2 MiB) — very large payloads return `413`.
+
+### Safe retries with idempotency keys
+
+When you script create/run operations, send an `Idempotency-Key` header (a unique value per logical action, e.g. a UUID) on `POST`/`PUT`/`PATCH`. If a request times out and you retry with the same key, ClawZ replays the original response instead of creating a duplicate agent/run (24-hour window). This makes automation safe to retry on flaky networks.
 
 ### Human approval gates
 
