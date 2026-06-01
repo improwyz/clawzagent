@@ -44,6 +44,8 @@ Thumbs.db
 # Architecture Decision Records ship with the repo.
 !/docs/adr/
 !/docs/adr/**
+# Published architecture diagram.
+!/docs/clawz-architecture-v1.1.png
 
 # Node
 node_modules/
