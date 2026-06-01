@@ -75,11 +75,14 @@ for i in $(seq 1 90); do
   fi
 done
 
-curl -sf "$GATEWAY_URL/api/v1/system/health" >/dev/null
-curl -sf "$GATEWAY_URL/api/v1/cloud/providers" | grep -q fly_io \
+API_KEY="${VALID_API_KEYS:-dev-key}"
+AUTH=(-H "Authorization: Bearer $API_KEY")
+
+curl -sf "${AUTH[@]}" "$GATEWAY_URL/api/v1/system/health" >/dev/null
+curl -sf "${AUTH[@]}" "$GATEWAY_URL/api/v1/cloud/providers" | grep -q fly_io \
   || {
     echo "cloud providers check failed"
-    curl -sv "$GATEWAY_URL/api/v1/cloud/providers" 2>&1 | head -40
+    curl -sv "${AUTH[@]}" "$GATEWAY_URL/api/v1/cloud/providers" 2>&1 | head -40
     $COMPOSE logs gateway
     exit 1
   }
