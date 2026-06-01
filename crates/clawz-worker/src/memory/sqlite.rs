@@ -132,6 +132,8 @@ impl SqliteMemoryBackend {
     fn migrate(path: &Path) -> Result<()> {
         let conn = Connection::open(path)
             .map_err(|e| ClawzError::Database(format!("sqlite open: {e}")))?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
         conn.execute_batch(
             r#"
             PRAGMA journal_mode = WAL;
@@ -179,6 +181,8 @@ impl SqliteMemoryBackend {
         task::spawn_blocking(move || {
             let conn = Connection::open(&path)
                 .map_err(|e| ClawzError::Database(format!("sqlite open: {e}")))?;
+            conn.busy_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| ClawzError::Database(format!("sqlite busy_timeout: {e}")))?;
             f(&conn)
         })
         .await

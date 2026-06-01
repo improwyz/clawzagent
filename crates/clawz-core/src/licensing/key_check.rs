@@ -30,7 +30,10 @@ impl LicenseStatus {
 impl std::fmt::Display for LicenseStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LicenseStatus::Valid { tier, days_remaining } => {
+            LicenseStatus::Valid {
+                tier,
+                days_remaining,
+            } => {
                 write!(f, "Licensed ({tier})")?;
                 if let Some(d) = days_remaining {
                     write!(f, ", {d} days remaining")?;
@@ -41,7 +44,10 @@ impl std::fmt::Display for LicenseStatus {
                 write!(f, "Trial — {days_remaining} days remaining")
             }
             LicenseStatus::GracePeriod { days_remaining } => {
-                write!(f, "License expired — {days_remaining} day grace period remaining")
+                write!(
+                    f,
+                    "License expired — {days_remaining} day grace period remaining"
+                )
             }
             LicenseStatus::Expired => write!(f, "License expired"),
             LicenseStatus::ClockTampered => {
@@ -144,6 +150,9 @@ mod tests {
 
         let status = verify_or_trial();
         assert!(status.is_usable());
-        assert!(matches!(status, LicenseStatus::Trial { days_remaining: 30 }));
+        assert!(matches!(
+            status,
+            LicenseStatus::Trial { days_remaining: 30 }
+        ));
     }
 }

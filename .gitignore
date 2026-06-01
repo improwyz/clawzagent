@@ -24,6 +24,12 @@ Thumbs.db
 # Documentation (local working copies, plans, specs)
 /docs/
 
+# Obsolete deploy configs (replaced by Caddy)
+/deploy/
+
+# Integration tests (dev-only)
+/tests/
+
 # Node
 node_modules/
 web/dist/

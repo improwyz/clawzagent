@@ -1,7 +1,7 @@
 # ClawZ
 
 <p align="center">
-  <img src="web/public/branding/clawz-logo-dark.png" alt="ClawZ" width="320" />
+  <img src="web/public/branding/clawz-logo-dark.png" alt="ClawZ" width="420" />
 </p>
 
 > A governed swarm of containerized AI agents — the reference implementation of the PRISM-G framework, in Rust.

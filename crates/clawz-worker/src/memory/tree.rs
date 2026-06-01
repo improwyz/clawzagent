@@ -70,6 +70,8 @@ impl MemoryTree {
             }
             let conn = Connection::open(&path)
                 .map_err(|e| ClawzError::Database(format!("memory tree open: {e}")))?;
+            conn.busy_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
             conn.execute_batch(
                 r#"
                 CREATE TABLE IF NOT EXISTS clawz_memory_tree (
@@ -127,6 +129,8 @@ impl MemoryTree {
         task::spawn_blocking(move || {
             let conn = Connection::open(&path)
                 .map_err(|e| ClawzError::Database(format!("memory tree open: {e}")))?;
+            conn.busy_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
             let depth: i64 = conn
                 .query_row(
                     "SELECT depth FROM clawz_memory_tree WHERE id = ?1",
@@ -146,6 +150,8 @@ impl MemoryTree {
         task::spawn_blocking(move || {
             let conn = Connection::open(&path)
                 .map_err(|e| ClawzError::Database(format!("memory tree open: {e}")))?;
+            conn.busy_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
             conn.execute(
                 r#"
                 INSERT INTO clawz_memory_tree (id, parent_id, agent_id, title, summary, depth, created_at)
@@ -176,6 +182,8 @@ impl MemoryTree {
         task::spawn_blocking(move || {
             let conn = Connection::open(&path)
                 .map_err(|e| ClawzError::Database(format!("memory tree open: {e}")))?;
+            conn.busy_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
             let mut stmt = conn
                 .prepare(
                     r#"

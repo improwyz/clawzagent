@@ -199,7 +199,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_agent_turn_tool_loop_stub() {
+        let dir = std::env::temp_dir().join(format!("clawz-run-tool-{}", Uuid::new_v4()));
         unsafe {
+            std::env::set_var("CLAWZ_HOME", dir.to_string_lossy().as_ref());
             std::env::set_var("CLAWZ_STUB_PROVIDER", "1");
         }
 

@@ -6,12 +6,12 @@ COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 RUN cargo chef prepare --recipe-path recipe.json
 
-# Stage 2: Cache dependencies
+# Stage 2: Cache dependencies (only for gateway, skip Tauri/GTK deps)
 FROM rust:1.88-bookworm AS cacher
 RUN cargo install cargo-chef --locked
 WORKDIR /app
 COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json -p clawz-gateway
 
 # Stage 3: Build binary
 FROM rust:1.88-bookworm AS builder
@@ -27,8 +27,9 @@ FROM debian:bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-RUN groupadd -r clawz && useradd -r -g clawz clawz
+RUN groupadd -r clawz && useradd -r -g clawz -d /home/clawz -m clawz
 COPY --from=builder /app/target/release/clawz-gateway /usr/local/bin/
+ENV HOME=/home/clawz
 USER clawz:clawz
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

@@ -437,6 +437,44 @@ mod tests {
         }
     }
 
+    fn setup_test_repo() -> String {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("clawz-git-test-{ts}"));
+        let _ = std::fs::create_dir_all(&dir);
+        std::process::Command::new("git")
+            .args(["init", dir.to_str().unwrap()])
+            .output()
+            .expect("git init");
+        std::process::Command::new("git")
+            .args([
+                "-C",
+                dir.to_str().unwrap(),
+                "config",
+                "user.email",
+                "test@test.com",
+            ])
+            .output()
+            .expect("git config email");
+        std::process::Command::new("git")
+            .args(["-C", dir.to_str().unwrap(), "config", "user.name", "Test"])
+            .output()
+            .expect("git config name");
+        std::fs::write(dir.join("README.md"), "# test\n").unwrap();
+        std::process::Command::new("git")
+            .args(["-C", dir.to_str().unwrap(), "add", "."])
+            .output()
+            .expect("git add");
+        std::process::Command::new("git")
+            .args(["-C", dir.to_str().unwrap(), "commit", "-m", "init"])
+            .output()
+            .expect("git commit");
+        dir.to_str().unwrap().to_string()
+    }
+
     #[test]
     fn test_git_name() {
         assert_eq!(GitTool::new().name(), "git");
@@ -461,7 +499,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_git_status_in_repo() {
-        // This test uses the actual git repo in the workspace
+        let repo_path = setup_test_repo();
         let tool = GitTool::new();
         let ctx = make_ctx();
         let result = tool
@@ -469,7 +507,7 @@ mod tests {
                 &ctx,
                 serde_json::json!({
                     "operation": "status",
-                    "repo_path": "/home/ubuntu/clawzagent"
+                    "repo_path": &repo_path
                 }),
             )
             .await
@@ -481,6 +519,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_git_log_in_repo() {
+        let repo_path = setup_test_repo();
         let tool = GitTool::new();
         let ctx = make_ctx();
         let result = tool
@@ -488,7 +527,7 @@ mod tests {
                 &ctx,
                 serde_json::json!({
                     "operation": "log",
-                    "repo_path": "/home/ubuntu/clawzagent",
+                    "repo_path": &repo_path,
                     "max_commits": 3
                 }),
             )

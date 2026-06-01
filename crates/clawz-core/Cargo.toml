@@ -1,6 +1,6 @@
 [package]
 name = "clawz-core"
-version = "1.1.0"
+version = "1.0.0"
 edition = "2021"
 license = "Elastic-2.0"
 rust-version = "1.75"
@@ -21,7 +21,7 @@ futures-core = { workspace = true }
 http = { workspace = true }
 sqlx = { workspace = true }
 parking_lot = { workspace = true, optional = true }
-clawz-platform = { path = "../clawz-platform", version = "1.1.0" }
+clawz-platform = { path = "../clawz-platform", version = "1.0.0" }
 
 [features]
 default = ["std"]

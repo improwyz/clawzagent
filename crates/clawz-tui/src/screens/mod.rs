@@ -1,6 +1,6 @@
-pub mod splash;
-pub mod llm_setup;
 pub mod chat;
+pub mod llm_setup;
+pub mod splash;
 
 use crossterm::event::Event;
 use ratatui::layout::Rect;

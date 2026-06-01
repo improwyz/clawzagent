@@ -15,6 +15,11 @@ export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml:docker-compose.build.yml
 export CLAWZ_MODE="${CLAWZ_MODE:-micro}"
 GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:3000}"
 
+# Ensure .env exists (compose requires it via env_file)
+if [[ ! -f .env ]] && [[ -f .env.example ]]; then
+  cp .env.example .env
+fi
+
 cleanup() {
   $COMPOSE down -v --remove-orphans 2>/dev/null || true
 }

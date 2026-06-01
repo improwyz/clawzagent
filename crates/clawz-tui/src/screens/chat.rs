@@ -89,11 +89,15 @@ impl ChatScreen {
                 let client_ref = client_clone.clone();
                 let initial_messages = vec![Message {
                     role: "user".to_string(),
-                    content: "I just started the ClawZ installer. Please greet me and help me set up.".to_string(),
+                    content:
+                        "I just started the ClawZ installer. Please greet me and help me set up."
+                            .to_string(),
                 }];
 
                 tokio::spawn(async move {
-                    let _ = client_ref.send_streaming(&initial_messages, stream_tx).await;
+                    let _ = client_ref
+                        .send_streaming(&initial_messages, stream_tx)
+                        .await;
                 });
 
                 let mut full_response = String::new();
@@ -105,7 +109,9 @@ impl ChatScreen {
 
                 history.push(Message {
                     role: "user".to_string(),
-                    content: "I just started the ClawZ installer. Please greet me and help me set up.".to_string(),
+                    content:
+                        "I just started the ClawZ installer. Please greet me and help me set up."
+                            .to_string(),
                 });
                 history.push(Message {
                     role: "assistant".to_string(),
@@ -120,8 +126,7 @@ impl ChatScreen {
                                 content: text,
                             });
 
-                            let (stream_tx, mut stream_rx) =
-                                mpsc::unbounded_channel::<String>();
+                            let (stream_tx, mut stream_rx) = mpsc::unbounded_channel::<String>();
                             let client_ref = client_clone.clone();
                             let msgs = history.clone();
 
@@ -275,13 +280,11 @@ impl Screen for ChatScreen {
         let skip = total.saturating_sub(msg_height);
         let visible: Vec<Line> = msg_lines.into_iter().skip(skip).collect();
 
-        let messages = Paragraph::new(visible)
-            .wrap(Wrap { trim: false })
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(branding::DIM)),
-            );
+        let messages = Paragraph::new(visible).wrap(Wrap { trim: false }).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(branding::DIM)),
+        );
         frame.render_widget(messages, chunks[1]);
 
         // Input area

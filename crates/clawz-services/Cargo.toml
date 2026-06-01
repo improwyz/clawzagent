@@ -1,12 +1,12 @@
 [package]
 name = "clawz-services"
-version = "1.1.0"
+version = "1.0.0"
 edition = "2024"
 license = "Elastic-2.0"
 rust-version = "1.87"
 
 [dependencies]
-clawz-core = { path = "../clawz-core", version = "1.1.0" }
+clawz-core = { path = "../clawz-core", version = "1.0.0" }
 async-trait = "0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

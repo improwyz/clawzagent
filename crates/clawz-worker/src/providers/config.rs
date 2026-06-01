@@ -234,8 +234,8 @@ pub fn config_from_env() -> ProviderRouterConfig {
     // Grok / xAI — OpenAI-compatible.
     if let Ok(key) = std::env::var("XAI_API_KEY") {
         if !key.is_empty() {
-            let endpoint = std::env::var("XAI_API_BASE")
-                .unwrap_or_else(|_| "https://api.x.ai/v1".to_string());
+            let endpoint =
+                std::env::var("XAI_API_BASE").unwrap_or_else(|_| "https://api.x.ai/v1".to_string());
             providers.insert(
                 "xai".to_string(),
                 ProviderConfig {

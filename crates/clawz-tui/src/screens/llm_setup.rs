@@ -136,7 +136,7 @@ impl LlmSetupScreen {
         if key.len() <= 8 {
             return "•".repeat(key.len());
         }
-        format!("{}{}",  "•".repeat(key.len() - 4), &key[key.len() - 4..])
+        format!("{}{}", "•".repeat(key.len() - 4), &key[key.len() - 4..])
     }
 
     fn transition_to_chat(&self) -> Transition {

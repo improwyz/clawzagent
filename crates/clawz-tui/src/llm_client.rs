@@ -205,9 +205,7 @@ impl LocalLlmClient {
                         return Ok(());
                     }
                     if let Ok(event) = serde_json::from_str::<serde_json::Value>(data) {
-                        if let Some(text) =
-                            event["choices"][0]["delta"]["content"].as_str()
-                        {
+                        if let Some(text) = event["choices"][0]["delta"]["content"].as_str() {
                             let _ = tx.send(text.to_string());
                         }
                     }

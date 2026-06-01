@@ -55,6 +55,8 @@ impl TranscriptFtsIndex {
     fn migrate(path: &Path) -> Result<()> {
         let conn = Connection::open(path)
             .map_err(|e| ClawzError::Database(format!("transcript fts open: {e}")))?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
         conn.execute_batch(
             r#"
             PRAGMA journal_mode = WAL;
@@ -94,6 +96,8 @@ impl TranscriptFtsIndex {
         task::spawn_blocking(move || {
             let conn = Connection::open(&db_path)
                 .map_err(|e| ClawzError::Database(format!("transcript fts open: {e}")))?;
+            conn.busy_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
             conn.execute(
                 "DELETE FROM transcript_fts WHERE session_id = ?1",
                 params![session_id],
@@ -124,6 +128,8 @@ impl TranscriptFtsIndex {
         task::spawn_blocking(move || {
             let conn = Connection::open(&db_path)
                 .map_err(|e| ClawzError::Database(format!("transcript fts open: {e}")))?;
+            conn.busy_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
             let mut stmt = conn
                 .prepare(
                     r#"
