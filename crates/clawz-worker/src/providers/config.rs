@@ -62,10 +62,12 @@ pub fn config_from_env() -> ProviderRouterConfig {
     // OpenAI — the most common provider; requires OPENAI_API_KEY.
     if let Ok(key) = std::env::var("OPENAI_API_KEY") {
         if !key.is_empty() {
+            let endpoint = std::env::var("OPENAI_API_BASE")
+                .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
             providers.insert(
                 "openai".to_string(),
                 ProviderConfig {
-                    endpoint: "https://api.openai.com/v1".to_string(),
+                    endpoint,
                     api_key: key,
                     models: vec![
                         "gpt-4o".to_string(),
@@ -86,10 +88,12 @@ pub fn config_from_env() -> ProviderRouterConfig {
     // Anthropic — requires ANTHROPIC_API_KEY.
     if let Ok(key) = std::env::var("ANTHROPIC_API_KEY") {
         if !key.is_empty() {
+            let endpoint = std::env::var("ANTHROPIC_API_BASE")
+                .unwrap_or_else(|_| "https://api.anthropic.com/v1".to_string());
             providers.insert(
                 "anthropic".to_string(),
                 ProviderConfig {
-                    endpoint: "https://api.anthropic.com/v1".to_string(),
+                    endpoint,
                     api_key: key,
                     models: vec![
                         "claude-opus-4-5".to_string(),
@@ -128,10 +132,12 @@ pub fn config_from_env() -> ProviderRouterConfig {
     // DeepSeek — requires DEEPSEEK_API_KEY.
     if let Ok(key) = std::env::var("DEEPSEEK_API_KEY") {
         if !key.is_empty() {
+            let endpoint = std::env::var("DEEPSEEK_API_BASE")
+                .unwrap_or_else(|_| "https://api.deepseek.com/v1".to_string());
             providers.insert(
                 "deepseek".to_string(),
                 ProviderConfig {
-                    endpoint: "https://api.deepseek.com/v1".to_string(),
+                    endpoint,
                     api_key: key,
                     models: vec![
                         "deepseek-chat".to_string(),
@@ -184,6 +190,117 @@ pub fn config_from_env() -> ProviderRouterConfig {
                 ..Default::default()
             },
         );
+    }
+
+    // OpenRouter — OpenAI-compatible aggregator with 100+ models.
+    if let Ok(key) = std::env::var("OPENROUTER_API_KEY") {
+        if !key.is_empty() {
+            let endpoint = std::env::var("OPENROUTER_API_BASE")
+                .unwrap_or_else(|_| "https://openrouter.ai/api/v1".to_string());
+            providers.insert(
+                "openrouter".to_string(),
+                ProviderConfig {
+                    endpoint,
+                    api_key: key,
+                    models: vec![],
+                    auth_type: AuthType::Bearer,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    // Groq — fast inference; OpenAI-compatible.
+    if let Ok(key) = std::env::var("GROQ_API_KEY") {
+        if !key.is_empty() {
+            let endpoint = std::env::var("GROQ_API_BASE")
+                .unwrap_or_else(|_| "https://api.groq.com/openai/v1".to_string());
+            providers.insert(
+                "groq".to_string(),
+                ProviderConfig {
+                    endpoint,
+                    api_key: key,
+                    models: vec![
+                        "llama-3.3-70b-versatile".to_string(),
+                        "mixtral-8x7b-32768".to_string(),
+                    ],
+                    auth_type: AuthType::Bearer,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    // Grok / xAI — OpenAI-compatible.
+    if let Ok(key) = std::env::var("XAI_API_KEY") {
+        if !key.is_empty() {
+            let endpoint = std::env::var("XAI_API_BASE")
+                .unwrap_or_else(|_| "https://api.x.ai/v1".to_string());
+            providers.insert(
+                "xai".to_string(),
+                ProviderConfig {
+                    endpoint,
+                    api_key: key,
+                    models: vec!["grok-2".to_string(), "grok-3".to_string()],
+                    auth_type: AuthType::Bearer,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    // Together AI — OpenAI-compatible.
+    if let Ok(key) = std::env::var("TOGETHER_API_KEY") {
+        if !key.is_empty() {
+            let endpoint = std::env::var("TOGETHER_API_BASE")
+                .unwrap_or_else(|_| "https://api.together.xyz/v1".to_string());
+            providers.insert(
+                "together".to_string(),
+                ProviderConfig {
+                    endpoint,
+                    api_key: key,
+                    models: vec![],
+                    auth_type: AuthType::Bearer,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    // Fireworks AI — OpenAI-compatible.
+    if let Ok(key) = std::env::var("FIREWORKS_API_KEY") {
+        if !key.is_empty() {
+            let endpoint = std::env::var("FIREWORKS_API_BASE")
+                .unwrap_or_else(|_| "https://api.fireworks.ai/inference/v1".to_string());
+            providers.insert(
+                "fireworks".to_string(),
+                ProviderConfig {
+                    endpoint,
+                    api_key: key,
+                    models: vec![],
+                    auth_type: AuthType::Bearer,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    // Custom OpenAI-compatible provider — any endpoint.
+    if let Ok(key) = std::env::var("CLAWZ_CUSTOM_LLM_KEY") {
+        if !key.is_empty() {
+            if let Ok(base) = std::env::var("CLAWZ_CUSTOM_LLM_BASE") {
+                providers.insert(
+                    "custom".to_string(),
+                    ProviderConfig {
+                        endpoint: base,
+                        api_key: key,
+                        models: vec![],
+                        auth_type: AuthType::Bearer,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
     }
 
     ProviderRouterConfig {

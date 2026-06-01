@@ -33,7 +33,13 @@ pub fn seal_secret(plaintext: &str) -> String {
         #[cfg(debug_assertions)]
         return format!("{PLAIN_PREFIX}{plaintext}");
         #[cfg(not(debug_assertions))]
-        panic!("CLAWZ_SECRETS_KEY must be set in release builds to seal secrets");
+        {
+            tracing::error!(
+                "CLAWZ_SECRETS_KEY must be set in release builds to seal secrets. \
+                 Generate one with: openssl rand -hex 32"
+            );
+            std::process::exit(1);
+        }
     };
     let cipher = Aes256Gcm::new_from_slice(&derive_key(&key)).expect("valid key length");
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);

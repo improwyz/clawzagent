@@ -1,14 +1,79 @@
-//! Interactive terminal wizards for ClawZ first-run setup and configuration.
+//! Interactive terminal UI for ClawZ first-run setup and configuration.
 //!
-//! Used by `clawz onboard`, `clawz setup`, and `clawz tui`. All I/O uses
-//! `stdin`/`stdout` so prompts are testable with [`std::io::Cursor`].
+//! The TUI has 3 screens: Splash → LLM Setup → Chat (local helper → gateway agent).
+//! Used by `clawz` (no args) or `clawz onboard`.
 
+mod branding;
+pub mod llm_client;
+mod screens;
 mod wizard;
 
 use clawz_setup::{SetupPlatform, SetupStateMachine};
-use std::io::{self, BufRead, Write};
+use crossterm::event;
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
+use crossterm::ExecutableCommand;
+use ratatui::backend::CrosstermBackend;
+use ratatui::Terminal;
+use screens::{Screen, Transition};
+use std::io::{self, stdout, BufRead, IsTerminal, Write};
+use std::time::Duration;
 
 pub use wizard::run_setup_wizard;
+
+/// Launch the unified TUI installer (3-screen flow: Splash → LLM → Chat).
+pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+    if !io::stdin().is_terminal()
+        || std::env::var("CLAWZ_TUI")
+            .map(|v| v.eq_ignore_ascii_case("plain"))
+            .unwrap_or(false)
+    {
+        run_headless();
+        return Ok(());
+    }
+
+    enable_raw_mode()?;
+    stdout().execute(EnterAlternateScreen)?;
+
+    let backend = CrosstermBackend::new(stdout());
+    let mut terminal = Terminal::new(backend)?;
+
+    let mut current_screen: Box<dyn Screen> = Box::new(screens::splash::SplashScreen::new());
+
+    loop {
+        terminal.draw(|frame| {
+            current_screen.draw(frame, frame.area());
+        })?;
+
+        if event::poll(Duration::from_millis(100))? {
+            let ev = event::read()?;
+            match current_screen.handle_event(ev) {
+                Transition::Stay => {}
+                Transition::Next(next) => current_screen = next,
+                Transition::Quit => break,
+            }
+        }
+
+        current_screen.tick();
+    }
+
+    disable_raw_mode()?;
+    stdout().execute(LeaveAlternateScreen)?;
+    Ok(())
+}
+
+/// Headless/plain text fallback for CI or non-TTY environments.
+fn run_headless() {
+    println!("=== ClawZ Setup (headless mode) ===");
+    println!("For interactive setup, run in a terminal (TTY).");
+    println!("Running legacy wizard...\n");
+
+    let mut sm = SetupStateMachine::new(SetupPlatform::Linux);
+    if let Err(e) = run_setup_wizard(&mut sm) {
+        eprintln!("Setup wizard failed: {e}");
+    }
+}
 
 /// Interactive first-run wizard — drives [`SetupStateMachine`] and prints env exports.
 pub fn run_onboarding() {
@@ -158,7 +223,6 @@ mod tests {
         let mut sm = SetupStateMachine::new(SetupPlatform::Linux).without_persistence();
         let mut answers = wizard::context::WizardAnswers::default();
 
-        // Drive welcome manually (plain::run uses stdin lock — test steps directly)
         sm.advance().expect("welcome");
         assert_eq!(sm.current_step(), SetupStep::DeployMode);
         sm.set_deployment(DeploymentChoice::Micro).expect("deploy");

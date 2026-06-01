@@ -84,8 +84,10 @@ write_env_file() {
     if command -v openssl >/dev/null 2>&1; then
       jwt_secret="$(openssl rand -hex 32)"
       worker_token="$(openssl rand -hex 24)"
+      secrets_key="$(openssl rand -hex 32)"
       sed -i.bak "s/change-me-in-production/${jwt_secret}/" .env
       sed -i.bak "s/change-me-worker-token/${worker_token}/" .env
+      sed -i.bak "s/change-me-secrets-key/${secrets_key}/" .env
       rm -f .env.bak
     fi
     log "Created .env from .env.example"

@@ -10,3 +10,10 @@ clawz-setup = { path = "../clawz-setup", version = "1.1.0" }
 uuid = { version = "1", features = ["v4"] }
 ratatui = "0.29"
 crossterm = "0.28"
+tui-textarea = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "sync", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tracing = "0.1"

@@ -70,6 +70,19 @@ impl GatewayServer {
         // protect auth and stored credentials. No-op in debug for local dev.
         validate_release_config();
 
+        // License check: trial (30 days), paid, or expired.
+        let license_status = clawz_core::licensing::verify_or_trial();
+        match &license_status {
+            s if s.is_usable() => tracing::info!("License: {s}"),
+            _ => {
+                tracing::error!("License: {license_status}");
+                tracing::error!(
+                    "Enter a license key at https://clawz.net or run `clawz` to activate"
+                );
+                std::process::exit(1);
+            }
+        }
+
         // CORS is restricted via `CLAWZ_CORS_ALLOWED_ORIGINS`; see [`build_cors`].
         let cors = build_cors();
 
@@ -204,18 +217,27 @@ fn validate_release_config() {
     {
         let jwt_set =
             std::env::var("CLAWZ_JWT_SECRET").is_ok() || std::env::var("JWT_SECRET").is_ok();
-        assert!(
-            jwt_set,
-            "CLAWZ_JWT_SECRET (or JWT_SECRET) must be set in release builds"
-        );
-        assert!(
-            std::env::var("CLAWZ_SECRETS_KEY").is_ok(),
-            "CLAWZ_SECRETS_KEY must be set in release builds"
-        );
-        assert!(
-            std::env::var("CLAWZ_DISABLE_AUTH").as_deref() != Ok("1"),
-            "CLAWZ_DISABLE_AUTH must not be enabled in release builds"
-        );
+        if !jwt_set {
+            tracing::error!(
+                "CLAWZ_JWT_SECRET (or JWT_SECRET) must be set in release builds. \
+                 Generate one with: openssl rand -hex 32"
+            );
+            std::process::exit(1);
+        }
+        if std::env::var("CLAWZ_SECRETS_KEY").is_err() {
+            tracing::error!(
+                "CLAWZ_SECRETS_KEY must be set in release builds. \
+                 Generate one with: openssl rand -hex 32"
+            );
+            std::process::exit(1);
+        }
+        if std::env::var("CLAWZ_DISABLE_AUTH").as_deref() == Ok("1") {
+            tracing::error!(
+                "CLAWZ_DISABLE_AUTH=1 must not be set in release builds. \
+                 Remove it from your .env or environment"
+            );
+            std::process::exit(1);
+        }
     }
 }
 

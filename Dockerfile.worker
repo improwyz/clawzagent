@@ -1,15 +1,36 @@
-# Stage 1: Build
-FROM rust:1.88-bookworm AS builder
+# Stage 1: Generate dependency recipe
+FROM rust:1.88-bookworm AS planner
+RUN cargo install cargo-chef --locked
 WORKDIR /app
-
 COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
+RUN cargo chef prepare --recipe-path recipe.json
 
+# Stage 2: Cache dependencies
+FROM rust:1.88-bookworm AS cacher
+RUN cargo install cargo-chef --locked
+WORKDIR /app
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# Stage 3: Build binary
+FROM rust:1.88-bookworm AS builder
+WORKDIR /app
+COPY --from=cacher /app/target target
+COPY --from=cacher /usr/local/cargo /usr/local/cargo
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
 RUN cargo build --release -p clawz-worker
-RUN strip /app/target/release/clawz-worker || true
 
-# Stage 2: Runtime
-FROM gcr.io/distroless/cc-debian12
+# Stage 4: Runtime
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN groupadd -r clawz && useradd -r -g clawz clawz
 COPY --from=builder /app/target/release/clawz-worker /usr/local/bin/
-USER nonroot:nonroot
+USER clawz:clawz
+EXPOSE 50051
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD curl -sf http://localhost:50051/health || exit 1
 ENTRYPOINT ["/usr/local/bin/clawz-worker"]

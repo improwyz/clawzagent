@@ -28,7 +28,7 @@ use std::sync::LazyLock;
 
 use axum::{
     body::Body,
-    extract::Request,
+    extract::{OriginalUri, Request},
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
@@ -154,7 +154,11 @@ pub async fn auth_middleware(
         return Ok(next.run(request).await);
     }
 
-    let path = request.uri().path().to_string();
+    let path = request
+        .extensions()
+        .get::<OriginalUri>()
+        .map(|u| u.path().to_string())
+        .unwrap_or_else(|| request.uri().path().to_string());
 
     // Skip auth for public endpoints so health checks and login flows work
     // without credentials.

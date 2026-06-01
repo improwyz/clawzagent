@@ -58,3 +58,17 @@ clawz-setup = { path = "crates/clawz-setup", version = "1.1.0" }
 [workspace.metadata.frictionless.platform]
 tiers = ["t0", "t1", "t2", "t3"]
 default = "t3"
+
+# Release Profiles
+# =============================================================================
+[profile.release]
+lto = "thin"
+strip = true
+panic = "abort"
+opt-level = 3
+
+[profile.docker]
+inherits = "release"
+codegen-units = 16
+lto = false
+opt-level = 2

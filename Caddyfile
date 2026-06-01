@@ -1,0 +1,3 @@
+{$CLAWZ_DOMAIN:localhost} {
+	reverse_proxy gateway:3000
+}
