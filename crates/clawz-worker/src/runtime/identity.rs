@@ -236,12 +236,14 @@ impl FileIdentityBackend {
     }
 
     pub fn default_home() -> Self {
-        let home = std::env::var("CLAWZ_HOME").map(std::path::PathBuf::from).unwrap_or_else(|_| {
-            std::env::var("HOME")
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/clawz"))
-                .join(".clawz")
-        });
+        let home = std::env::var("CLAWZ_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::env::var("HOME")
+                    .map(std::path::PathBuf::from)
+                    .unwrap_or_else(|_| std::path::PathBuf::from("/tmp/clawz"))
+                    .join(".clawz")
+            });
         Self::new(home.join("identities"))
     }
 

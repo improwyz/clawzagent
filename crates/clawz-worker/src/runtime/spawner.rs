@@ -149,7 +149,7 @@ impl AgentTreeSpawner {
                     handles.push(handle);
                 }
                 Err(e) => {
-                    log::error!("failed to spawn child: {}", e);
+                    log::error!("failed to spawn child: {e}");
                 }
             }
         }
@@ -271,10 +271,6 @@ mod tests {
 
     fn make_tenant() -> TenantContext {
         TenantContext::new("test-tenant".into(), clawz_core::types::TenantRole::Agent)
-    }
-
-    fn make_policy() -> ScalePolicy {
-        ScalePolicy::new(3.0, 1.0, 5)
     }
 
     #[tokio::test]

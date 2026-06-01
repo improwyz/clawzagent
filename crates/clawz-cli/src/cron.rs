@@ -23,13 +23,9 @@ pub enum CronAction {
         name: Option<String>,
     },
     /// Run a job immediately by id.
-    Run {
-        job_id: String,
-    },
+    Run { job_id: String },
     /// Delete a cron job.
-    Remove {
-        job_id: String,
-    },
+    Remove { job_id: String },
 }
 
 pub async fn run(action: CronAction) -> Result<()> {

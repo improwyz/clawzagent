@@ -13,9 +13,7 @@ use crate::oauth::providers::{
     build_authorize_url, exchange_code, exchange_openai_device_grant, poll_openai_device_code,
     start_openai_device_code,
 };
-use crate::oauth::types::{
-    OAuthStartResult, OAuthTokenBundle, PendingOAuth, SetupOAuthProvider,
-};
+use crate::oauth::types::{OAuthStartResult, OAuthTokenBundle, PendingOAuth, SetupOAuthProvider};
 use crate::paths::setup_dir;
 
 fn pending_oauth_path() -> PathBuf {
@@ -91,10 +89,7 @@ pub fn oauth_start(provider: SetupOAuthProvider) -> Result<OAuthStartResult> {
     let pkce = generate_pkce();
 
     if provider == SetupOAuthProvider::Codex
-        && std::env::var("CLAWZ_SETUP_OAUTH_DEVICE")
-            .ok()
-            .as_deref()
-            == Some("1")
+        && std::env::var("CLAWZ_SETUP_OAUTH_DEVICE").ok().as_deref() == Some("1")
     {
         let device = start_openai_device_code()?;
         save_pending(
@@ -181,9 +176,11 @@ pub fn oauth_complete(
     let code = code.ok_or_else(|| SetupError::Internal("authorization code required".into()))?;
 
     if let Some(device) = take_device_pending(state)? {
+        let wait_secs = device.interval_secs.max(1);
+        std::thread::sleep(std::time::Duration::from_secs(wait_secs));
         if let Some(grant) = poll_openai_device_code(&device.device_auth_id, &device.user_code)? {
-            let provider = SetupOAuthProvider::parse(&device.provider)
-                .unwrap_or(SetupOAuthProvider::Codex);
+            let provider =
+                SetupOAuthProvider::parse(&device.provider).unwrap_or(SetupOAuthProvider::Codex);
             let bundle = exchange_openai_device_grant(&grant)?;
             let mut bundle = bundle;
             bundle.provider = provider.as_str().into();
@@ -192,9 +189,9 @@ pub fn oauth_complete(
             clear_device_pending(state)?;
             return Ok(bundle);
         }
-        return Err(SetupError::Internal(
-            "device authorization not complete yet — enter the code at auth.openai.com/codex/device and retry".into(),
-        ));
+        return Err(SetupError::Internal(format!(
+            "device authorization not complete yet — enter the code at auth.openai.com/codex/device, wait at least {wait_secs}s, and retry"
+        )));
     }
 
     let pending = load_pending(state)?
@@ -204,7 +201,12 @@ pub fn oauth_complete(
         SetupError::Internal(format!("unsupported oauth provider: {}", pending.provider))
     })?;
 
-    let bundle = exchange_code(provider, code, &pending.code_verifier, &pending.redirect_uri)?;
+    let bundle = exchange_code(
+        provider,
+        code,
+        &pending.code_verifier,
+        &pending.redirect_uri,
+    )?;
     save_oauth_tokens(&bundle)?;
     clear_pending(state)?;
     Ok(bundle)
@@ -217,8 +219,7 @@ pub fn load_oauth_tokens(provider: &str) -> Result<Option<OAuthTokenBundle>> {
         return Ok(None);
     }
     let data = fs::read_to_string(&path).map_err(SetupError::Io)?;
-    let vault: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_str(&data)?;
+    let vault: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&data)?;
     vault
         .get(provider)
         .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -235,10 +236,7 @@ pub fn save_oauth_tokens(bundle: &OAuthTokenBundle) -> Result<()> {
     } else {
         serde_json::Map::new()
     };
-    vault.insert(
-        bundle.provider.clone(),
-        serde_json::to_value(bundle)?,
-    );
+    vault.insert(bundle.provider.clone(), serde_json::to_value(bundle)?);
     let json = serde_json::to_string_pretty(&vault)?;
     fs::write(&path, json).map_err(SetupError::Io)?;
     Ok(())
@@ -253,10 +251,7 @@ fn save_pending(state: &str, pending: &PendingOAuth) -> Result<()> {
     } else {
         serde_json::Map::new()
     };
-    map.insert(
-        state.to_string(),
-        serde_json::to_value(pending)?,
-    );
+    map.insert(state.to_string(), serde_json::to_value(pending)?);
     let json = serde_json::to_string_pretty(&map)?;
     fs::write(&path, json).map_err(SetupError::Io)
 }
@@ -267,8 +262,7 @@ fn load_pending(state: &str) -> Result<Option<PendingOAuth>> {
         return Ok(None);
     }
     let data = fs::read_to_string(&path).map_err(SetupError::Io)?;
-    let map: serde_json::Map<String, serde_json::Value> =
-        serde_json::from_str(&data)?;
+    let map: serde_json::Map<String, serde_json::Value> = serde_json::from_str(&data)?;
     Ok(map
         .get(state)
         .and_then(|v| serde_json::from_value(v.clone()).ok()))
@@ -296,13 +290,22 @@ struct DevicePending {
     provider: String,
     device_auth_id: String,
     user_code: String,
+    #[serde(default = "default_device_poll_interval_secs")]
+    interval_secs: u64,
+}
+
+fn default_device_poll_interval_secs() -> u64 {
+    5
 }
 
 fn device_pending_path() -> PathBuf {
     setup_dir().join("oauth-device-pending.json")
 }
 
-fn save_device_pending(state: &str, device: &crate::oauth::providers::DeviceCodeStart) -> Result<()> {
+fn save_device_pending(
+    state: &str,
+    device: &crate::oauth::providers::DeviceCodeStart,
+) -> Result<()> {
     crate::session::ensure_setup_dir()?;
     let path = device_pending_path();
     let mut map: serde_json::Map<String, serde_json::Value> = if path.exists() {
@@ -317,8 +320,8 @@ fn save_device_pending(state: &str, device: &crate::oauth::providers::DeviceCode
             provider: "codex".into(),
             device_auth_id: device.device_auth_id.clone(),
             user_code: device.user_code.clone(),
-        })
-?,
+            interval_secs: device.interval_secs,
+        })?,
     );
     let json = serde_json::to_string_pretty(&map)?;
     fs::write(&path, json).map_err(SetupError::Io)

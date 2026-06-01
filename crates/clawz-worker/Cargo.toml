@@ -1,18 +1,18 @@
 [package]
 name = "clawz-worker"
-version = "1.0.1"
+version = "1.0.0"
 edition = "2024"
 license = "Elastic-2.0"
 rust-version = "1.87"
 
 [dependencies]
-clawz-core = { path = "../clawz-core", version = "1.0.1" }
-clawz-platform = { path = "../clawz-platform", version = "1.0.1" }
-clawz-services = { path = "../clawz-services", version = "1.0.1" }
+clawz-core = { path = "../clawz-core", version = "1.0.0" }
+clawz-platform = { path = "../clawz-platform", version = "1.0.0" }
+clawz-services = { path = "../clawz-services", version = "1.0.0" }
 
-# Control API
-axum = { version = "0.8", features = ["json", "macros"] }
-tower-http = { version = "0.6", features = ["cors", "trace"] }
+# Control API (versions centralized in [workspace.dependencies])
+axum = { workspace = true }
+tower-http = { workspace = true }
 
 # Logging
 log = "0.4"

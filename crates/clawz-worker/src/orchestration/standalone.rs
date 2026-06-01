@@ -226,9 +226,10 @@ mod tests {
     }
 
     fn test_spec() -> AgentSpec {
-        let mut spec = AgentSpec::default();
-        spec.capabilities = vec!["chat".to_string(), "search".to_string()];
-        spec
+        AgentSpec {
+            capabilities: vec!["chat".to_string(), "search".to_string()],
+            ..Default::default()
+        }
     }
 
     #[tokio::test]
@@ -284,8 +285,10 @@ mod tests {
     async fn test_find_warm() {
         let scheduler = StandaloneScheduler::new(5);
         let ctx = test_context();
-        let mut spec = AgentSpec::default();
-        spec.capabilities = vec!["chat".to_string(), "image_gen".to_string()];
+        let spec = AgentSpec {
+            capabilities: vec!["chat".to_string(), "image_gen".to_string()],
+            ..Default::default()
+        };
 
         let handle = scheduler.spawn_agent(&ctx, spec).await.unwrap();
 

@@ -16,7 +16,10 @@ pub fn agent_id_from_config(config: &Value) -> Option<String> {
         .map(str::to_string)
 }
 
-pub async fn load_channel(state: &AppState, channel_id: &str) -> Result<ChannelRecord, GatewayError> {
+pub async fn load_channel(
+    state: &AppState,
+    channel_id: &str,
+) -> Result<ChannelRecord, GatewayError> {
     let channels = state.channels.read().await;
     let record = channels
         .iter()
@@ -57,14 +60,14 @@ pub async fn dispatch_parsed_messages(
         {
             tracing::info!(
                 channel_id = %record.id,
-                peer = %msg.from,
+                peer = %redact_peer(&msg.from),
                 "inbound blocked — peer not paired"
             );
             continue;
         }
 
-        let conversation_id = SessionKey::from_channel(platform, &record.id, &msg.from, &agent_id)
-            .storage_id();
+        let conversation_id =
+            SessionKey::from_channel(platform, &record.id, &msg.from, &agent_id).storage_id();
 
         let turn = platform_exec
             .execution
@@ -93,6 +96,8 @@ pub async fn process_webhook_body(
     body: &[u8],
     headers: &HeaderMap,
 ) -> Result<Vec<(String, String)>, GatewayError> {
+    verify_webhook_signature(record, headers, body)?;
+
     let platform_exec = state
         .platform
         .as_ref()
@@ -148,4 +153,201 @@ pub async fn send_reply(
         .await
         .map_err(|e| GatewayError::Internal(e.to_string()))?;
     Ok(())
+}
+
+/// Outcome of webhook signature verification.
+enum WebhookAuth {
+    /// No secret configured for this channel — cannot verify (allowed).
+    NoSecret,
+    /// Signature present and valid.
+    Valid,
+    /// Signature present but did not match.
+    Invalid,
+    /// A secret is configured but no recognized signature header was sent.
+    MissingSignature,
+}
+
+/// Config keys that may hold a webhook signing secret.
+const SECRET_KEYS: &[&str] = &["signing_secret", "webhook_secret", "secret", "app_secret"];
+
+/// Headers carrying an HMAC-SHA256 hex signature (optionally `sha256=` prefixed).
+const SIGNATURE_HEADERS: &[&str] = &[
+    "x-hub-signature-256",
+    "x-signature-256",
+    "x-webhook-signature",
+    "x-signature",
+];
+
+/// Extract and (if sealed) decrypt the channel's webhook secret from its config.
+fn channel_secret(config: &Value) -> Option<String> {
+    for key in SECRET_KEYS {
+        if let Some(s) = config.get(*key).and_then(|v| v.as_str()) {
+            if !s.is_empty() {
+                // Secrets may be sealed at rest; fall back to the raw value.
+                return Some(crate::secrets::open_secret(s).unwrap_or_else(|| s.to_string()));
+            }
+        }
+    }
+    None
+}
+
+/// Whether webhook signature failures should be rejected (vs. warn-only).
+///
+/// Defaults to warn-only so existing integrations without a configured secret
+/// keep working; set `CLAWZ_WEBHOOK_ENFORCE=1` to reject unverified webhooks.
+fn webhook_enforce() -> bool {
+    std::env::var("CLAWZ_WEBHOOK_ENFORCE").as_deref() == Ok("1")
+}
+
+/// Classify an inbound webhook's HMAC-SHA256 signature against the channel secret.
+fn classify_webhook_auth(config: &Value, headers: &HeaderMap, body: &[u8]) -> WebhookAuth {
+    let Some(secret) = channel_secret(config) else {
+        return WebhookAuth::NoSecret;
+    };
+    let signature = SIGNATURE_HEADERS.iter().find_map(|name| {
+        headers
+            .get(*name)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.trim().trim_start_matches("sha256=").to_string())
+    });
+    let Some(signature) = signature else {
+        return WebhookAuth::MissingSignature;
+    };
+    if verify_hmac_sha256_hex(&secret, body, &signature) {
+        WebhookAuth::Valid
+    } else {
+        WebhookAuth::Invalid
+    }
+}
+
+/// Verify an HMAC-SHA256 hex signature over `body` using `secret`.
+fn verify_hmac_sha256_hex(secret: &str, body: &[u8], signature_hex: &str) -> bool {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(secret.as_bytes()) else {
+        return false;
+    };
+    mac.update(body);
+    let expected = mac.finalize().into_bytes();
+    let Some(provided) = decode_hex(signature_hex) else {
+        return false;
+    };
+    if provided.len() != expected.len() {
+        return false;
+    }
+    // Constant-time comparison to avoid leaking the match position via timing.
+    let mut diff = 0u8;
+    for (a, b) in provided.iter().zip(expected.iter()) {
+        diff |= a ^ b;
+    }
+    diff == 0
+}
+
+/// Redact a peer identifier (phone/email/handle) for logs.
+///
+/// Returns a stable, non-reversible short hash so operators can correlate
+/// repeated events from the same peer without logging raw PII.
+fn redact_peer(peer: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(peer.as_bytes());
+    let hex: String = digest.iter().take(6).map(|b| format!("{b:02x}")).collect();
+    format!("peer:{hex}")
+}
+
+/// Decode a hex string into bytes (returns `None` on malformed input).
+fn decode_hex(s: &str) -> Option<Vec<u8>> {
+    if !s.len().is_multiple_of(2) {
+        return None;
+    }
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
+        .collect()
+}
+
+/// Reject unverified webhooks when enforcement is enabled; otherwise warn.
+fn verify_webhook_signature(
+    record: &ChannelRecord,
+    headers: &HeaderMap,
+    body: &[u8],
+) -> Result<(), GatewayError> {
+    match classify_webhook_auth(&record.config, headers, body) {
+        WebhookAuth::Valid | WebhookAuth::NoSecret => Ok(()),
+        WebhookAuth::Invalid | WebhookAuth::MissingSignature => {
+            if webhook_enforce() {
+                return Err(GatewayError::Unauthorized(
+                    "webhook signature verification failed".into(),
+                ));
+            }
+            tracing::warn!(
+                channel_id = %record.id,
+                "inbound webhook signature unverified (set CLAWZ_WEBHOOK_ENFORCE=1 to reject)"
+            );
+            Ok(())
+        }
+    }
+}
+
+#[cfg(test)]
+mod webhook_auth_tests {
+    use super::*;
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    fn sign(secret: &str, body: &[u8]) -> String {
+        let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).unwrap();
+        mac.update(body);
+        mac.finalize()
+            .into_bytes()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
+    }
+
+    #[test]
+    fn no_secret_is_allowed() {
+        let cfg = serde_json::json!({});
+        let h = HeaderMap::new();
+        assert!(matches!(
+            classify_webhook_auth(&cfg, &h, b"x"),
+            WebhookAuth::NoSecret
+        ));
+    }
+
+    #[test]
+    fn valid_signature_accepted() {
+        let body = b"hello";
+        let sig = sign("s3cr3t", body);
+        let cfg = serde_json::json!({ "signing_secret": "s3cr3t" });
+        let mut h = HeaderMap::new();
+        h.insert(
+            "x-hub-signature-256",
+            format!("sha256={sig}").parse().unwrap(),
+        );
+        assert!(matches!(
+            classify_webhook_auth(&cfg, &h, body),
+            WebhookAuth::Valid
+        ));
+    }
+
+    #[test]
+    fn bad_signature_rejected() {
+        let cfg = serde_json::json!({ "signing_secret": "s3cr3t" });
+        let mut h = HeaderMap::new();
+        h.insert("x-hub-signature-256", "sha256=deadbeef".parse().unwrap());
+        assert!(matches!(
+            classify_webhook_auth(&cfg, &h, b"hello"),
+            WebhookAuth::Invalid
+        ));
+    }
+
+    #[test]
+    fn missing_signature_flagged() {
+        let cfg = serde_json::json!({ "webhook_secret": "s3cr3t" });
+        let h = HeaderMap::new();
+        assert!(matches!(
+            classify_webhook_auth(&cfg, &h, b"hello"),
+            WebhookAuth::MissingSignature
+        ));
+    }
 }

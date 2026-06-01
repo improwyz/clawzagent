@@ -10,7 +10,7 @@ use tokio::process::Command;
 
 use clawz_core::error::{ClawzError, Result};
 
-use super::{truncate_output, ExecResult, TerminalBackend, MAX_EXEC_OUTPUT_BYTES};
+use super::{ExecResult, MAX_EXEC_OUTPUT_BYTES, TerminalBackend, truncate_output};
 
 pub struct LocalBackend {
     workdir: PathBuf,
@@ -59,10 +59,11 @@ impl TerminalBackend for LocalBackend {
             .spawn()
             .map_err(|e| ClawzError::Tool(format!("failed to spawn command: {e}")))?;
 
-        let output = tokio::time::timeout(Duration::from_secs(timeout_secs), child.wait_with_output())
-            .await
-            .map_err(|_| ClawzError::Tool(format!("command timed out after {timeout_secs}s")))?
-            .map_err(|e| ClawzError::Tool(format!("command execution failed: {e}")))?;
+        let output =
+            tokio::time::timeout(Duration::from_secs(timeout_secs), child.wait_with_output())
+                .await
+                .map_err(|_| ClawzError::Tool(format!("command timed out after {timeout_secs}s")))?
+                .map_err(|e| ClawzError::Tool(format!("command execution failed: {e}")))?;
 
         Ok(ExecResult {
             stdout: truncate_output(&output.stdout, MAX_EXEC_OUTPUT_BYTES),

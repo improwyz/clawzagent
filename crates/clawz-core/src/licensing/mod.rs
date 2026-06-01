@@ -6,8 +6,12 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 pub mod driver;
+pub mod hwid;
+pub mod key_check;
+pub mod local_store;
 
 pub use driver::{LicenseDriver, NoOpLicenseDriver};
+pub use key_check::{activate_key, verify_or_trial, LicenseStatus};
 
 // =============================================================================
 // Error Types

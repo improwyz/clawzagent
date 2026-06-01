@@ -25,9 +25,8 @@ pub async fn status() -> Result<()> {
 }
 
 pub async fn start() -> Result<()> {
-    let root = find_compose_root().context(
-        "no docker-compose.yml found — run from the ClawZ repo or set CLAWZ_REPO",
-    )?;
+    let root = find_compose_root()
+        .context("no docker-compose.yml found — run from the ClawZ repo or set CLAWZ_REPO")?;
     println!("Starting stack in {} …", root.display());
     let status = tokio::process::Command::new("docker")
         .args(["compose", "up", "-d"])

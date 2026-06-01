@@ -79,6 +79,13 @@ impl Default for DatabaseConfig {
 
 /// Single LLM provider entry (OpenAI, Anthropic, Gemini, Mistral, …).
 /// // Dependency: used by worker::provider_router to select and rate-limit backends.
+///
+/// Layering note: this is the **static, declarative** provider config — keys are
+/// referenced by env-var *name* (`api_key_env`) and a `default_model` is chosen.
+/// It is intentionally distinct from `clawz_worker::providers::router::ProviderConfig`,
+/// which is the **resolved HTTP-adapter** config (literal/`${VAR}` key, concrete
+/// `endpoint`, `auth_type`, `fallback_models`, `extras`). The two are different
+/// layers, not duplicates; do not merge them. See ADR 0001 / 0002.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderConfig {
     /// Human-readable name, also used as lookup key.
@@ -126,6 +133,12 @@ impl Default for ProviderConfig {
 
 /// WireGuard / overlay-network settings for peer-to-peer agent mesh.
 /// // Dependency: used by worker::mesh and traits::TenantMesh impls.
+///
+/// Layering note: this is the **overlay/control-plane** mesh config (network
+/// name, listen port, management URL, auth-key env). It is intentionally
+/// distinct from `clawz_worker::mesh::config::MeshConfig`, which holds the
+/// **runtime transport** knobs (bootstrap peers, heartbeat intervals, route
+/// cache TTL, path counts). Different layers, not duplicates. See ADR 0002.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MeshConfig {
     /// Whether to join the overlay network on startup.

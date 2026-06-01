@@ -136,44 +136,10 @@ impl SharedRateLimiter {
 
 /// Retry a fallible async operation with exponential back-off.
 ///
-/// `max_attempts` – total attempts (including the first).
-/// `base_delay`   – initial back-off delay; doubles after each failure.
-///
-/// If the operation returns `ClawzError::RateLimited`, the retry waits for the
-/// exact `retry_after_secs` instead of using exponential back-off.  This
-/// respects upstream API guidance and avoids compounding throttling.
-pub async fn retry_with_backoff<F, Fut, T>(
-    max_attempts: u32,
-    base_delay: Duration,
-    mut f: F,
-) -> Result<T>
-where
-    F: FnMut() -> Fut,
-    Fut: std::future::Future<Output = Result<T>>,
-{
-    let mut delay = base_delay;
-    for attempt in 1..=max_attempts {
-        match f().await {
-            Ok(v) => return Ok(v),
-            // Upstream told us exactly how long to wait; honour it.
-            Err(ClawzError::RateLimited { retry_after_secs }) => {
-                tokio::time::sleep(Duration::from_secs(retry_after_secs)).await;
-            }
-            // Transient failure — back off exponentially so we don't hammer
-            // a struggling service.
-            Err(e) if attempt < max_attempts => {
-                log::warn!("Attempt {attempt}/{max_attempts} failed: {e}. Retrying in {delay:?}");
-                tokio::time::sleep(delay).await;
-                delay *= 2;
-            }
-            // Final attempt failed — propagate the error to the caller.
-            Err(e) => return Err(e),
-        }
-    }
-    // Should be unreachable because the loop always returns inside, but we
-    // keep a fallback for compile-time exhaustiveness.
-    Err(ClawzError::Internal("retry exhausted".into()))
-}
+/// Re-exported from [`clawz_core::retry`] — the canonical home for this helper —
+/// so existing `crate::channels::plugin::retry_with_backoff` call sites and
+/// channel-plugin authors keep working unchanged after the Phase 4 dedup.
+pub use clawz_core::retry::retry_with_backoff;
 
 // ── Markdown conversion helpers ───────────────────────────────────────────────
 

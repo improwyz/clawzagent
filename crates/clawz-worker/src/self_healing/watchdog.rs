@@ -65,7 +65,7 @@ pub fn install_config_reloader(
 ) {
     // In tokio: tokio::signal::unix::signal(SignalKind::user_defined1())
     // for SIGUSR1
-    eprintln!("config hot-reload handler installed for {:?}", config_path);
+    eprintln!("config hot-reload handler installed for {config_path:?}");
 }
 
 /// Identity drift checkpoint for T1-T3.
@@ -97,15 +97,15 @@ impl DriftCheckpoint {
             let _ = std::fs::create_dir_all(parent);
         }
         let mut file = std::fs::File::create(&path)
-            .unwrap_or_else(|_| panic!("failed to create checkpoint file at {:?}", path));
+            .unwrap_or_else(|_| panic!("failed to create checkpoint file at {path:?}"));
         file.write_all(
             serde_json::to_string_pretty(&checkpoint)
                 .unwrap()
                 .as_bytes(),
         )
-        .unwrap_or_else(|_| panic!("failed to write checkpoint to {:?}", path));
+        .unwrap_or_else(|_| panic!("failed to write checkpoint to {path:?}"));
 
-        eprintln!("identity drift checkpoint written to {:?}", path);
+        eprintln!("identity drift checkpoint written to {path:?}");
         path
     }
 }

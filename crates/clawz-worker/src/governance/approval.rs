@@ -219,7 +219,7 @@ impl ApprovalWorkflow {
             .with_expiry(expires_at);
         let id = req.id.clone();
         self.requests.write().await.insert(id.clone(), req);
-        log::debug!("[approval] created request id={}", id);
+        log::debug!("[approval] created request id={id}");
         id
     }
 
@@ -254,17 +254,13 @@ impl ApprovalWorkflow {
         if req.is_expired() {
             req.status = ApprovalStatus::Expired;
             return Err(ClawzError::Validation(format!(
-                "approval request '{}' has expired",
-                approval_id
+                "approval request '{approval_id}' has expired"
             )));
         }
 
         let fully_approved = req.approve(approver_id);
         log::info!(
-            "[approval] id={} approver='{}' fully_approved={}",
-            approval_id,
-            approver_id,
-            fully_approved
+            "[approval] id={approval_id} approver='{approver_id}' fully_approved={fully_approved}"
         );
         Ok(fully_approved)
     }
@@ -290,12 +286,7 @@ impl ApprovalWorkflow {
                 id: approval_id.into(),
             })?;
         req.reject();
-        log::info!(
-            "[approval] id={} rejected by '{}': {}",
-            approval_id,
-            approver_id,
-            reason
-        );
+        log::info!("[approval] id={approval_id} rejected by '{approver_id}': {reason}");
         Ok(())
     }
 
@@ -383,7 +374,7 @@ impl ApprovalWorkflow {
             }
         }
         if count > 0 {
-            log::info!("[approval] expired {} stale requests", count);
+            log::info!("[approval] expired {count} stale requests");
         }
         count
     }

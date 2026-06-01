@@ -40,7 +40,7 @@ impl ArchiveBackend for FilesystemArchive {
             let line = serde_json::to_string(entry)
                 .map_err(|e| clawz_core::error::ClawzError::Internal(format!("json: {e}")))?;
             use std::io::Write;
-            writeln!(file, "{}", line)
+            writeln!(file, "{line}")
                 .map_err(|e| clawz_core::error::ClawzError::Internal(format!("write: {e}")))?;
         }
         Ok(())

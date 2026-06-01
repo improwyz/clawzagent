@@ -110,9 +110,9 @@ impl SaaSConnector for IntercomConnector {
         // Intercom caps `per_page` at 150 for most endpoints.
         let per_page = filters.limit.unwrap_or(50).min(150);
         let path = match obj {
-            "contacts" => format!("/contacts?per_page={}", per_page),
-            "conversations" => format!("/conversations?per_page={}", per_page),
-            "companies" => format!("/companies?per_page={}", per_page),
+            "contacts" => format!("/contacts?per_page={per_page}"),
+            "conversations" => format!("/conversations?per_page={per_page}"),
+            "companies" => format!("/companies?per_page={per_page}"),
             "admins" => "/admins".to_string(),
             "tags" => "/tags".to_string(),
             _ => {
@@ -144,7 +144,7 @@ impl SaaSConnector for IntercomConnector {
                 let contact_id = data["contact_id"].as_str().unwrap_or("");
                 return {
                     let resp = self
-                        .post(&format!("/contacts/{}/notes", contact_id))
+                        .post(&format!("/contacts/{contact_id}/notes"))
                         .json(&data)
                         .send()
                         .await
@@ -171,9 +171,9 @@ impl SaaSConnector for IntercomConnector {
 
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let path = match obj {
-            "contacts" => format!("/contacts/{}", id),
-            "conversations" => format!("/conversations/{}", id),
-            "companies" => format!("/companies/{}", id),
+            "contacts" => format!("/contacts/{id}"),
+            "conversations" => format!("/conversations/{id}"),
+            "companies" => format!("/companies/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Intercom object: {obj}"
@@ -191,8 +191,8 @@ impl SaaSConnector for IntercomConnector {
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let path = match obj {
-            "contacts" => format!("/contacts/{}", id),
-            "companies" => format!("/companies/{}", id),
+            "contacts" => format!("/contacts/{id}"),
+            "companies" => format!("/companies/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Intercom object: {obj}"
@@ -219,7 +219,7 @@ impl SaaSConnector for IntercomConnector {
             "reply_to_conversation" => {
                 let conv_id = params["conversation_id"].as_str().unwrap_or("");
                 let resp = self
-                    .post(&format!("/conversations/{}/reply", conv_id))
+                    .post(&format!("/conversations/{conv_id}/reply"))
                     .json(&params)
                     .send()
                     .await

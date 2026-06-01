@@ -21,8 +21,7 @@ async fn main() -> anyhow::Result<()> {
     let gateway_url = std::env::var("CLAWZ_GATEWAY_URL")
         .or_else(|_| std::env::var("CLAWZ_PUBLIC_URL"))
         .unwrap_or_else(|_| "http://gateway:3000".into());
-    let worker_url =
-        std::env::var("WORKER_URL").unwrap_or_else(|_| "http://worker:50051".into());
+    let worker_url = std::env::var("WORKER_URL").unwrap_or_else(|_| "http://worker:50051".into());
 
     tracing::info!(
         agent_id = %agent_id,

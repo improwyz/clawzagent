@@ -92,7 +92,7 @@ impl KvClient {
                     // Percent-encode each byte of the UTF-8 representation.
                     c.to_string()
                         .bytes()
-                        .flat_map(|b| format!("%{:02X}", b).chars().collect::<Vec<_>>())
+                        .flat_map(|b| format!("%{b:02X}").chars().collect::<Vec<_>>())
                         .collect()
                 }
             })
@@ -186,7 +186,7 @@ impl KvClient {
     pub async fn put(&self, key: &str, value: &str, ttl: Option<u64>) -> Result<(), ClawzError> {
         let mut url = self.value_url(key);
         if let Some(t) = ttl {
-            url.push_str(&format!("?expiration_ttl={}", t));
+            url.push_str(&format!("?expiration_ttl={t}"));
         }
 
         let resp = self
@@ -269,10 +269,12 @@ mod tests {
 
     #[test]
     fn test_kv_client_from_enabled_config() {
-        let mut cfg = CloudflareConfig::default();
-        cfg.enabled = true;
-        cfg.account_id = "acc123".into();
-        cfg.api_token = "tok456".into();
+        let mut cfg = CloudflareConfig {
+            enabled: true,
+            account_id: "acc123".into(),
+            api_token: "tok456".into(),
+            ..Default::default()
+        };
         cfg.kv.enabled = true;
         cfg.kv.namespace_id = Some("ns-abc".into());
         let client = KvClient::from_config(&cfg).unwrap();

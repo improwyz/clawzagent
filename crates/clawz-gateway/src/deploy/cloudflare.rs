@@ -49,7 +49,7 @@ impl CloudflareAdapter {
 
     /// Build a Cloudflare API v4 URL for the given path.
     fn api_url(&self, path: &str) -> String {
-        format!("https://api.cloudflare.com/client/v4{}", path)
+        format!("https://api.cloudflare.com/client/v4{path}")
     }
 }
 

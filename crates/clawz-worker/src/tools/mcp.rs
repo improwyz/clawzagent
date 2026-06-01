@@ -162,7 +162,7 @@ impl StdioMcpClient {
         }
 
         let mut child = cmd.spawn().map_err(|e| {
-            ClawzError::Tool(format!("failed to spawn MCP server '{}': {e}", command))
+            ClawzError::Tool(format!("failed to spawn MCP server '{command}': {e}"))
         })?;
 
         let stdin = child.stdin.take().expect("no stdin");
@@ -185,7 +185,7 @@ impl StdioMcpClient {
         let json = serde_json::to_string(&req)?;
 
         // Write JSON-RPC request + newline (NDJSON framing)
-        writeln!(self.stdin, "{}", json)
+        writeln!(self.stdin, "{json}")
             .map_err(|e| ClawzError::Tool(format!("MCP write error: {e}")))?;
         self.stdin
             .flush()
@@ -251,7 +251,7 @@ impl StdioMcpClient {
             "method": "notifications/initialized",
             "params": {}
         });
-        writeln!(self.stdin, "{}", notif)
+        writeln!(self.stdin, "{notif}")
             .map_err(|e| ClawzError::Tool(format!("MCP notify error: {e}")))?;
         self.stdin.flush().ok();
 

@@ -668,9 +668,10 @@ mod tests {
     use clawz_core::types::mesh::TrafficType;
 
     fn make_manager() -> MeshManager {
-        let mut config = MeshConfig::default();
-        config.enabled = true;
-        MeshManager::new(config)
+        MeshManager::new(MeshConfig {
+            enabled: true,
+            ..Default::default()
+        })
     }
 
     fn make_peer(id: Uuid) -> PeerInfo {

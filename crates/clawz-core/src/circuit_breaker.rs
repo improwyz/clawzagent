@@ -150,4 +150,21 @@ mod tests {
         assert!(matches!(cb.state(), BreakerState::Closed));
         assert!(cb.allow_request());
     }
+
+    #[test]
+    fn half_open_after_recovery_timeout_allows_probe() {
+        // Zero recovery timeout: once open, the next state read derives
+        // HalfOpen, and a probe is allowed. Pins the behavior the worker's
+        // private breaker provides via is_open() ahead of Phase 4 dedup.
+        let cb = CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 1,
+            recovery_timeout: Duration::from_secs(0),
+        });
+        cb.record_failure();
+        assert!(matches!(cb.state(), BreakerState::HalfOpen));
+        assert!(cb.allow_request());
+        // A successful probe closes the breaker.
+        cb.record_success();
+        assert!(matches!(cb.state(), BreakerState::Closed));
+    }
 }

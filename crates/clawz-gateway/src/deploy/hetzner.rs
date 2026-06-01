@@ -47,7 +47,7 @@ impl HetznerAdapter {
 
     /// Build a Hetzner Cloud API v1 URL for the given path.
     fn api_url(&self, path: &str) -> String {
-        format!("https://api.hetzner.cloud/v1{}", path)
+        format!("https://api.hetzner.cloud/v1{path}")
     }
 }
 

@@ -178,7 +178,7 @@ impl BrowserManager {
         }
 
         let child = cmd.spawn().map_err(|e| {
-            ClawzError::Tool(format!("failed to launch Chrome '{}': {e}", chrome_bin))
+            ClawzError::Tool(format!("failed to launch Chrome '{chrome_bin}': {e}"))
         })?;
 
         *self.process.lock().await = Some(child);
@@ -421,7 +421,7 @@ impl BrowserManager {
         let coords = &result["result"]["value"];
         let x = coords["x"]
             .as_f64()
-            .ok_or_else(|| ClawzError::Tool(format!("element '{}' not found", selector)))?;
+            .ok_or_else(|| ClawzError::Tool(format!("element '{selector}' not found")))?;
         let y = coords["y"]
             .as_f64()
             .ok_or_else(|| ClawzError::Tool("no y coordinate".into()))?;
@@ -521,8 +521,7 @@ impl BrowserManager {
         // Check for exception
         if result["exceptionDetails"].is_object() {
             return Err(ClawzError::Tool(format!(
-                "wait_for '{}' timed out after {}ms",
-                selector, timeout_ms
+                "wait_for '{selector}' timed out after {timeout_ms}ms"
             )));
         }
 

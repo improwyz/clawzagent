@@ -165,9 +165,7 @@ impl DependencyGraph {
                 .iter()
                 .fold(HashMap::new(), |mut acc, (node, deps)| {
                     for dep in deps {
-                        acc.entry(dep.clone())
-                            .or_insert_with(Vec::new)
-                            .push(node.clone());
+                        acc.entry(dep.clone()).or_default().push(node.clone());
                     }
                     acc
                 });

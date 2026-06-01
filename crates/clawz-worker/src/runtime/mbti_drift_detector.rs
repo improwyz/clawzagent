@@ -110,9 +110,7 @@ impl MBTIDriftDetector {
         };
 
         if let (Some(ei), Some(sn), Some(tf), Some(jp)) = (e_or_i, s_or_n, t_or_f, j_or_p) {
-            Some(Box::leak(
-                format!("{}{}{}{}", ei, sn, tf, jp).into_boxed_str(),
-            ))
+            Some(Box::leak(format!("{ei}{sn}{tf}{jp}").into_boxed_str()))
         } else {
             None
         }

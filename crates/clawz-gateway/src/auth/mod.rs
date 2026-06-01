@@ -23,13 +23,43 @@
 pub mod api_key;
 pub mod jwt;
 
+use std::sync::Arc;
+use std::sync::LazyLock;
+
 use axum::{
     body::Body,
-    extract::Request,
+    extract::{OriginalUri, Request},
     http::{HeaderMap, StatusCode},
     middleware::Next,
     response::Response,
 };
+use parking_lot::RwLock;
+
+/// Cache of API-key records parsed from `VALID_API_KEYS`, keyed by the raw env
+/// value so a runtime change is picked up on the next request.
+///
+/// Without this the auth middleware re-split the env var and re-hashed every
+/// plain key (SHA-256) on *every* authenticated request. The cache parses once
+/// and reuses the result until the env value changes.
+type ApiKeyCache = Option<(Option<String>, Arc<Vec<api_key::ApiKeyRecord>>)>;
+static API_KEY_CACHE: LazyLock<RwLock<ApiKeyCache>> = LazyLock::new(|| RwLock::new(None));
+
+/// Return the parsed API-key records, parsing from the environment only when the
+/// `VALID_API_KEYS` value differs from what is cached (fail-safe on change).
+fn cached_api_key_records() -> Arc<Vec<api_key::ApiKeyRecord>> {
+    let current = std::env::var("VALID_API_KEYS").ok();
+    {
+        let guard = API_KEY_CACHE.read();
+        if let Some((cached_raw, records)) = guard.as_ref() {
+            if *cached_raw == current {
+                return records.clone();
+            }
+        }
+    }
+    let records = Arc::new(load_api_key_records_from_env());
+    *API_KEY_CACHE.write() = Some((current, records.clone()));
+    records
+}
 
 fn default_tenant_id() -> String {
     std::env::var("CLAWZ_TENANT_ID").unwrap_or_else(|_| "default".to_string())
@@ -117,12 +147,18 @@ pub async fn auth_middleware(
     mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    // Auth bypass is a debug-only convenience; it is compiled out of release builds.
+    #[cfg(debug_assertions)]
     if std::env::var("CLAWZ_DISABLE_AUTH").ok().as_deref() == Some("1") {
         request.extensions_mut().insert(dev_auth_context());
         return Ok(next.run(request).await);
     }
 
-    let path = request.uri().path().to_string();
+    let path = request
+        .extensions()
+        .get::<OriginalUri>()
+        .map(|u| u.path().to_string())
+        .unwrap_or_else(|| request.uri().path().to_string());
 
     // Skip auth for public endpoints so health checks and login flows work
     // without credentials.
@@ -130,12 +166,12 @@ pub async fn auth_middleware(
         return Ok(next.run(request).await);
     }
 
-    // Dependency: `JWT_SECRET` is expected to be set in production.
-    // Fallback to a well-known dev value so the gateway starts without extra
-    // configuration in local development.
-    let secret = std::env::var("CLAWZ_JWT_SECRET")
-        .or_else(|_| std::env::var("JWT_SECRET"))
-        .unwrap_or_else(|_| "changeme".to_string());
+    let secret = match jwt_secret() {
+        Some(s) => s,
+        // Release builds validate this at startup; if we reach here without a
+        // configured secret, fail closed rather than trust a default.
+        None => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
 
     // --- 1. Try Bearer JWT ---
     if let Some(auth_header) = request
@@ -196,13 +232,13 @@ pub fn resolve_request_auth(
     headers: &HeaderMap,
     api_key_query: Option<&str>,
 ) -> Result<AuthContext, StatusCode> {
+    // Auth bypass is a debug-only convenience; it is compiled out of release builds.
+    #[cfg(debug_assertions)]
     if std::env::var("CLAWZ_DISABLE_AUTH").ok().as_deref() == Some("1") {
         return Ok(dev_auth_context());
     }
 
-    let secret = std::env::var("CLAWZ_JWT_SECRET")
-        .or_else(|_| std::env::var("JWT_SECRET"))
-        .unwrap_or_else(|_| "changeme".to_string());
+    let secret = jwt_secret().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
 
     if let Some(auth_header) = headers.get("Authorization").and_then(|v| v.to_str().ok()) {
         if let Some(token) = auth_header.strip_prefix("Bearer ") {
@@ -272,9 +308,11 @@ async fn try_api_key(
     // In a real deployment the valid keys would come from a database or
     // shared state injected via an extension. For now we look up an
     // environment variable list: VALID_API_KEYS=<hash1>:<user_id>:<role>,...
-    let records = load_api_key_records_from_env();
+    // Records are cached (keyed by the env value) so we don't re-parse and
+    // re-hash on every request; see `cached_api_key_records`.
+    let records = cached_api_key_records();
     // Dependency: api_key sub-module for validation logic.
-    match api_key::ApiKeyValidator::validate(&raw_key, &records) {
+    match api_key::ApiKeyValidator::validate(&raw_key, records.as_slice()) {
         Some(record) => {
             let ctx = AuthContext {
                 user_id: record.user_id.clone(),
@@ -311,6 +349,28 @@ fn extract_api_key_param(query: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Resolve the JWT signing secret.
+///
+/// In debug builds this falls back to a well-known dev value for local
+/// convenience. In release builds the secret must be configured (enforced at
+/// startup by the gateway), so there is no fallback and `None` is returned.
+fn jwt_secret() -> Option<String> {
+    if let Ok(s) = std::env::var("CLAWZ_JWT_SECRET") {
+        return Some(s);
+    }
+    if let Ok(s) = std::env::var("JWT_SECRET") {
+        return Some(s);
+    }
+    #[cfg(debug_assertions)]
+    {
+        Some("changeme".to_string())
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        None
+    }
 }
 
 /// Minimal percent-decode (only `%XX` sequences and `+` → space).
@@ -363,11 +423,12 @@ fn load_api_key_records_from_env() -> Vec<api_key::ApiKeyRecord> {
                 .filter(|t| !t.is_empty())
                 .map(|t| (*t).to_string())
                 .unwrap_or_else(default_tenant_id);
-            let key_hash = if parts[0].len() == 64 && parts[0].chars().all(|c| c.is_ascii_hexdigit()) {
-                parts[0].to_string()
-            } else {
-                api_key::ApiKeyValidator::hash_key(parts[0])
-            };
+            let key_hash =
+                if parts[0].len() == 64 && parts[0].chars().all(|c| c.is_ascii_hexdigit()) {
+                    parts[0].to_string()
+                } else {
+                    api_key::ApiKeyValidator::hash_key(parts[0])
+                };
             Some(api_key::ApiKeyRecord {
                 id: uuid::Uuid::new_v4().to_string(),
                 key_hash,
@@ -381,4 +442,18 @@ fn load_api_key_records_from_env() -> Vec<api_key::ApiKeyRecord> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn api_key_cache_reuses_parsed_records() {
+        // VALID_API_KEYS is unset in the lib test process, so repeated calls
+        // must return the same cached Arc rather than re-parsing each time.
+        let a = cached_api_key_records();
+        let b = cached_api_key_records();
+        assert!(Arc::ptr_eq(&a, &b));
+    }
 }

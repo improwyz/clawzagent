@@ -24,8 +24,8 @@ use std::sync::Arc;
 use clawz_core::{deployment::DeploymentMode, error::Result, traits::AgentScheduler};
 
 // Dependency: sibling modules — concrete scheduler implementations
-use super::{BollardScheduler, StandaloneScheduler};
 use super::tool_orchestrator::{DockerToolOrchestrator, InMemoryToolOrchestrator};
+use super::{BollardScheduler, StandaloneScheduler};
 use clawz_core::traits::ToolOrchestrator;
 use clawz_core::types::orchestration::AgentSpec;
 
@@ -54,9 +54,10 @@ pub fn env_max_agents() -> usize {
 
 /// [`AgentSpec`] with image and limits from environment.
 pub fn default_agent_spec() -> AgentSpec {
-    let mut spec = AgentSpec::default();
-    spec.image = env_agent_image();
-    spec
+    AgentSpec {
+        image: env_agent_image(),
+        ..AgentSpec::default()
+    }
 }
 
 /// Creates an [`AgentScheduler`] appropriate for the given deployment mode.
@@ -84,8 +85,7 @@ pub fn create_scheduler(mode: DeploymentMode) -> Result<Arc<dyn AgentScheduler>>
         // Both Micro and Elastic map to the same backend; elasticity is handled
         // at a higher level ( orchestrator / autoscaler ) rather than here.
         DeploymentMode::Micro | DeploymentMode::Elastic => {
-            let scheduler =
-                BollardScheduler::with_network(env_max_agents(), env_docker_network())?;
+            let scheduler = BollardScheduler::with_network(env_max_agents(), env_docker_network())?;
             Ok(Arc::new(scheduler))
         }
     }

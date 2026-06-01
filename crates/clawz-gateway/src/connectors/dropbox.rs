@@ -68,12 +68,12 @@ impl DropboxConnector {
 
     /// Build an RPC POST request to the metadata API.
     fn rpc_post(&self, endpoint: &str) -> reqwest::RequestBuilder {
-        reqwest::Client::new().post(format!("https://api.dropboxapi.com/2/{}", endpoint))
+        reqwest::Client::new().post(format!("https://api.dropboxapi.com/2/{endpoint}"))
     }
 
     /// Build a content POST request to the upload/download API.
     fn content_post(&self, endpoint: &str) -> reqwest::RequestBuilder {
-        reqwest::Client::new().post(format!("https://content.dropboxapi.com/2/{}", endpoint))
+        reqwest::Client::new().post(format!("https://content.dropboxapi.com/2/{endpoint}"))
     }
 }
 

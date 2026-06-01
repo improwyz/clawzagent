@@ -511,8 +511,10 @@ mod tests {
     use crate::mesh::config::MeshConfig;
 
     fn make_fleet() -> FleetMesh {
-        let mut cfg = MeshConfig::default();
-        cfg.enabled = true;
+        let cfg = MeshConfig {
+            enabled: true,
+            ..Default::default()
+        };
         let mgr = Arc::new(MeshManager::new(cfg));
         FleetMesh::new(mgr)
     }

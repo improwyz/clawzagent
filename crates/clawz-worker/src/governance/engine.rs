@@ -221,7 +221,7 @@ impl ClawzGovernanceEngine {
     /// The key format is `agent_id|action|context` where `context` is the
     /// JSON serialisation of the value.
     fn cache_key(agent_id: &str, action: &str, context: &serde_json::Value) -> String {
-        format!("{}|{}|{}", agent_id, action, context)
+        format!("{agent_id}|{action}|{context}")
     }
 
     /// Looks up a cached result by key, returning `None` if missing or expired.

@@ -66,7 +66,9 @@ impl SetupStateMachine {
     pub fn set_deployment(&mut self, choice: DeploymentChoice) -> Result<()> {
         self.ensure_not_aborted()?;
         self.session.deployment = Some(choice);
-        self.session.events.push(SetupEvent::DeploymentChosen { choice });
+        self.session
+            .events
+            .push(SetupEvent::DeploymentChosen { choice });
         self.session.touch();
         self.persist_if_enabled()
     }
@@ -74,7 +76,9 @@ impl SetupStateMachine {
     pub fn set_install_strategy(&mut self, strategy: InstallStrategy) -> Result<()> {
         self.ensure_not_aborted()?;
         self.session.install_strategy = Some(strategy);
-        self.session.events.push(SetupEvent::InstallStrategyChosen { strategy });
+        self.session
+            .events
+            .push(SetupEvent::InstallStrategyChosen { strategy });
         self.session.touch();
         self.persist_if_enabled()
     }
@@ -82,9 +86,9 @@ impl SetupStateMachine {
     pub fn advance(&mut self) -> Result<SetupStep> {
         self.ensure_not_aborted()?;
         let current = self.session.current_step;
-        let next = current.next().ok_or_else(|| {
-            SetupError::InvalidTransition("already at final step".into())
-        })?;
+        let next = current
+            .next()
+            .ok_or_else(|| SetupError::InvalidTransition("already at final step".into()))?;
         self.go_to(next)
     }
 
@@ -106,9 +110,7 @@ impl SetupStateMachine {
 
     pub fn abort(&mut self, reason: Option<String>) -> Result<()> {
         self.session.aborted = true;
-        self.session
-            .events
-            .push(SetupEvent::Aborted { reason });
+        self.session.events.push(SetupEvent::Aborted { reason });
         self.session.touch();
         self.persist_if_enabled()
     }
@@ -218,7 +220,8 @@ mod tests {
         let path = dir.path().join("session.json");
 
         let mut sm = SetupStateMachine::new(SetupPlatform::Linux).without_persistence();
-        sm.set_deployment(DeploymentChoice::Elastic).expect("deploy");
+        sm.set_deployment(DeploymentChoice::Elastic)
+            .expect("deploy");
         sm.go_to(SetupStep::InstallStrategy).expect("step");
         save_session_to(sm.session(), &path).expect("save");
 
@@ -236,8 +239,9 @@ mod tests {
     fn user_config_setup_complete() {
         let dir = TempDir::new().expect("tempdir");
         let path = dir.path().join("config.json");
-        let mut cfg = ClawzUserConfig::default();
-        cfg.setup_complete = true;
+        let cfg = ClawzUserConfig {
+            setup_complete: true,
+        };
         cfg.save_to(&path).expect("save");
         let loaded = ClawzUserConfig::load_from(&path).expect("load");
         assert!(loaded.setup_complete);

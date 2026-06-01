@@ -51,7 +51,7 @@ impl AzureFunctionsAdapter {
     /// Base URL for the Azure Resource Manager (ARM) API.
     #[allow(dead_code)]
     fn management_url(&self, path: &str) -> String {
-        format!("https://management.azure.com{}", path)
+        format!("https://management.azure.com{path}")
     }
 
     /// Build the ARM resource path for a Function App within this subscription + RG.
@@ -71,10 +71,7 @@ impl AzureFunctionsAdapter {
         client_id: &str,
         client_secret: &str,
     ) -> Result<String> {
-        let token_url = format!(
-            "https://login.microsoftonline.com/{}/oauth2/v2.0/token",
-            tenant_id
-        );
+        let token_url = format!("https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token");
 
         let params = [
             ("grant_type", "client_credentials"),

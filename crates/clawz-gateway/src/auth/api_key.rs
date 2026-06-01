@@ -115,7 +115,7 @@ impl ApiKeyValidator {
         let encoded = URL_SAFE_NO_PAD.encode(&raw);
         // Truncate to 48 characters so the final key is exactly 52 chars long.
         let key_body: String = encoded.chars().take(48).collect();
-        format!("clz_{}", key_body)
+        format!("clz_{key_body}")
     }
 }
 

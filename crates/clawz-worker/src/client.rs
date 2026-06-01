@@ -7,12 +7,11 @@ use clawz_services::dto::{
     A2aInvokeRequest, A2aInvokeResponse, ChannelPollRequest, ChannelPollResponse,
     ChannelSendRequest, ChannelSendResponse, ChannelWebhookRequest, ChannelWebhookResponse,
     CompactSessionRequest, CompactSessionResponse, CreateCronJobRequest, CronJobDto,
-    SessionSummary,
     CronRunResultDto, EvaluateGovernanceRequest, EvaluateGovernanceResponse, ExecuteToolRequest,
     ExecuteToolResponse, FanOutRequest, FanOutResponse, MemoryIngestRequest, MemoryIngestResponse,
     OrchestrateRequest, OrchestrateResponse, ProviderHealthRequest, ProviderHealthResponse,
-    RunTurnRequest, RunTurnResponse, SubconsciousTickRequest, SubconsciousTickResponse,
-    TestChannelRequest, TestChannelResponse,
+    RunTurnRequest, RunTurnResponse, SessionSummary, SubconsciousTickRequest,
+    SubconsciousTickResponse, TestChannelRequest, TestChannelResponse,
 };
 use clawz_services::execution::{ExecutionClient, ExecutionError, ExecutionResult};
 
@@ -55,7 +54,9 @@ impl ExecutionClient for InProcessExecutionClient {
         session_id: &str,
         req: CompactSessionRequest,
     ) -> ExecutionResult<CompactSessionResponse> {
-        let keep = req.keep_last.unwrap_or(crate::runtime::session_commands::DEFAULT_COMPACT_KEEP);
+        let keep = req
+            .keep_last
+            .unwrap_or(crate::runtime::session_commands::DEFAULT_COMPACT_KEEP);
         let (removed, usage) = self
             .service
             .compact_session(session_id, keep)
@@ -126,22 +127,19 @@ impl ExecutionClient for InProcessExecutionClient {
             .map_err(Self::map_err)
     }
 
-    async fn poll_channel(
-        &self,
-        req: ChannelPollRequest,
-    ) -> ExecutionResult<ChannelPollResponse> {
+    async fn poll_channel(&self, req: ChannelPollRequest) -> ExecutionResult<ChannelPollResponse> {
         self.service.poll_channel(req).await.map_err(Self::map_err)
     }
 
     async fn list_cron_jobs(&self) -> ExecutionResult<Vec<CronJobDto>> {
         let jobs = self.service.list_cron_jobs().await.map_err(Self::map_err)?;
-        Ok(jobs.into_iter().map(crate::cron::convert::job_to_dto).collect())
+        Ok(jobs
+            .into_iter()
+            .map(crate::cron::convert::job_to_dto)
+            .collect())
     }
 
-    async fn create_cron_job(
-        &self,
-        req: CreateCronJobRequest,
-    ) -> ExecutionResult<CronJobDto> {
+    async fn create_cron_job(&self, req: CreateCronJobRequest) -> ExecutionResult<CronJobDto> {
         let job = self
             .service
             .create_cron_job(crate::cron::convert::create_from_dto(req))
@@ -166,7 +164,10 @@ impl ExecutionClient for InProcessExecutionClient {
         Ok(crate::cron::convert::run_to_dto(result))
     }
 
-    async fn ingest_memory(&self, req: MemoryIngestRequest) -> ExecutionResult<MemoryIngestResponse> {
+    async fn ingest_memory(
+        &self,
+        req: MemoryIngestRequest,
+    ) -> ExecutionResult<MemoryIngestResponse> {
         let chunks = req
             .chunks
             .into_iter()

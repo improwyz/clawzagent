@@ -3,9 +3,6 @@
 //! Public routes (no JWT) — mutating handlers require `X-Clawz-Setup-Token`
 //! matching `CLAWZ_SETUP_BOOTSTRAP_TOKEN` or `~/.clawz/setup/bootstrap.token`.
 
-use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
 use axum::{
     Json, Router,
     extract::{Query, State},
@@ -18,11 +15,15 @@ use clawz_setup::{
     AgentBootstrap, ClawzUserConfig, ConfirmGate, DeploymentChoice, HostExecPolicy,
     HostSpecChecker, IdentityInput, InstallStrategy, OAuthStartResult, SetupOAuthProvider,
     SetupPlatform, SetupStateMachine, SetupStep, SetupToolRegistry, ToolContext, ToolInput,
-    ensure_setup_dir, init_workspace_at, load_session, oauth_complete, resolve_repo_root,
-    oauth_start as setup_oauth_start, save_session, session_path, setup_dir, workspace_root,
+    ensure_setup_dir, init_workspace_at, load_session, oauth_complete,
+    oauth_start as setup_oauth_start, resolve_repo_root, save_session, session_path, setup_dir,
+    workspace_root,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
 use uuid::Uuid;
 
 use crate::{AgentRecord, AgentStatus, AppState, GatewayError, ProviderRecord};
@@ -38,7 +39,10 @@ pub fn routes() -> Router<AppState> {
         .route("/apply", post(apply))
         .route("/complete", post(complete))
         .route("/oauth/start", post(oauth_start))
-        .route("/oauth/callback", get(oauth_callback_browser).post(oauth_callback))
+        .route(
+            "/oauth/callback",
+            get(oauth_callback_browser).post(oauth_callback),
+        )
         .route("/stack/status", get(stack_status))
         .route("/stack", post(stack_mutate))
 }
@@ -145,7 +149,8 @@ fn load_or_create_bootstrap_token() -> Result<String, GatewayError> {
     }
     ensure_setup_dir().map_err(map_setup_error)?;
     let token = Uuid::new_v4().to_string();
-    fs::write(&path, &token).map_err(|e| GatewayError::Internal(format!("write bootstrap token: {e}")))?;
+    fs::write(&path, &token)
+        .map_err(|e| GatewayError::Internal(format!("write bootstrap token: {e}")))?;
     Ok(token)
 }
 
@@ -188,12 +193,10 @@ fn map_setup_error(err: clawz_setup::SetupError) -> GatewayError {
         clawz_setup::SetupError::InvalidTransition(msg) => {
             GatewayError::Unprocessable(format!("invalid transition: {msg}"))
         }
-        clawz_setup::SetupError::SessionNotFound { path } => {
-            GatewayError::NotFound {
-                resource: "setup_session".into(),
-                id: path,
-            }
-        }
+        clawz_setup::SetupError::SessionNotFound { path } => GatewayError::NotFound {
+            resource: "setup_session".into(),
+            id: path,
+        },
         clawz_setup::SetupError::Internal(msg) => GatewayError::Internal(msg),
         other => GatewayError::Internal(other.to_string()),
     }
@@ -256,7 +259,10 @@ async fn status() -> Result<Json<SetupStatusResponse>, GatewayError> {
 
     let user = ClawzUserConfig::load().map_err(map_setup_error)?;
     let (step, session_id) = match load_session() {
-        Ok(session) => (step_name(session.current_step), Some(session.id.to_string())),
+        Ok(session) => (
+            step_name(session.current_step),
+            Some(session.id.to_string()),
+        ),
         Err(clawz_setup::SetupError::SessionNotFound { .. }) => {
             (step_name(SetupStep::Welcome), None)
         }
@@ -375,11 +381,14 @@ fn record_user_answer(
     field: &str,
     value: &str,
 ) -> Result<(), GatewayError> {
-    machine.session_mut().events.push(clawz_setup::SetupEvent::UserAnswer {
-        step,
-        field: field.to_string(),
-        value: value.to_string(),
-    });
+    machine
+        .session_mut()
+        .events
+        .push(clawz_setup::SetupEvent::UserAnswer {
+            step,
+            field: field.to_string(),
+            value: value.to_string(),
+        });
     machine.session_mut().touch();
     Ok(())
 }
@@ -400,8 +409,8 @@ async fn apply(
     let machine = load_machine()?;
     let session = machine.session();
 
-    let provider_type = find_answer(session, SetupStep::Llm, "provider")
-        .unwrap_or_else(|| "anthropic".into());
+    let provider_type =
+        find_answer(session, SetupStep::Llm, "provider").unwrap_or_else(|| "anthropic".into());
     let api_key = find_answer(session, SetupStep::Llm, "api_key");
 
     let now = Utc::now();
@@ -447,12 +456,14 @@ async fn apply(
             "setup.apply",
             "setup",
             &session.id.to_string(),
-            Some(json!({
-                "provider_id": provider_id,
-                "agent_id": agent.id,
-                "workspace": workspace.display().to_string(),
-            })
-            .to_string()),
+            Some(
+                json!({
+                    "provider_id": provider_id,
+                    "agent_id": agent.id,
+                    "workspace": workspace.display().to_string(),
+                })
+                .to_string(),
+            ),
         )
         .await;
 
@@ -477,13 +488,7 @@ async fn complete(
     machine.complete().map_err(map_setup_error)?;
 
     state
-        .append_audit(
-            "system",
-            "setup.complete",
-            "setup",
-            &session_id,
-            None,
-        )
+        .append_audit("system", "setup.complete", "setup", &session_id, None)
         .await;
 
     Ok((
@@ -545,8 +550,8 @@ async fn oauth_callback_browser(
     let bundle = oauth_complete(&state_id, Some(&code), None).map_err(map_setup_error)?;
     sync_vault_from_bundle(&state, &bundle).await;
 
-    let setup_url = std::env::var("CLAWZ_SETUP_UI_URL")
-        .unwrap_or_else(|_| "/setup?oauth=success".into());
+    let setup_url =
+        std::env::var("CLAWZ_SETUP_UI_URL").unwrap_or_else(|_| "/setup?oauth=success".into());
 
     Ok(Html(format!(
         r#"<!DOCTYPE html><html><head>
@@ -568,12 +573,8 @@ async fn oauth_callback(
 ) -> Result<Json<Value>, GatewayError> {
     guard_mutations_allowed()?;
 
-    let bundle = oauth_complete(
-        &body.state,
-        body.code.as_deref(),
-        body.token.as_deref(),
-    )
-    .map_err(map_setup_error)?;
+    let bundle = oauth_complete(&body.state, body.code.as_deref(), body.token.as_deref())
+        .map_err(map_setup_error)?;
 
     sync_vault_from_bundle(&state, &bundle).await;
 
@@ -588,9 +589,7 @@ async fn oauth_callback(
 /// `GET /setup/stack/status` — host exec policy and Docker readiness (read-only).
 async fn stack_status() -> Result<Json<StackStatusResponse>, GatewayError> {
     let spec = HostSpecChecker::collect();
-    let repo_root = resolve_repo_root()
-        .ok()
-        .map(|p| p.display().to_string());
+    let repo_root = resolve_repo_root().ok().map(|p| p.display().to_string());
     Ok(Json(StackStatusResponse {
         host_exec_allowed: HostExecPolicy::allowed(),
         suggested_command: HostExecPolicy::suggested_install_command(),
@@ -680,18 +679,14 @@ fn find_answer(
     step: SetupStep,
     field: &str,
 ) -> Option<String> {
-    session
-        .events
-        .iter()
-        .rev()
-        .find_map(|ev| match ev {
-            clawz_setup::SetupEvent::UserAnswer {
-                step: s,
-                field: f,
-                value,
-            } if *s == step && f == field => Some(value.clone()),
-            _ => None,
-        })
+    session.events.iter().rev().find_map(|ev| match ev {
+        clawz_setup::SetupEvent::UserAnswer {
+            step: s,
+            field: f,
+            value,
+        } if *s == step && f == field => Some(value.clone()),
+        _ => None,
+    })
 }
 
 fn build_identity_from_session(session: &clawz_setup::SetupSession) -> IdentityInput {

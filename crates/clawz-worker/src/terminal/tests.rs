@@ -1,9 +1,8 @@
 #[cfg(test)]
 mod local_tests {
     use std::collections::HashMap;
-    use std::sync::Arc;
 
-    use super::super::{create_terminal_backend, LocalBackend, TerminalBackend};
+    use super::super::{LocalBackend, TerminalBackend};
 
     #[tokio::test]
     async fn local_exec_echo() {
@@ -20,7 +19,7 @@ mod local_tests {
 
     #[test]
     fn resolve_kind_parse() {
-        use super::super::config::{resolve_backend_kind, TerminalBackendKind};
+        use super::super::config::{TerminalBackendKind, resolve_backend_kind};
         let _ = resolve_backend_kind;
         assert_eq!(
             TerminalBackendKind::parse("ssh"),

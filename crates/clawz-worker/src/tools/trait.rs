@@ -152,7 +152,7 @@ mod tests {
             let input = args["input"].as_str().unwrap_or("");
             Ok(ToolResult {
                 tool_call_id: String::new(),
-                output: format!("processed: {}", input),
+                output: format!("processed: {input}"),
                 is_error: false,
             })
         }

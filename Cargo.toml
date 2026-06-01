@@ -3,7 +3,7 @@ members = ["crates/clawz-core", "crates/clawz-services", "crates/clawz-worker", 
 resolver = "2"
 
 [workspace.package]
-version = "1.0.1"
+version = "1.0.0"
 edition = "2021"
 license = "Elastic-2.0"
 rust-version = "1.75"
@@ -21,9 +21,11 @@ base64 = "0.22"
 reqwest = { version = "0.12", features = ["json"] }
 
 # Gateway dependencies
-axum = "0.7"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+# Versions kept in sync with the gateway/worker crates; per-crate manifests
+# add only the extra features they need (ws, fs, util) via `workspace = true`.
+axum = { version = "0.8", features = ["macros", "json"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "trace"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 
@@ -38,17 +40,17 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid"
 parking_lot = "0.12"
 
 # Workspace packages
-clawz-core = { path = "crates/clawz-core", version = "1.0.1" }
-clawz-worker = { path = "crates/clawz-worker", version = "1.0.1" }
-clawz-gateway = { path = "crates/clawz-gateway", version = "1.0.1" }
-clawz-platform = { path = "crates/clawz-platform", version = "1.0.1" }
-clawz-runtime = { path = "crates/clawz-runtime", version = "1.0.1" }
-clawz-embedded = { path = "crates/clawz-embedded", version = "1.0.1" }
-clawz-tauri = { path = "crates/clawz-tauri", version = "1.0.1" }
-clawz-tui = { path = "crates/clawz-tui", version = "1.0.1" }
-clawz-cli = { path = "crates/clawz-cli", version = "1.0.1" }
-clawz-services = { path = "crates/clawz-services", version = "1.0.1" }
-clawz-setup = { path = "crates/clawz-setup", version = "1.0.1" }
+clawz-core = { path = "crates/clawz-core", version = "1.0.0" }
+clawz-worker = { path = "crates/clawz-worker", version = "1.0.0" }
+clawz-gateway = { path = "crates/clawz-gateway", version = "1.0.0" }
+clawz-platform = { path = "crates/clawz-platform", version = "1.0.0" }
+clawz-runtime = { path = "crates/clawz-runtime", version = "1.0.0" }
+clawz-embedded = { path = "crates/clawz-embedded", version = "1.0.0" }
+clawz-tauri = { path = "crates/clawz-tauri", version = "1.0.0" }
+clawz-tui = { path = "crates/clawz-tui", version = "1.0.0" }
+clawz-cli = { path = "crates/clawz-cli", version = "1.0.0" }
+clawz-services = { path = "crates/clawz-services", version = "1.0.0" }
+clawz-setup = { path = "crates/clawz-setup", version = "1.0.0" }
 
 # =============================================================================
 # Platform Feature Flags
@@ -56,3 +58,17 @@ clawz-setup = { path = "crates/clawz-setup", version = "1.0.1" }
 [workspace.metadata.frictionless.platform]
 tiers = ["t0", "t1", "t2", "t3"]
 default = "t3"
+
+# Release Profiles
+# =============================================================================
+[profile.release]
+lto = "thin"
+strip = true
+panic = "abort"
+opt-level = 3
+
+[profile.docker]
+inherits = "release"
+codegen-units = 16
+lto = false
+opt-level = 2

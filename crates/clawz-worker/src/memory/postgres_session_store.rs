@@ -50,13 +50,12 @@ impl PostgresSessionStore {
         if !self.table_ready().await {
             return self.fallback.load_transcript(session_id).await;
         }
-        let row: Option<(Value,)> = sqlx::query_as(
-            "SELECT messages FROM clawz_sessions WHERE session_id = $1",
-        )
-        .bind(session_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| ClawzError::Database(e.to_string()))?;
+        let row: Option<(Value,)> =
+            sqlx::query_as("SELECT messages FROM clawz_sessions WHERE session_id = $1")
+                .bind(session_id)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| ClawzError::Database(e.to_string()))?;
 
         match row {
             Some((messages,)) => {
@@ -72,8 +71,8 @@ impl PostgresSessionStore {
         if !self.table_ready().await {
             return self.fallback.save_transcript(session_id, messages).await;
         }
-        let payload = serde_json::to_value(messages)
-            .map_err(|e| ClawzError::Serialization(e.to_string()))?;
+        let payload =
+            serde_json::to_value(messages).map_err(|e| ClawzError::Serialization(e.to_string()))?;
         sqlx::query(
             r#"
             INSERT INTO clawz_sessions (session_id, messages, updated_at)
@@ -136,12 +135,11 @@ impl SessionStore for PostgresSessionStore {
         if !self.table_ready().await {
             return self.fallback.list_sessions().await;
         }
-        let rows: Vec<(String,)> = sqlx::query_as(
-            "SELECT session_id FROM clawz_sessions ORDER BY updated_at DESC",
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| ClawzError::Database(e.to_string()))?;
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT session_id FROM clawz_sessions ORDER BY updated_at DESC")
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| ClawzError::Database(e.to_string()))?;
         Ok(rows.into_iter().map(|(id,)| id).collect())
     }
 }

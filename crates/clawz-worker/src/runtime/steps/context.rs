@@ -190,7 +190,10 @@ impl PipelineStep for RetrieveContextStep {
                     ctx.insert_meta(
                         META_WORKSPACE_SKILLS,
                         serde_json::Value::Array(
-                            names.iter().map(|n| serde_json::Value::String(n.clone())).collect(),
+                            names
+                                .iter()
+                                .map(|n| serde_json::Value::String(n.clone()))
+                                .collect(),
                         ),
                     );
                     crate::workspace::WorkspaceLoader::build_skills_prompt_snapshot(&snap)

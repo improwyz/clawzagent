@@ -10,8 +10,7 @@ use crate::dto::{
     ExecuteToolResponse, FanOutRequest, FanOutResponse, MemoryIngestRequest, MemoryIngestResponse,
     OrchestrateRequest, OrchestrateResponse, ProviderHealthRequest, ProviderHealthResponse,
     RunTurnRequest, RunTurnResponse, SessionSummary, SubconsciousTickRequest,
-    SubconsciousTickResponse,
-    TestChannelRequest, TestChannelResponse,
+    SubconsciousTickResponse, TestChannelRequest, TestChannelResponse,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -73,23 +72,20 @@ pub trait ExecutionClient: Send + Sync {
         req: ChannelSendRequest,
     ) -> ExecutionResult<ChannelSendResponse>;
 
-    async fn poll_channel(
-        &self,
-        req: ChannelPollRequest,
-    ) -> ExecutionResult<ChannelPollResponse>;
+    async fn poll_channel(&self, req: ChannelPollRequest) -> ExecutionResult<ChannelPollResponse>;
 
     async fn list_cron_jobs(&self) -> ExecutionResult<Vec<CronJobDto>>;
 
-    async fn create_cron_job(
-        &self,
-        req: CreateCronJobRequest,
-    ) -> ExecutionResult<CronJobDto>;
+    async fn create_cron_job(&self, req: CreateCronJobRequest) -> ExecutionResult<CronJobDto>;
 
     async fn delete_cron_job(&self, job_id: &str) -> ExecutionResult<()>;
 
     async fn run_cron_job(&self, job_id: &str) -> ExecutionResult<CronRunResultDto>;
 
-    async fn ingest_memory(&self, req: MemoryIngestRequest) -> ExecutionResult<MemoryIngestResponse>;
+    async fn ingest_memory(
+        &self,
+        req: MemoryIngestRequest,
+    ) -> ExecutionResult<MemoryIngestResponse>;
 
     async fn run_subconscious_tick(
         &self,
@@ -266,10 +262,7 @@ impl ExecutionClient for HttpExecutionClient {
         self.post_json("/v1/channels/send", &req).await
     }
 
-    async fn poll_channel(
-        &self,
-        req: ChannelPollRequest,
-    ) -> ExecutionResult<ChannelPollResponse> {
+    async fn poll_channel(&self, req: ChannelPollRequest) -> ExecutionResult<ChannelPollResponse> {
         self.post_json("/v1/channels/poll", &req).await
     }
 
@@ -282,10 +275,7 @@ impl ExecutionClient for HttpExecutionClient {
         Ok(resp.data)
     }
 
-    async fn create_cron_job(
-        &self,
-        req: CreateCronJobRequest,
-    ) -> ExecutionResult<CronJobDto> {
+    async fn create_cron_job(&self, req: CreateCronJobRequest) -> ExecutionResult<CronJobDto> {
         self.post_json("/v1/cron/jobs", &req).await
     }
 
@@ -301,7 +291,10 @@ impl ExecutionClient for HttpExecutionClient {
         .await
     }
 
-    async fn ingest_memory(&self, req: MemoryIngestRequest) -> ExecutionResult<MemoryIngestResponse> {
+    async fn ingest_memory(
+        &self,
+        req: MemoryIngestRequest,
+    ) -> ExecutionResult<MemoryIngestResponse> {
         self.post_json("/v1/background/ingest", &req).await
     }
 

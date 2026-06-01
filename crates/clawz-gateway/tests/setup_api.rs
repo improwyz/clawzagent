@@ -190,8 +190,5 @@ async fn setup_stack_deps_dry_run_requires_bootstrap_token() {
     let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(json["ok"], true);
     assert_eq!(json["dry_run"], true);
-    assert!(json["message"]
-        .as_str()
-        .unwrap_or("")
-        .contains("ensure_"));
+    assert!(json["message"].as_str().unwrap_or("").contains("ensure_"));
 }

@@ -368,7 +368,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clawz_core::traits::TransportListener as _;
     use std::net::SocketAddr;
     use tokio::task;
 
@@ -377,14 +376,9 @@ mod tests {
         let bound = listener.local_addr().unwrap();
         task::spawn(async move {
             if let Ok((mut stream, _)) = listener.accept().await {
-                loop {
-                    match read_frame(&mut stream).await {
-                        Ok(data) => {
-                            if write_frame(&mut stream, &data).await.is_err() {
-                                break;
-                            }
-                        }
-                        Err(_) => break,
+                while let Ok(data) = read_frame(&mut stream).await {
+                    if write_frame(&mut stream, &data).await.is_err() {
+                        break;
                     }
                 }
             }
@@ -410,7 +404,7 @@ mod tests {
     async fn test_listen_accept() {
         let config = GrpcConfig::default();
         let transport = GrpcTransport::new(config);
-        let mut listener = transport.listen("127.0.0.1:0").await.unwrap();
+        let listener = transport.listen("127.0.0.1:0").await.unwrap();
         // Just verify we can create a listener without error.
         drop(listener);
     }

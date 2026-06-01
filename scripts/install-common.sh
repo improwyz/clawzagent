@@ -10,6 +10,7 @@ CLAWZ_INSTALL_DIR="${CLAWZ_INSTALL_DIR:-${HOME}/clawz}"
 GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:3000}"
 COMPOSE="${COMPOSE:-docker compose}"
 CLAWZ_REGISTRY="${CLAWZ_REGISTRY:-ghcr.io/improwyz}"
+CLAWZ_REGISTRY_FALLBACK="${CLAWZ_REGISTRY_FALLBACK:-}"
 CLAWZ_IMAGE_TAG="${CLAWZ_IMAGE_TAG:-latest}"
 COMPOSE_BASE="docker-compose.yml"
 COMPOSE_PREBUILT="docker-compose.prebuilt.yml"
@@ -83,8 +84,10 @@ write_env_file() {
     if command -v openssl >/dev/null 2>&1; then
       jwt_secret="$(openssl rand -hex 32)"
       worker_token="$(openssl rand -hex 24)"
+      secrets_key="$(openssl rand -hex 32)"
       sed -i.bak "s/change-me-in-production/${jwt_secret}/" .env
       sed -i.bak "s/change-me-worker-token/${worker_token}/" .env
+      sed -i.bak "s/change-me-secrets-key/${secrets_key}/" .env
       rm -f .env.bak
     fi
     log "Created .env from .env.example"
@@ -151,6 +154,11 @@ ghcr_logged_in() {
   [[ -f "${HOME}/.docker/config.json" ]] && grep -q '"ghcr.io"' "${HOME}/.docker/config.json" 2>/dev/null
 }
 
+docker_hub_logged_in() {
+  [[ -f "${HOME}/.docker/config.json" ]] \
+    && grep -qE 'index\.docker\.io|https://index\.docker\.io/v1/' "${HOME}/.docker/config.json" 2>/dev/null
+}
+
 registry_github_user() {
   if [[ -n "${CLAWZ_REGISTRY_USER:-}" ]]; then
     echo "$CLAWZ_REGISTRY_USER"
@@ -166,44 +174,149 @@ registry_github_user() {
   return 1
 }
 
+registry_dockerhub_user() {
+  if [[ -n "${DOCKERHUB_USERNAME:-}" ]]; then
+    echo "$DOCKERHUB_USERNAME"
+    return 0
+  fi
+  if [[ "${CLAWZ_REGISTRY_FALLBACK:-}" =~ ^docker\.io/([^/]+)(/clawz)?$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+# docker.io/user/clawz → docker.io/user and enables monorepo tags (clawz:gateway-latest).
+clawz_normalize_registry_path() {
+  local path="$1"
+  if [[ "$path" =~ ^(docker\.io/[^/]+)/clawz$ ]]; then
+    export CLAWZ_HUB_MONOREPO="${CLAWZ_HUB_MONOREPO:-clawz}"
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  echo "$path"
+}
+
+clawz_hub_monorepo_name() {
+  echo "${CLAWZ_HUB_MONOREPO:-clawz}"
+}
+
+clawz_image_layout_for_registry() {
+  local registry="$1"
+  local forced="${2:-}"
+  if [[ "$forced" == "monorepo" || "$forced" == "multirepo" ]]; then
+    echo "$forced"
+    return 0
+  fi
+  if [[ "${CLAWZ_IMAGE_LAYOUT:-}" == "monorepo" || "${CLAWZ_IMAGE_LAYOUT:-}" == "multirepo" ]]; then
+    echo "${CLAWZ_IMAGE_LAYOUT}"
+    return 0
+  fi
+  if [[ -n "${CLAWZ_HUB_MONOREPO:-}" ]]; then
+    local hub_user
+    hub_user="$(registry_dockerhub_user)" || true
+    if [[ -n "$hub_user" && "$registry" == "docker.io/${hub_user}" ]]; then
+      echo monorepo
+      return 0
+    fi
+  fi
+  echo multirepo
+}
+
+clawz_component_image() {
+  local component="$1"
+  local registry="$2"
+  local tag="${3:-${CLAWZ_IMAGE_TAG:-latest}}"
+  local layout_force="${4:-}"
+  local layout
+  layout="$(clawz_image_layout_for_registry "$registry" "$layout_force")"
+  if [[ "$layout" == "monorepo" ]]; then
+    echo "${registry}/$(clawz_hub_monorepo_name):${component}-${tag}"
+  else
+    echo "${registry}/clawz-${component}:${tag}"
+  fi
+}
+
+clawz_export_compose_images() {
+  local registry="$1"
+  local layout="${2:-}"
+  export CLAWZ_GATEWAY_IMAGE="$(clawz_component_image gateway "$registry" "${CLAWZ_IMAGE_TAG}" "$layout")"
+  export CLAWZ_WORKER_IMAGE="$(clawz_component_image worker "$registry" "${CLAWZ_IMAGE_TAG}" "$layout")"
+  export CLAWZ_DASHBOARD_IMAGE="$(clawz_component_image dashboard "$registry" "${CLAWZ_IMAGE_TAG}" "$layout")"
+  export CLAWZ_AGENT_IMAGE="$(clawz_component_image agent "$registry" "${CLAWZ_IMAGE_TAG}" "$layout")"
+  if [[ -n "$layout" ]]; then
+    log "Image refs (${layout}): ${CLAWZ_GATEWAY_IMAGE}"
+  fi
+}
+
+clawz_registry_fallback() {
+  local path
+  if [[ -n "${CLAWZ_REGISTRY_FALLBACK:-}" ]]; then
+    path="$(clawz_normalize_registry_path "${CLAWZ_REGISTRY_FALLBACK}")"
+    echo "$path"
+    return 0
+  fi
+  local hub_user
+  hub_user="$(registry_dockerhub_user)" || return 1
+  echo "docker.io/${hub_user}"
+}
+
+login_ghcr() {
+  if ghcr_logged_in; then
+    log "Using existing docker login for ghcr.io (primary)"
+    return 0
+  fi
+  local token="${GITHUB_TOKEN:-${GHCR_TOKEN:-${CLAWZ_REGISTRY_TOKEN:-}}}"
+  if [[ -z "$token" ]]; then
+    return 1
+  fi
+  local user
+  user="$(registry_github_user)" || return 1
+  log "Logging in to ghcr.io as ${user}..."
+  echo "$token" | docker login ghcr.io -u "$user" --password-stdin >/dev/null
+}
+
+login_dockerhub() {
+  if docker_hub_logged_in; then
+    log "Using existing docker login for Docker Hub (fallback)"
+    return 0
+  fi
+  local token="${DOCKERHUB_TOKEN:-}"
+  if [[ -z "$token" ]]; then
+    return 1
+  fi
+  local user
+  user="$(registry_dockerhub_user)" || return 1
+  log "Logging in to Docker Hub as ${user}..."
+  echo "$token" | docker login -u "$user" --password-stdin >/dev/null
+}
+
 registry_login_hint() {
-  err "Prebuilt install requires GHCR access (GitHub PAT — not your account password)."
+  err "Prebuilt install pulls from GHCR first, then Docker Hub if configured."
   err ""
-  err "  export GITHUB_TOKEN=ghp_xxxx   # scopes: read:packages"
+  err "Primary (GHCR):"
+  err "  export GITHUB_TOKEN=ghp_xxxx   # read:packages"
   err "  export GITHUB_USER=your_github_username"
-  err "  ./install.sh"
   err ""
-  err "Or login manually:"
-  err "  echo \"\$GITHUB_TOKEN\" | docker login ghcr.io -u \$GITHUB_USER --password-stdin"
+  err "Fallback (private Docker Hub — optional):"
+  err "  export DOCKERHUB_USERNAME=your_namespace"
+  err "  export DOCKERHUB_TOKEN=dckr_pat_xxxx"
+  err "  export CLAWZ_REGISTRY_FALLBACK=docker.io/\${DOCKERHUB_USERNAME}"
+  err "  # one private Hub repo: export CLAWZ_HUB_MONOREPO=clawz"
   err ""
-  err "Package access: improwyz/clawz-gateway, clawz-worker, clawz-agent must grant your user Read."
+  err "Or: ./install.sh --build  (local compile, no registry)"
   err "Docs: docs/private-registry.md"
-  err ""
-  err "Maintainers must publish images first (git tag v* or Actions → Release workflow)."
-  err "Slow local compile only if you opt in: ./install.sh --build"
 }
 
 ensure_registry_auth() {
-  if ghcr_logged_in; then
-    log "Using existing docker login for ghcr.io"
-    return 0
+  if ! login_ghcr; then
+    warn "GHCR login skipped (set GITHUB_TOKEN + GITHUB_USER for primary registry)."
   fi
-
-  local token="${CLAWZ_REGISTRY_TOKEN:-${GITHUB_TOKEN:-${GHCR_TOKEN:-}}}"
-  if [[ -z "$token" ]]; then
+  if clawz_registry_fallback >/dev/null 2>&1 || [[ -n "${DOCKERHUB_TOKEN:-}" ]]; then
+    login_dockerhub || warn "Docker Hub fallback login skipped (set DOCKERHUB_TOKEN + DOCKERHUB_USERNAME)."
+  fi
+  if ! ghcr_logged_in && ! docker_hub_logged_in; then
     registry_login_hint
-    exit 1
-  fi
-
-  local user
-  user="$(registry_github_user)" || {
-    err "Set GITHUB_USER or CLAWZ_REGISTRY_USER (your GitHub username, not email)."
-    exit 1
-  }
-
-  log "Logging in to ghcr.io as ${user}..."
-  if ! echo "$token" | docker login ghcr.io -u "$user" --password-stdin >/dev/null; then
-    err "docker login ghcr.io failed — check token scopes (read:packages) and username."
     exit 1
   fi
 }
@@ -215,32 +328,65 @@ compose_has_service() {
   $COMPOSE $(compose_args prebuilt) "$@" config --services 2>/dev/null | grep -qxF "$svc"
 }
 
+_pull_log_report() {
+  local pull_log="$1"
+  err "Prebuilt image pull failed."
+  sed 's/^/[clawz] /' "$pull_log" >&2 || true
+  err ""
+  if grep -qiE 'unauthorized|denied|403|401' "$pull_log" 2>/dev/null; then
+    err "Auth issue: check GHCR (read:packages) or Docker Hub token access."
+  elif grep -qiE 'not found|manifest unknown|404' "$pull_log" 2>/dev/null; then
+    err "Images may not be published yet. Ask maintainers to run the Release workflow or push tag v*."
+    err "Until then, only ./install.sh --build will work (local compile, 10–20 min)."
+  fi
+}
+
+_compose_pull_prebuilt() {
+  local pull_log="$1"
+  local pull_services="$2"
+  shift 2
+  local compose_profile_args=("$@")
+  # shellcheck disable=SC2086
+  $COMPOSE $(compose_args prebuilt) "${compose_profile_args[@]}" pull $pull_services 2>"$pull_log"
+}
+
 pull_prebuilt_images() {
   local pull_log pull_services="gateway worker" compose_profile_args=()
+  local primary_registry="${CLAWZ_REGISTRY:-ghcr.io/improwyz}"
   pull_log="$(mktemp)"
   trap 'rm -f "$pull_log"' RETURN
 
   if [[ "${WITH_WEB:-0}" == "1" ]] && compose_has_service dashboard --profile web; then
     pull_services="gateway worker dashboard"
     compose_profile_args=(--profile web)
-    log "Pulling ${CLAWZ_REGISTRY}/clawz-gateway:${CLAWZ_IMAGE_TAG}, clawz-worker:${CLAWZ_IMAGE_TAG}, and clawz-dashboard:${CLAWZ_IMAGE_TAG} ..."
-  else
-    log "Pulling ${CLAWZ_REGISTRY}/clawz-gateway:${CLAWZ_IMAGE_TAG} and clawz-worker:${CLAWZ_IMAGE_TAG} ..."
   fi
-  # shellcheck disable=SC2086
-  if $COMPOSE $(compose_args prebuilt) "${compose_profile_args[@]}" pull $pull_services 2>"$pull_log"; then
+
+  export CLAWZ_REGISTRY="$primary_registry"
+  clawz_export_compose_images "$primary_registry" multirepo
+  log "Pulling from primary registry ${CLAWZ_REGISTRY} (tag ${CLAWZ_IMAGE_TAG})..."
+  if _compose_pull_prebuilt "$pull_log" "$pull_services" "${compose_profile_args[@]}"; then
     return 0
   fi
 
-  err "Prebuilt image pull failed."
-  sed 's/^/[clawz] /' "$pull_log" >&2 || true
-  err ""
-  if grep -qiE 'unauthorized|denied|403|401' "$pull_log" 2>/dev/null; then
-    err "Auth issue: use a PAT with read:packages and confirm package access on ghcr.io/improwyz."
-  elif grep -qiE 'not found|manifest unknown|404' "$pull_log" 2>/dev/null; then
-    err "Images may not be published yet. Ask maintainers to run the Release workflow or push tag v*."
-    err "Until then, only ./install.sh --build will work (local compile, 10–20 min)."
+  local fallback_registry
+  fallback_registry="$(clawz_registry_fallback)" || true
+  if [[ -z "$fallback_registry" || "$fallback_registry" == "$primary_registry" ]]; then
+    _pull_log_report "$pull_log"
+    registry_login_hint
+    exit 1
   fi
+
+  warn "Primary registry (${primary_registry}) failed — trying fallback (${fallback_registry})..."
+  login_dockerhub || true
+  export CLAWZ_REGISTRY="$fallback_registry"
+  clawz_export_compose_images "$fallback_registry"
+  : >"$pull_log"
+  log "Pulling from fallback registry ${CLAWZ_REGISTRY} (tag ${CLAWZ_IMAGE_TAG}, layout $(clawz_image_layout_for_registry "$fallback_registry"))..."
+  if _compose_pull_prebuilt "$pull_log" "$pull_services" "${compose_profile_args[@]}"; then
+    return 0
+  fi
+
+  _pull_log_report "$pull_log"
   registry_login_hint
   exit 1
 }
@@ -270,7 +416,12 @@ install_with_docker() {
 
   export CLAWZ_REGISTRY="${CLAWZ_REGISTRY:-ghcr.io/improwyz}"
   export CLAWZ_IMAGE_TAG="${CLAWZ_IMAGE_TAG:-latest}"
-  export CLAWZ_AGENT_IMAGE="${CLAWZ_AGENT_IMAGE:-${CLAWZ_REGISTRY}/clawz-agent:${CLAWZ_IMAGE_TAG}}"
+  if [[ -n "${CLAWZ_REGISTRY_FALLBACK:-}" ]]; then
+    export CLAWZ_REGISTRY_FALLBACK="$(clawz_normalize_registry_path "${CLAWZ_REGISTRY_FALLBACK}")"
+  elif [[ -n "${DOCKERHUB_USERNAME:-}" ]]; then
+    export CLAWZ_REGISTRY_FALLBACK="docker.io/${DOCKERHUB_USERNAME}"
+  fi
+  clawz_export_compose_images "${CLAWZ_REGISTRY}" multirepo
 
   local compose_mode="prebuilt"
   if [[ "$use_build" == "1" ]]; then

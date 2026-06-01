@@ -2,9 +2,9 @@
 
 use anyhow::{anyhow, Context, Result};
 use clawz_setup::{
-    DependencyInstaller, DeploymentChoice, HostExecPolicy, HostScriptRunner,
-    HostSpecChecker, InstallStrategy, StackAction, StackRunner, SetupToolRegistry, ToolContext,
-    ToolInput, ConfirmGate,
+    ConfirmGate, DependencyInstaller, DeploymentChoice, HostExecPolicy, HostScriptRunner,
+    HostSpecChecker, InstallStrategy, SetupToolRegistry, StackAction, StackRunner, ToolContext,
+    ToolInput,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -61,14 +61,15 @@ pub fn run_stack(opts: SetupStackOptions) -> Result<()> {
                 repo_root: runner.repo_root().to_path_buf(),
                 env_path: runner.repo_root().join(".env"),
             };
-            let dep_out = reg.run(
-                "install_deps",
-                &ctx,
-                &ToolInput {
-                    args: serde_json::json!({ "dry_run": false, "with_web": opts.with_web }),
-                },
-            )
-            .map_err(|e| anyhow!("{e}"))?;
+            let dep_out = reg
+                .run(
+                    "install_deps",
+                    &ctx,
+                    &ToolInput {
+                        args: serde_json::json!({ "dry_run": false, "with_web": opts.with_web }),
+                    },
+                )
+                .map_err(|e| anyhow!("{e}"))?;
             if !dep_out.ok {
                 anyhow::bail!("install_deps failed: {}", dep_out.message);
             }
@@ -80,8 +81,7 @@ pub fn run_stack(opts: SetupStackOptions) -> Result<()> {
         }
     }
 
-    let plan = StackRunner::plan(deployment, strategy, &spec, None)
-        .map_err(|e| anyhow!("{e}"))?;
+    let plan = StackRunner::plan(deployment, strategy, &spec, None).map_err(|e| anyhow!("{e}"))?;
     let stack = StackRunner::new(runner);
     let out = stack
         .run(StackAction::Up, &plan, opts.with_web, opts.dry_run)

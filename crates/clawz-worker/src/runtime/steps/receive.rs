@@ -82,10 +82,7 @@ impl PipelineStep for ReceiveMessageStep {
                 }
                 // Injection check.
                 if let Some(pattern) = Self::detect_injection(text) {
-                    log::warn!(
-                        "[receive] injection pattern detected in message: '{}'",
-                        pattern
-                    );
+                    log::warn!("[receive] injection pattern detected in message: '{pattern}'");
                     // Record the detection in metadata so downstream steps can act.
                     ctx.insert_meta(
                         "injection_detected",
@@ -108,10 +105,7 @@ impl PipelineStep for ReceiveMessageStep {
                     }
                 });
                 if let Some(pattern) = injection_pattern {
-                    log::warn!(
-                        "[receive] injection pattern in multimodal part: '{}'",
-                        pattern
-                    );
+                    log::warn!("[receive] injection pattern in multimodal part: '{pattern}'");
                     ctx.insert_meta("injection_detected", serde_json::Value::String(pattern));
                 }
             }
@@ -134,10 +128,7 @@ impl PipelineStep for ReceiveMessageStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clawz_core::{
-        traits::PipelineContext,
-        types::message::{Message, Role},
-    };
+    use clawz_core::{traits::PipelineContext, types::message::Message};
 
     fn make_ctx_with_text(text: &str) -> PipelineContext {
         let mut ctx = PipelineContext::new("agent-1", "conv-1");

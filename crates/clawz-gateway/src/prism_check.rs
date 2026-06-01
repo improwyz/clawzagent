@@ -149,13 +149,13 @@ pub async fn prism_status_json() -> Value {
             "title": info.dimension.title(),
             "status": status_label(status),
             "module": info.module,
-            "required_modes": info.required_modes.iter().map(|m| format!("{:?}", m).to_lowercase()).collect::<Vec<_>>(),
-            "passing_modes": passing_modes.iter().map(|m| format!("{:?}", m).to_lowercase()).collect::<Vec<_>>(),
+            "required_modes": info.required_modes.iter().map(|m| format!("{m:?}").to_lowercase()).collect::<Vec<_>>(),
+            "passing_modes": passing_modes.iter().map(|m| format!("{m:?}").to_lowercase()).collect::<Vec<_>>(),
         }));
     }
 
     json!({
-        "mode": format!("{:?}", mode).to_lowercase(),
+        "mode": format!("{mode:?}").to_lowercase(),
         "dimensions": dimensions,
         "checked_at": chrono::Utc::now(),
     })

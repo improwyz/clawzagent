@@ -322,7 +322,7 @@ impl Council {
                 id: member_id.into(),
             })?;
         member.cast_vote(vote, reasoning);
-        log::debug!("[council] member '{}' voted {:?}", member_id, vote);
+        log::debug!("[council] member '{member_id}' voted {vote:?}");
         Ok(())
     }
 

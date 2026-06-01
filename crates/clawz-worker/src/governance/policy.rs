@@ -381,7 +381,7 @@ impl PolicyEngine {
         }
 
         // Unknown condition — treat as no-match.
-        log::warn!("[policy] unknown condition syntax: '{}'", cond);
+        log::warn!("[policy] unknown condition syntax: '{cond}'");
         false
     }
 }

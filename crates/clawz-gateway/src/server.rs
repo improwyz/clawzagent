@@ -14,12 +14,16 @@
 //! - [`crate::AppState`] — Shared in-memory state and broadcast channel.
 
 use axum::{
-    Router, middleware,
+    Router,
+    extract::Request,
+    http::{HeaderValue, header},
+    middleware::{self, Next},
+    response::Response,
     routing::{get, post},
 };
 use std::net::SocketAddr;
 use std::path::Path;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
@@ -62,13 +66,30 @@ impl GatewayServer {
     /// 3. Add global middleware (request tracing, CORS).
     /// 4. Attach [`AppState`] so every handler can extract it.
     pub fn build_router(state: AppState) -> Router {
-        // Use a permissive CORS layer for local development and SPA front-ends.
-        // In production this should be tightened to the exact allowed origins.
-        let cors = CorsLayer::permissive();
+        // Fail-closed: in release builds, refuse to start without the secrets that
+        // protect auth and stored credentials. No-op in debug for local dev.
+        validate_release_config();
+
+        // License check: trial (30 days), paid, or expired.
+        let license_status = clawz_core::licensing::verify_or_trial();
+        match &license_status {
+            s if s.is_usable() => tracing::info!("License: {s}"),
+            _ => {
+                tracing::error!("License: {license_status}");
+                tracing::error!(
+                    "Enter a license key at https://clawz.net or run `clawz` to activate"
+                );
+                std::process::exit(1);
+            }
+        }
+
+        // CORS is restricted via `CLAWZ_CORS_ALLOWED_ORIGINS`; see [`build_cors`].
+        let cors = build_cors();
 
         let webhooks = Router::new()
             .merge(crate::routes::telephony::routes())
-            .merge(crate::routes::webhooks::routes());
+            .merge(crate::routes::webhooks::routes())
+            .layer(middleware::from_fn(crate::ratelimit::rate_limit));
 
         let mut router = Router::new()
             .route("/health", get(health))
@@ -80,14 +101,22 @@ impl GatewayServer {
         if let Some(dist) = Self::web_dist_path() {
             tracing::info!("serving dashboard from {}", dist.display());
             router = router.fallback_service(
-                ServeDir::new(&dist)
-                    .not_found_service(ServeFile::new(dist.join("index.html"))),
+                ServeDir::new(&dist).not_found_service(ServeFile::new(dist.join("index.html"))),
             );
         }
 
         router
+            .layer(middleware::from_fn(security_headers))
+            // Idempotency-Key replay for mutating requests (no-op unless a DB
+            // pool is registered and the request carries the header).
+            .layer(middleware::from_fn(crate::idempotency::idempotency))
             .layer(TraceLayer::new_for_http())
             .layer(cors)
+            // Cap inbound request bodies to bound memory use / reject oversized
+            // payloads. Only affects request bodies (not streaming responses or
+            // WS, which carry no upgrade-request body). Tunable via
+            // CLAWZ_MAX_BODY_BYTES; defaults to axum's historical 2 MiB.
+            .layer(axum::extract::DefaultBodyLimit::max(max_body_bytes()))
             .with_state(state)
     }
 
@@ -129,6 +158,8 @@ impl GatewayServer {
             .nest("/dashboard", crate::routes::dashboard::routes())
             .route("/mcp", post(crate::mcp::handle_mcp_request))
             .layer(middleware::from_fn(crate::auth::auth_middleware))
+            // Outermost: reject floods before auth/handlers run.
+            .layer(middleware::from_fn(crate::ratelimit::rate_limit))
     }
 
     /// Bind and serve the gateway on the given address.
@@ -173,4 +204,139 @@ async fn health() -> &'static str {
 /// that the `/api/docs` route does not 404 during early development.
 async fn swagger_ui() -> impl axum::response::IntoResponse {
     axum::response::Redirect::temporary("/api/v1/system/openapi")
+}
+
+/// In release builds, refuse to start without production secrets. No-op in debug.
+///
+/// Enforces fail-closed deployment: a misconfigured production gateway aborts at
+/// startup with a clear message instead of silently running with the well-known
+/// dev fallbacks (`"changeme"` JWT secret, `dev-insecure-key` secrets key) or an
+/// auth bypass left enabled.
+fn validate_release_config() {
+    #[cfg(not(debug_assertions))]
+    {
+        let jwt_set =
+            std::env::var("CLAWZ_JWT_SECRET").is_ok() || std::env::var("JWT_SECRET").is_ok();
+        if !jwt_set {
+            tracing::error!(
+                "CLAWZ_JWT_SECRET (or JWT_SECRET) must be set in release builds. \
+                 Generate one with: openssl rand -hex 32"
+            );
+            std::process::exit(1);
+        }
+        if std::env::var("CLAWZ_SECRETS_KEY").is_err() {
+            tracing::error!(
+                "CLAWZ_SECRETS_KEY must be set in release builds. \
+                 Generate one with: openssl rand -hex 32"
+            );
+            std::process::exit(1);
+        }
+        if std::env::var("CLAWZ_DISABLE_AUTH").as_deref() == Ok("1") {
+            tracing::error!(
+                "CLAWZ_DISABLE_AUTH=1 must not be set in release builds. \
+                 Remove it from your .env or environment"
+            );
+            std::process::exit(1);
+        }
+    }
+}
+
+/// Maximum inbound request body size in bytes.
+///
+/// Reads `CLAWZ_MAX_BODY_BYTES`; falls back to 2 MiB (axum's historical default)
+/// so behavior is preserved unless an operator opts into a different cap.
+fn max_body_bytes() -> usize {
+    const DEFAULT: usize = 2 * 1024 * 1024;
+    std::env::var("CLAWZ_MAX_BODY_BYTES")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(DEFAULT)
+}
+
+/// Build the CORS layer from `CLAWZ_CORS_ALLOWED_ORIGINS` (comma-separated origins).
+///
+/// - When set, only those origins are allowed.
+/// - When unset in debug builds, a permissive layer is used for local development.
+/// - When unset in release builds, no cross-origin grants are issued, so browsers
+///   fall back to same-origin only (secure default).
+fn build_cors() -> CorsLayer {
+    if let Ok(raw) = std::env::var("CLAWZ_CORS_ALLOWED_ORIGINS") {
+        let origins: Vec<HeaderValue> = raw
+            .split(',')
+            .filter_map(|o| o.trim().parse().ok())
+            .collect();
+        if !origins.is_empty() {
+            return CorsLayer::new()
+                .allow_origin(origins)
+                .allow_methods(Any)
+                .allow_headers(Any);
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    {
+        CorsLayer::permissive()
+    }
+    #[cfg(not(debug_assertions))]
+    {
+        CorsLayer::new()
+    }
+}
+
+/// Attach baseline security response headers to every response.
+///
+/// HSTS is only emitted in release builds to avoid pinning HTTPS during local HTTP
+/// development. A Content-Security-Policy is opt-in via `CLAWZ_CSP` so the bundled
+/// SPA is not broken by a default policy.
+async fn security_headers(request: Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    headers.insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
+    );
+    #[cfg(not(debug_assertions))]
+    headers.insert(
+        header::STRICT_TRANSPORT_SECURITY,
+        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+    );
+    if let Ok(csp) = std::env::var("CLAWZ_CSP") {
+        if let Ok(value) = HeaderValue::from_str(&csp) {
+            headers.insert(header::CONTENT_SECURITY_POLICY, value);
+        }
+    }
+    response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{body::Body, http::Request as HttpRequest, routing::get};
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn security_headers_are_set_on_responses() {
+        let app = Router::new()
+            .route("/", get(|| async { "ok" }))
+            .layer(middleware::from_fn(security_headers));
+        let res = app
+            .oneshot(HttpRequest::builder().uri("/").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let h = res.headers();
+        assert_eq!(h.get("x-content-type-options").unwrap(), "nosniff");
+        assert_eq!(h.get("x-frame-options").unwrap(), "DENY");
+        assert_eq!(h.get("referrer-policy").unwrap(), "no-referrer");
+    }
+
+    #[test]
+    fn build_cors_does_not_panic() {
+        let _ = build_cors();
+    }
 }

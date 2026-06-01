@@ -173,8 +173,7 @@ mod tests {
         let signals = DriftDetector::compare(&predicted, &observed);
         assert!(
             signals.iter().any(|s| matches!(s.kind, DriftKind::Anomaly)),
-            "expected at least one Anomaly drift signal, got {:?}",
-            signals
+            "expected at least one Anomaly drift signal, got {signals:?}"
         );
     }
 }

@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use clawz_worker::orchestration::tool_orchestrator::InMemoryToolOrchestrator;
 use clawz_worker::runtime::swarm::{
-    AgentRole, ConflictResolver, DependencyGraph, ResolutionStrategy, SwarmPattern,
+    ConflictResolver, DependencyGraph, ResolutionStrategy, SwarmPattern,
 };
 
 fn make_spawn_config(owner_agent_id: &str) -> clawz_core::types::orchestration::SpawnConfig {

@@ -2,21 +2,33 @@
 
 use crate::PlatformTier;
 
-#[cfg(feature = "t0")]
-pub const fn detect_platform_auto() -> PlatformTier {
-    PlatformTier::T0
-}
-#[cfg(feature = "t1")]
-pub const fn detect_platform_auto() -> PlatformTier {
-    PlatformTier::T1
-}
-#[cfg(feature = "t2")]
-pub const fn detect_platform_auto() -> PlatformTier {
-    PlatformTier::T2
-}
+// The tier features (t0..t3) are not mutually exclusive in Cargo's feature
+// model — `--all-features` (or any multi-tier combination) enables several at
+// once. Select exactly one active definition via a priority order (higher tier
+// wins) so the crate still compiles under `--all-features`, plus a fallback for
+// when no tier feature is set at all.
 #[cfg(feature = "t3")]
 pub const fn detect_platform_auto() -> PlatformTier {
     PlatformTier::T3
+}
+#[cfg(all(feature = "t2", not(feature = "t3")))]
+pub const fn detect_platform_auto() -> PlatformTier {
+    PlatformTier::T2
+}
+#[cfg(all(feature = "t1", not(any(feature = "t2", feature = "t3"))))]
+pub const fn detect_platform_auto() -> PlatformTier {
+    PlatformTier::T1
+}
+#[cfg(all(
+    feature = "t0",
+    not(any(feature = "t1", feature = "t2", feature = "t3"))
+))]
+pub const fn detect_platform_auto() -> PlatformTier {
+    PlatformTier::T0
+}
+#[cfg(not(any(feature = "t0", feature = "t1", feature = "t2", feature = "t3")))]
+pub const fn detect_platform_auto() -> PlatformTier {
+    PlatformTier::T1
 }
 
 /// Runtime detection for unknown platforms. Falls back to T1.

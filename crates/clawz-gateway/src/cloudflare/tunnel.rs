@@ -316,10 +316,12 @@ mod tests {
 
     #[test]
     fn test_tunnel_client_from_enabled_config() {
-        let mut cfg = CloudflareConfig::default();
-        cfg.enabled = true;
-        cfg.account_id = "acc123".into();
-        cfg.api_token = "tok456".into();
+        let mut cfg = CloudflareConfig {
+            enabled: true,
+            account_id: "acc123".into(),
+            api_token: "tok456".into(),
+            ..Default::default()
+        };
         cfg.tunnel.enabled = true;
         let client = TunnelClient::from_config(&cfg).unwrap();
         assert_eq!(client.account_id, "acc123");

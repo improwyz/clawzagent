@@ -21,25 +21,14 @@ Thumbs.db
 .env.*.local
 !.env.example
 
-# Documentation tree (local copies); ship install/registry docs only
-/docs/*
-!/docs/INSTALL.md
-!/docs/private-registry.md
-!/docs/install-dependencies.csv
-!/docs/deployment-build-strategy.md
-!/docs/agent-runtime-parity-plan.md
-!/docs/openhuman-comparison.md
-!/docs/CLAWZ_PHASE0_COMPLETE.md
-!/docs/PHASE0_COMPLETE_ANALYSIS.md
-!/docs/superpowers/specs/2026-05-30-install-onboarding-wizard-design.md
-!/docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md
-!/docs/install-onboarding-wizard-tasks.md
-!/docs/clawz-product-brochure.md
-!/docs/user-manual.md
-!/docs/administration-manual.md
-!/docs/api-reference.md
-!/docs/USER-MANUAL.md
-!/docs/ADMINISTRATION-MANUAL.md
+# Documentation (local working copies, plans, specs)
+/docs/
+
+# Obsolete deploy configs (replaced by Caddy)
+/deploy/
+
+# Integration tests (dev-only)
+/tests/
 
 # Node
 node_modules/

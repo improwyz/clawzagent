@@ -33,9 +33,6 @@
 pub mod identity_types;
 
 pub mod agent;
-pub mod session_commands;
-pub mod session_run;
-pub mod turn_events;
 pub mod complexity;
 pub mod fan_out;
 pub mod idempotency;
@@ -44,12 +41,15 @@ pub mod mbti_drift_detector;
 pub mod negotiation;
 pub mod orchestration;
 pub mod pipeline;
+pub mod session_commands;
+pub mod session_run;
 pub mod spawner;
 pub mod steps;
 pub mod subagent;
 pub mod swarm;
 pub mod team;
 pub mod turn_coordinator;
+pub mod turn_events;
 
 /// Re-export the primary runtime entry point and its dependency bag.
 pub use agent::{AgentRuntime, RuntimeDependencies};

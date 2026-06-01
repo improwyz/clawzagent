@@ -157,8 +157,7 @@ impl FanOut {
                         .await
                         .map_err(|_| {
                             ClawzError::Internal(format!(
-                                "model '{}' timed out after {:?}",
-                                model_clone, timeout
+                                "model '{model_clone}' timed out after {timeout:?}"
                             ))
                         })
                         .and_then(|r| r);
@@ -301,7 +300,7 @@ impl MixtureOfAgents {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clawz_core::types::message::{ChatChoice, ChatResponse, Message, Usage};
+    use clawz_core::types::message::{ChatResponse, Message, Usage};
 
     #[test]
     fn test_aggregation_first() {

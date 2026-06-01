@@ -50,8 +50,8 @@ impl ShopifyConnector {
             client_id,
             client_secret,
             redirect_uri,
-            format!("https://{}.myshopify.com/admin/oauth/authorize", shop),
-            format!("https://{}.myshopify.com/admin/oauth/access_token", shop),
+            format!("https://{shop}.myshopify.com/admin/oauth/authorize"),
+            format!("https://{shop}.myshopify.com/admin/oauth/access_token"),
             vec![
                 "read_products".into(),
                 "write_products".into(),

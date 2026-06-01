@@ -836,7 +836,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "clawz-cli"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -852,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-core"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -874,7 +874,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-embedded"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "clawz-core",
@@ -890,7 +890,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-gateway"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -932,14 +932,14 @@ dependencies = [
 
 [[package]]
 name = "clawz-platform"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "clawz-runtime"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "thiserror 2.0.18",
@@ -948,7 +948,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-services"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -963,7 +963,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-setup"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -981,7 +981,7 @@ dependencies = [
 
 [[package]]
 name = "clawz-tauri"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clawz-core",
@@ -1007,17 +1007,24 @@ dependencies = [
 
 [[package]]
 name = "clawz-tui"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "clawz-setup",
  "crossterm",
+ "futures-util",
  "ratatui",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tui-textarea",
  "uuid",
 ]
 
 [[package]]
 name = "clawz-worker"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -6681,6 +6688,17 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "tui-textarea"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a5318dd619ed73c52a9417ad19046724effc1287fb75cdcc4eca1d6ac1acbae"
+dependencies = [
+ "crossterm",
+ "ratatui",
+ "unicode-width 0.2.0",
+]
 
 [[package]]
 name = "tungstenite"

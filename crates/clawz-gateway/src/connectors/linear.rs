@@ -94,8 +94,7 @@ impl LinearConnector {
         // Linear returns errors in a top-level "errors" array even for HTTP 200.
         if let Some(errors) = json.get("errors") {
             return Err(ClawzError::Provider(format!(
-                "Linear GraphQL errors: {}",
-                errors
+                "Linear GraphQL errors: {errors}"
             )));
         }
         Ok(json["data"].clone())

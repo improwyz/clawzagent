@@ -257,9 +257,7 @@ fn extract_ollama_content(
                 match p {
                     ContentPart::Text { text } => text_parts.push(text.clone()),
                     ContentPart::ImageBase64 { data, .. } => images.push(data.clone()),
-                    ContentPart::ImageUrl { url, .. } => {
-                        text_parts.push(format!("[image: {}]", url))
-                    }
+                    ContentPart::ImageUrl { url, .. } => text_parts.push(format!("[image: {url}]")),
                     ContentPart::AudioBase64 { .. } => {}
                 }
             }

@@ -123,10 +123,10 @@ impl SaaSConnector for PipedriveConnector {
 
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let path = match obj {
-            "deals" => format!("/deals/{}", id),
-            "persons" => format!("/persons/{}", id),
-            "organizations" => format!("/organizations/{}", id),
-            "activities" => format!("/activities/{}", id),
+            "deals" => format!("/deals/{id}"),
+            "persons" => format!("/persons/{id}"),
+            "organizations" => format!("/organizations/{id}"),
+            "activities" => format!("/activities/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Pipedrive object: {obj}"
@@ -147,10 +147,10 @@ impl SaaSConnector for PipedriveConnector {
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let path = match obj {
-            "deals" => format!("/deals/{}", id),
-            "persons" => format!("/persons/{}", id),
-            "organizations" => format!("/organizations/{}", id),
-            "activities" => format!("/activities/{}", id),
+            "deals" => format!("/deals/{id}"),
+            "persons" => format!("/persons/{id}"),
+            "organizations" => format!("/organizations/{id}"),
+            "activities" => format!("/activities/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Pipedrive object: {obj}"

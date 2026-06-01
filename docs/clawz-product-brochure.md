@@ -159,11 +159,17 @@ Agents run through ordered, **reversible** steps: context → governance → pro
 
 ### 7. Security and multi-tenancy
 
-- API keys with **tenant-scoped RBAC** (`hash:user:role:tenant`)  
+- API keys with **tenant-scoped RBAC** (`hash:user:role:tenant`); owner-role grants restricted to existing owners  
 - JWT sessions for dashboard users  
+- **Fail-closed in production** — release builds refuse to boot without real secrets; no insecure dev fallbacks, auth-bypass compiled out  
+- **Per-actor rate limiting** (token bucket) with optional **distributed Postgres quota** across the fleet — `429` + `Retry-After`, fully fail-open  
+- **Idempotency keys** for safe, duplicate-free retries on create/run operations  
+- **Webhook HMAC-SHA256** verification, request body-size caps, locked-down CORS + HSTS/CSP security headers  
+- **SSRF guard** on outbound connector/OAuth fetches (DNS-level, blocks private ranges)  
+- **Tamper-evident audit** — SHA-256 hash-chained governance log + resource-level audit of sensitive ops  
 - Mesh **firewall** rules between nodes  
-- Secrets encryption at rest (`CLAWZ_SECRETS_KEY`)  
-- Optional auth disable **only** for local dev (`CLAWZ_DISABLE_AUTH=1`)
+- Secrets encryption at rest with a salted KDF (`CLAWZ_SECRETS_KEY`); PII redacted in logs  
+- Optional auth disable **only** for local dev (`CLAWZ_DISABLE_AUTH=1`, debug builds only)
 
 ### 8. Observability
 

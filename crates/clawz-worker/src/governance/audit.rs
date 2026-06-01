@@ -38,6 +38,12 @@ use std::sync::{Arc, RwLock};
 ///
 /// Each entry is linked to the previous one through SHA-256 hashes, forming a chain
 /// that detects any modification to historical records.
+///
+/// Layering note: this agent-centric, hash-chained record is intentionally a
+/// different type from the gateway's resource-centric `AuditEntry`
+/// (`clawz_gateway::AuditEntry`). They share a name but not a purpose; the
+/// hash chain over this struct's fields means its shape must not be refactored
+/// to share an embedded struct. See ADR 0002.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEntry {
     /// Unique identifier for this entry (UUID v4).

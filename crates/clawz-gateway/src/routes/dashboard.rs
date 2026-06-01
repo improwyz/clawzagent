@@ -41,11 +41,7 @@ fn provider_json(p: &ProviderRecord) -> Value {
 }
 
 fn channel_json(c: &ChannelRecord) -> Value {
-    let status = if !c.enabled {
-        "idle"
-    } else {
-        "active"
-    };
+    let status = if !c.enabled { "idle" } else { "active" };
     json!({
         "id": c.id,
         "name": c.name,
@@ -178,8 +174,8 @@ async fn dashboard_config(State(state): State<AppState>) -> Json<Value> {
         .or_else(|| std::env::var("CLAWZ_DEFAULT_PROVIDER").ok())
         .unwrap_or_else(|| "none".to_string());
 
-    let docker_registry = std::env::var("CLAWZ_DOCKER_REGISTRY")
-        .unwrap_or_else(|_| "ghcr.io/improwyz".to_string());
+    let docker_registry =
+        std::env::var("CLAWZ_DOCKER_REGISTRY").unwrap_or_else(|_| "ghcr.io/improwyz".to_string());
 
     let ui = state.ui_settings.read().await;
 

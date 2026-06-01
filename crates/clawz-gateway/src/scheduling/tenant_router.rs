@@ -28,9 +28,7 @@
 use std::sync::Arc;
 
 use clawz_core::{
-    error::Result,
-    traits::AgentScheduler,
-    types::orchestration::AgentHandle,
+    error::Result, traits::AgentScheduler, types::orchestration::AgentHandle,
     types::tenant::TenantContext,
 };
 
@@ -101,12 +99,12 @@ impl TenantRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use clawz_core::types::orchestration::HealthStatus;
+    use clawz_core::types::orchestration::{AgentSpec, HealthStatus};
 
     #[test]
     fn tenant_router_module_loads() {
+        // Construction must not panic; binding it is the assertion.
         let _router = TenantRouter::new(Arc::new(NullScheduler));
-        assert!(true);
     }
 
     struct NullScheduler;

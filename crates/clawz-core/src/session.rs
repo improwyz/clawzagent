@@ -59,7 +59,13 @@ impl SessionKey {
     pub fn storage_id(&self) -> String {
         fn seg(s: &str) -> String {
             s.chars()
-                .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
                 .collect()
         }
         format!(

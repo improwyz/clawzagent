@@ -15,6 +15,11 @@ export COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml:docker-compose.build.yml
 export CLAWZ_MODE="${CLAWZ_MODE:-micro}"
 GATEWAY_URL="${GATEWAY_URL:-http://127.0.0.1:3000}"
 
+# Ensure .env exists (compose requires it via env_file)
+if [[ ! -f .env ]] && [[ -f .env.example ]]; then
+  cp .env.example .env
+fi
+
 cleanup() {
   $COMPOSE down -v --remove-orphans 2>/dev/null || true
 }
@@ -70,11 +75,14 @@ for i in $(seq 1 90); do
   fi
 done
 
+API_KEY="${VALID_API_KEYS:-dev-key}"
+AUTH=(-H "X-API-Key: $API_KEY")
+
 curl -sf "$GATEWAY_URL/api/v1/system/health" >/dev/null
-curl -sf "$GATEWAY_URL/api/v1/cloud/providers" | grep -q fly_io \
+curl -sf "${AUTH[@]}" "$GATEWAY_URL/api/v1/cloud/providers" | grep -q fly_io \
   || {
     echo "cloud providers check failed"
-    curl -sv "$GATEWAY_URL/api/v1/cloud/providers" 2>&1 | head -40
+    curl -sv "${AUTH[@]}" "$GATEWAY_URL/api/v1/cloud/providers" 2>&1 | head -40
     $COMPOSE logs gateway
     exit 1
   }

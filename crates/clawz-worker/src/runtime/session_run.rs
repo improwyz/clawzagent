@@ -7,9 +7,9 @@ use clawz_core::types::message::{Message, Role};
 use clawz_services::dto::{RunTurnRequest, RunTurnResponse};
 use uuid::Uuid;
 
-use clawz_core::error::Result;
 use crate::runtime::session_commands::{self, SessionCommand};
 use crate::service::WorkerService;
+use clawz_core::error::Result;
 
 /// Execute one user message through session commands or the full multi-turn tool loop.
 pub async fn execute_agent_turn(
@@ -25,19 +25,19 @@ pub async fn execute_agent_turn(
     match session_commands::parse_command(&req.message) {
         SessionCommand::New => {
             let new_id = Uuid::new_v4().to_string();
-            return Ok(command_response(
+            Ok(command_response(
                 agent_id,
                 new_id,
                 "Started a new session. Use the returned conversation_id on your next message.",
-            ));
+            ))
         }
         SessionCommand::Reset => {
             service.session_store().reset(&conversation_id).await?;
-            return Ok(command_response(
+            Ok(command_response(
                 agent_id,
                 conversation_id,
                 "Session transcript cleared.",
-            ));
+            ))
         }
         SessionCommand::Compact => {
             let removed = service
@@ -45,25 +45,25 @@ pub async fn execute_agent_turn(
                 .compact(&conversation_id, session_commands::DEFAULT_COMPACT_KEEP)
                 .await?;
             let usage = service.session_store().usage(&conversation_id).await?;
-            return Ok(command_response(
+            Ok(command_response(
                 agent_id,
                 conversation_id,
                 format!(
                     "Compacted session: removed {removed} message(s); {} message(s) remain (~{} tokens).",
                     usage.message_count, usage.estimated_tokens
                 ),
-            ));
+            ))
         }
         SessionCommand::Usage => {
             let usage = service.session_store().usage(&conversation_id).await?;
-            return Ok(command_response(
+            Ok(command_response(
                 agent_id,
                 conversation_id,
                 format!(
                     "Session usage: {} message(s), ~{} estimated tokens.",
                     usage.message_count, usage.estimated_tokens
                 ),
-            ));
+            ))
         }
         SessionCommand::Chat(user_text) => {
             if user_text.is_empty() {
@@ -94,19 +94,12 @@ pub async fn execute_agent_turn(
                 .run_multi_turn_in_conversation(transcript, &conversation_id)
                 .await?;
 
-            store
-                .save_transcript(&conversation_id, &messages)
-                .await?;
+            store.save_transcript(&conversation_id, &messages).await?;
 
             let restrict = req.cron_mode || req.background_mode;
             if !restrict {
-                if let Some(proposal) =
-                    crate::workspace::SkillCurator::maybe_propose(&messages)
-                {
-                    let name = format!(
-                        "learned-{}",
-                        chrono::Utc::now().timestamp()
-                    );
+                if let Some(proposal) = crate::workspace::SkillCurator::maybe_propose(&messages) {
+                    let name = format!("learned-{}", chrono::Utc::now().timestamp());
                     let loader = crate::workspace::WorkspaceLoader::default_home();
                     let skill_dir = loader.root().join("skills").join(&name);
                     if std::fs::create_dir_all(&skill_dir).is_ok() {
@@ -124,7 +117,11 @@ pub async fn execute_agent_turn(
                 }
 
                 if let Some(tenant_id) = req.sender_user_id.as_deref() {
-                    if let Err(e) = service.learning().user_profiles().touch_session(tenant_id).await
+                    if let Err(e) = service
+                        .learning()
+                        .user_profiles()
+                        .touch_session(tenant_id)
+                        .await
                     {
                         log::warn!("[session_run] user profile touch failed: {e}");
                     }
@@ -139,12 +136,7 @@ pub async fn execute_agent_turn(
                     if let Err(e) = service
                         .learning()
                         .post_turn_nudge()
-                        .nudge(
-                            runtime.memory(),
-                            agent_id,
-                            &conversation_id,
-                            assistant_text,
-                        )
+                        .nudge(runtime.memory(), agent_id, &conversation_id, assistant_text)
                         .await
                     {
                         log::warn!("[session_run] post-turn memory nudge failed: {e}");
@@ -152,11 +144,13 @@ pub async fn execute_agent_turn(
                 }
             }
 
-            service.turn_event_bus().emit(crate::runtime::turn_events::TurnEvent::TurnComplete {
-                run_id: run_id.clone(),
-                conversation_id: conversation_id.clone(),
-                turn_count: messages.len() as u32,
-            });
+            service
+                .turn_event_bus()
+                .emit(crate::runtime::turn_events::TurnEvent::TurnComplete {
+                    run_id: run_id.clone(),
+                    conversation_id: conversation_id.clone(),
+                    turn_count: messages.len() as u32,
+                });
 
             let content = messages
                 .iter()
@@ -205,7 +199,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_execute_agent_turn_tool_loop_stub() {
+        let dir = std::env::temp_dir().join(format!("clawz-run-tool-{}", Uuid::new_v4()));
         unsafe {
+            std::env::set_var("CLAWZ_HOME", dir.to_string_lossy().as_ref());
             std::env::set_var("CLAWZ_STUB_PROVIDER", "1");
         }
 

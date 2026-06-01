@@ -4,16 +4,16 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
+use bollard::Docker;
 use bollard::container::{
     Config, CreateContainerOptions, ListContainersOptions, StartContainerOptions,
 };
 use bollard::models::{HostConfig, Mount, MountTypeEnum};
-use bollard::Docker;
 use futures_util::StreamExt;
 
 use clawz_core::error::{ClawzError, Result};
 
-use super::{shell_escape, truncate_output, ExecResult, TerminalBackend, MAX_EXEC_OUTPUT_BYTES};
+use super::{ExecResult, MAX_EXEC_OUTPUT_BYTES, TerminalBackend, shell_escape, truncate_output};
 
 const CONTAINER_NAME: &str = "clawz-terminal-sandbox";
 const CONTAINER_WORKDIR: &str = "/workspace";
@@ -26,8 +26,8 @@ pub struct DockerBackend {
 
 impl DockerBackend {
     pub fn new(workdir: PathBuf) -> Result<Self> {
-        let image = std::env::var("CLAWZ_TERMINAL_DOCKER_IMAGE")
-            .unwrap_or_else(|_| "alpine:3.19".into());
+        let image =
+            std::env::var("CLAWZ_TERMINAL_DOCKER_IMAGE").unwrap_or_else(|_| "alpine:3.19".into());
         let docker = Docker::connect_with_local_defaults()
             .map_err(|e| ClawzError::Tool(format!("docker connect: {e}")))?;
         Ok(Self {
@@ -112,21 +112,13 @@ impl DockerBackend {
                 .strip_prefix(&self.workdir)
                 .unwrap_or(path)
                 .to_string_lossy();
-            format!(
-                "{}/{}",
-                CONTAINER_WORKDIR,
-                rel.trim_start_matches('/')
-            )
+            format!("{}/{}", CONTAINER_WORKDIR, rel.trim_start_matches('/'))
         } else {
             format!("{}/{}", CONTAINER_WORKDIR, path.to_string_lossy())
         }
     }
 
-    async fn exec_in_container(
-        &self,
-        command: &str,
-        timeout_secs: u64,
-    ) -> Result<ExecResult> {
+    async fn exec_in_container(&self, command: &str, timeout_secs: u64) -> Result<ExecResult> {
         use bollard::exec::{CreateExecOptions, StartExecOptions};
 
         let container_id = self.ensure_container().await?;
@@ -183,8 +175,9 @@ impl DockerBackend {
 
         tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), collect)
             .await
-            .map_err(|_| ClawzError::Tool(format!("docker exec timed out after {timeout_secs}s")))?
-            .map_err(|e| e)?;
+            .map_err(|_| {
+                ClawzError::Tool(format!("docker exec timed out after {timeout_secs}s"))
+            })??;
 
         let inspect = self
             .docker
@@ -227,9 +220,7 @@ impl TerminalBackend for DockerBackend {
 
     async fn read_file(&self, path: &Path) -> Result<Vec<u8>> {
         let cp = shell_escape(&self.container_path(path));
-        let out = self
-            .exec_in_container(&format!("cat -- {cp}"), 60)
-            .await?;
+        let out = self.exec_in_container(&format!("cat -- {cp}"), 60).await?;
         if out.success() {
             Ok(out.stdout.into_bytes())
         } else {
@@ -238,7 +229,7 @@ impl TerminalBackend for DockerBackend {
     }
 
     async fn write_file(&self, path: &Path, content: &[u8]) -> Result<()> {
-        use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+        use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
         let cp = shell_escape(&self.container_path(path));
         let encoded = B64.encode(content);
         let cmd = format!(

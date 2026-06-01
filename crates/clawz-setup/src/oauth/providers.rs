@@ -23,7 +23,8 @@ const OPENAI_AUTH_URL: &str = "https://auth.openai.com/oauth/authorize";
 const OPENAI_TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
 const OPENAI_SCOPE: &str = "openid profile email offline_access";
 
-const OPENAI_DEVICE_USER_CODE_URL: &str = "https://auth.openai.com/api/accounts/deviceauth/usercode";
+const OPENAI_DEVICE_USER_CODE_URL: &str =
+    "https://auth.openai.com/api/accounts/deviceauth/usercode";
 const OPENAI_DEVICE_TOKEN_URL: &str = "https://auth.openai.com/api/accounts/deviceauth/token";
 const OPENAI_DEVICE_REDIRECT_URI: &str = "https://auth.openai.com/deviceauth/callback";
 
@@ -68,8 +69,8 @@ fn build_openai_authorize(
     pkce: &PkcePair,
     originator: &str,
 ) -> Result<String> {
-    let mut url =
-        Url::parse(OPENAI_AUTH_URL).map_err(|e| SetupError::Internal(format!("openai auth: {e}")))?;
+    let mut url = Url::parse(OPENAI_AUTH_URL)
+        .map_err(|e| SetupError::Internal(format!("openai auth: {e}")))?;
     {
         let mut qp = url.query_pairs_mut();
         qp.append_pair("response_type", "code");
@@ -303,14 +304,8 @@ fn extract_openai_account_id(id_token: Option<&str>) -> Option<String> {
     if parts.len() != 3 {
         return None;
     }
-    let padded = parts[1]
-        .replace('-', "+")
-        .replace('_', "/");
-    let padded = format!(
-        "{}{}",
-        padded,
-        "=".repeat((4 - padded.len() % 4) % 4)
-    );
+    let padded = parts[1].replace('-', "+").replace('_', "/");
+    let padded = format!("{}{}", padded, "=".repeat((4 - padded.len() % 4) % 4));
     let decoded = STANDARD.decode(padded).ok()?;
     let payload: serde_json::Value = serde_json::from_slice(&decoded).ok()?;
     payload
@@ -372,8 +367,7 @@ struct StandardTokenJson {
 
 impl StandardTokenJson {
     fn expires_at(&self) -> Option<String> {
-        self.expires_in.map(|secs| {
-            (Utc::now() + chrono::Duration::seconds(secs as i64)).to_rfc3339()
-        })
+        self.expires_in
+            .map(|secs| (Utc::now() + chrono::Duration::seconds(secs as i64)).to_rfc3339())
     }
 }

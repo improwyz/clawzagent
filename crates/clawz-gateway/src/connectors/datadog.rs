@@ -119,14 +119,14 @@ impl SaaSConnector for DatadogConnector {
     async fn list_objects(&self, obj: &str, filters: &Filters) -> Result<Vec<Value>> {
         let limit = filters.limit.unwrap_or(100).min(1000);
         let path = match obj {
-            "monitors" => format!("/api/v1/monitor?count={}", limit),
+            "monitors" => format!("/api/v1/monitor?count={limit}"),
             "dashboards" => "/api/v1/dashboard".to_string(),
-            "hosts" => format!("/api/v1/hosts?count={}", limit),
+            "hosts" => format!("/api/v1/hosts?count={limit}"),
             "metrics" => {
                 let from = filters.search.as_deref().unwrap_or("now-1h");
-                format!("/api/v1/metrics?from={}", from)
+                format!("/api/v1/metrics?from={from}")
             }
-            "events" => format!("/api/v1/events?count={}", limit),
+            "events" => format!("/api/v1/events?count={limit}"),
             "logs" => "/api/v2/logs/events".to_string(),
             _ => {
                 return Err(ClawzError::Provider(format!(
@@ -176,8 +176,8 @@ impl SaaSConnector for DatadogConnector {
 
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let path = match obj {
-            "monitors" => format!("/api/v1/monitor/{}", id),
-            "dashboards" => format!("/api/v1/dashboard/{}", id),
+            "monitors" => format!("/api/v1/monitor/{id}"),
+            "dashboards" => format!("/api/v1/dashboard/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Datadog object: {obj}"
@@ -195,9 +195,9 @@ impl SaaSConnector for DatadogConnector {
 
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let path = match obj {
-            "monitors" => format!("/api/v1/monitor/{}", id),
-            "dashboards" => format!("/api/v1/dashboard/{}", id),
-            "downtimes" => format!("/api/v1/downtime/{}", id),
+            "monitors" => format!("/api/v1/monitor/{id}"),
+            "dashboards" => format!("/api/v1/dashboard/{id}"),
+            "downtimes" => format!("/api/v1/downtime/{id}"),
             _ => {
                 return Err(ClawzError::Provider(format!(
                     "Unknown Datadog object: {obj}"
@@ -224,7 +224,7 @@ impl SaaSConnector for DatadogConnector {
             "mute_monitor" => {
                 let id = params["id"].as_str().unwrap_or("");
                 let resp = self
-                    .post(&format!("/api/v1/monitor/{}/mute", id))
+                    .post(&format!("/api/v1/monitor/{id}/mute"))
                     .json(&params)
                     .send()
                     .await
@@ -238,10 +238,7 @@ impl SaaSConnector for DatadogConnector {
                 let to = params["to"].as_i64().unwrap_or(0);
                 let query = params["query"].as_str().unwrap_or("");
                 let resp = self
-                    .get(&format!(
-                        "/api/v1/query?from={}&to={}&query={}",
-                        from, to, query
-                    ))
+                    .get(&format!("/api/v1/query?from={from}&to={to}&query={query}"))
                     .send()
                     .await
                     .map_err(|e| {

@@ -83,10 +83,11 @@ const agents = await res.json();
 | 403 | Invalid, expired, or revoked credential |
 | 404 | Resource not found |
 | 409 | Conflict (e.g. setup already complete) |
-| 429 | Admission / quota exceeded |
+| 413 | Request body exceeds the configured size limit (`CLAWZ_MAX_BODY_BYTES`, default 2 MiB) |
+| 429 | Rate limit / quota exceeded — see `Retry-After` and `X-RateLimit-*` headers (§16) |
 | 500 | Internal server error |
 
-Error bodies are JSON with a `error` or message field depending on the handler. Prefer checking status codes in clients and logging response bodies for support.
+Error bodies are JSON with a `error` or message field depending on the handler. As of v1.1, `500` responses return a generic message plus a correlation id (`error_id`) — the full detail is logged server-side only, never returned to clients. Prefer checking status codes in clients and logging response bodies (and any `error_id`) for support.
 
 ---
 
@@ -200,7 +201,7 @@ Refer to OpenAPI for message append and participant management payloads, which m
 
 ## 6. Channels and webhooks
 
-Channels register inbound integrations (Slack, Discord, webhooks, etc.). Inbound HTTP from external systems hits **`POST /webhooks/{channel_type}/{channel_id}`** without API key auth; validate signatures per channel adapter documentation.
+Channels register inbound integrations (Slack, Discord, webhooks, etc.). Inbound HTTP from external systems hits **`POST /webhooks/{channel_type}/{channel_id}`** without API key auth. As of v1.1 the generic webhook path performs **HMAC-SHA256 signature verification** against the channel's stored secret: deliveries with a missing/invalid signature are rejected with `401`. During rollout this is warn-then-enforce — set `CLAWZ_WEBHOOK_ENFORCE=1` (default in release) to reject; mismatches are logged with the peer identifier redacted. Provider-specific paths (Twilio, Google Voice) keep their own signature checks.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -382,7 +383,47 @@ Skills correspond to workspace skill files used by agents; sessions track operat
 
 ## 16. Rate limits and best practices
 
-Admission control and provider rate limits protect shared infrastructure. Clients should implement exponential backoff on **429** and **503** responses, respect `Retry-After` when present, and use idempotent keys for create operations where your workflow allows duplicate detection by name.
+The gateway enforces **per-actor request-rate limiting** (v1.1) in addition to
+admission control and provider rate limits. The actor is the API key (hashed),
+else the forwarded client IP (`X-Forwarded-For`/`X-Real-IP`), else a shared
+anonymous bucket. Auth/setup endpoints get a stricter budget than general API
+traffic.
+
+Every rate-limited response carries headers:
+
+| Header | Meaning |
+|--------|---------|
+| `X-RateLimit-Limit` | Budget for the endpoint class (requests/min) |
+| `X-RateLimit-Remaining` | Tokens left in the current window |
+| `Retry-After` | Seconds to wait (on `429` only) |
+
+Tuning (operator-set env): `CLAWZ_RATELIMIT_PER_MIN` (default 600),
+`CLAWZ_RATELIMIT_AUTH_PER_MIN` (default 30), and — when the gateway runs against
+Postgres — `CLAWZ_RATELIMIT_DISTRIBUTED_PER_MIN` for a shared cross-fleet
+ceiling. Clients should implement exponential backoff on **429**/**503** and
+always respect `Retry-After`.
+
+### Idempotency keys
+
+Non-idempotent requests (`POST`/`PUT`/`PATCH`) may send an `Idempotency-Key`
+header. When the gateway is backed by Postgres, the first successful JSON
+response for a key is stored and **replayed** for any retry with the same key
+(24-hour TTL), so a client that retries after a network blip will not create a
+duplicate resource or run.
+
+```
+POST /api/v1/agents
+Idempotency-Key: 7c1f…-create-support-bot
+```
+
+Use a unique key per logical operation (e.g. a client-generated UUID). The
+feature is a no-op if the header is absent or the deployment has no database.
+
+### Request size & errors
+
+Inbound request bodies are capped (default 2 MiB, `CLAWZ_MAX_BODY_BYTES`);
+oversized requests get **413**. `500` responses are generic with an `error_id`
+correlation token (no internal detail is leaked).
 
 Store API keys in secret managers, not repositories. Rotate keys by updating `VALID_API_KEYS` and revoking old entries. Use separate keys per environment and tenant. For long-running autonomous agents, prefer WebSocket or SSE consumption over polling `history` in tight loops.
 

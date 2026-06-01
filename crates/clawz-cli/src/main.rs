@@ -20,7 +20,11 @@ mod setup_cmd;
 )]
 struct Cli {
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
+
+    /// Run in headless mode (plain text, no TUI).
+    #[arg(long, global = true)]
+    headless: bool,
 }
 
 #[derive(Subcommand)]
@@ -113,7 +117,20 @@ enum TuiAction {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    match cli.command {
+
+    // No subcommand → launch the unified TUI installer
+    let Some(command) = cli.command else {
+        if cli.headless {
+            std::env::set_var("CLAWZ_TUI", "plain");
+        }
+        if let Err(e) = clawz_tui::run() {
+            eprintln!("TUI error: {e}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    };
+
+    match command {
         Commands::Onboard {
             install_daemon,
             resume,

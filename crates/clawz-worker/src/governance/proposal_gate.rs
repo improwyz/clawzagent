@@ -43,7 +43,7 @@ const IDENTITY_CORE_FIELDS: &[&str] = &[
 /// Parse an approval ID string to Uuid, propagating errors as ClawzError.
 fn parse_approval_id(id: &str) -> Result<Uuid, ClawzError> {
     Uuid::parse_str(id).map_err(|_| {
-        ClawzError::Internal(format!("ApprovalWorkflow returned malformed UUID: {}", id))
+        ClawzError::Internal(format!("ApprovalWorkflow returned malformed UUID: {id}"))
     })
 }
 

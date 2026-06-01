@@ -1,8 +1,8 @@
 //! Allowlisted setup tools (no arbitrary shell).
 
-pub mod init_workspace;
 mod compose_down;
 mod compose_up;
+pub mod init_workspace;
 mod install_deps;
 mod migrate_db;
 mod spec_check;
@@ -13,7 +13,7 @@ use serde_json::Value;
 
 pub use compose_down::ComposeDownTool;
 pub use compose_up::ComposeUpTool;
-pub use init_workspace::{InitWorkspaceTool, init_workspace_at, workspace_root};
+pub use init_workspace::{init_workspace_at, workspace_root, InitWorkspaceTool};
 pub use install_deps::InstallDepsTool;
 pub use migrate_db::MigrateDbTool;
 pub use spec_check::SpecCheckTool;

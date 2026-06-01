@@ -12,9 +12,7 @@ use crossterm::ExecutableCommand;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{
-    Block, Borders, List, ListItem, ListState, Paragraph, Wrap,
-};
+use ratatui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 use std::io::stdout;
 use std::time::Duration;
@@ -98,10 +96,12 @@ impl WizardApp {
         }
 
         match sm.current_step() {
-            SetupStep::Welcome | SetupStep::Stack | SetupStep::Skills
-            | SetupStep::AgentTopology | SetupStep::Verify | SetupStep::Complete => {
-                self.handle_nav_key(key, sm, answers)
-            }
+            SetupStep::Welcome
+            | SetupStep::Stack
+            | SetupStep::Skills
+            | SetupStep::AgentTopology
+            | SetupStep::Verify
+            | SetupStep::Complete => self.handle_nav_key(key, sm, answers),
             SetupStep::DeployMode => self.handle_list_key(key, sm, answers, true),
             SetupStep::InstallStrategy => self.handle_list_key(key, sm, answers, false),
             SetupStep::WriteSecrets => self.handle_secrets_key(key, sm, answers),
@@ -164,7 +164,12 @@ impl WizardApp {
                         _ => DeploymentChoice::Elastic,
                     };
                     sm.set_deployment(choice)?;
-                    record_answer(sm, SetupStep::DeployMode, "deployment", deployment_label(choice));
+                    record_answer(
+                        sm,
+                        SetupStep::DeployMode,
+                        "deployment",
+                        deployment_label(choice),
+                    );
                     std::env::set_var("CLAWZ_MODE", deployment_label(choice));
                     sm.advance()?;
                 } else {
@@ -360,7 +365,12 @@ pub fn run(sm: &mut SetupStateMachine, answers: &mut WizardAnswers) -> Result<()
     Ok(())
 }
 
-fn draw_ui(f: &mut Frame, sm: &SetupStateMachine, app: &mut WizardApp, answers: &mut WizardAnswers) {
+fn draw_ui(
+    f: &mut Frame,
+    sm: &SetupStateMachine,
+    app: &mut WizardApp,
+    answers: &mut WizardAnswers,
+) {
     let step = sm.current_step();
     let phase = step.phase();
 
@@ -374,8 +384,14 @@ fn draw_ui(f: &mut Frame, sm: &SetupStateMachine, app: &mut WizardApp, answers: 
         .split(f.area());
 
     let progress = Paragraph::new(Line::from(vec![
-        Span::styled(" ClawZ Setup ", Style::default().add_modifier(Modifier::BOLD)),
-        Span::raw(format!("  step {phase}/10 — {}", WizardApp::step_title(step))),
+        Span::styled(
+            " ClawZ Setup ",
+            Style::default().add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(format!(
+            "  step {phase}/10 — {}",
+            WizardApp::step_title(step)
+        )),
     ]))
     .block(Block::default().borders(Borders::ALL).title("Progress"));
     f.render_widget(progress, outer[0]);
@@ -390,11 +406,19 @@ fn draw_ui(f: &mut Frame, sm: &SetupStateMachine, app: &mut WizardApp, answers: 
         SetupStep::Welcome => draw_welcome(f, inner, app),
         SetupStep::DeployMode => draw_deploy_list(f, inner, &mut app.deploy_list),
         SetupStep::InstallStrategy => draw_install_list(f, inner, &mut app.install_list),
-        SetupStep::Stack => draw_hint(f, inner, "Stack dependencies install on apply.\n\nEnter — continue"),
+        SetupStep::Stack => draw_hint(
+            f,
+            inner,
+            "Stack dependencies install on apply.\n\nEnter — continue",
+        ),
         SetupStep::WriteSecrets => draw_secrets(f, inner, answers, app),
         SetupStep::Llm => draw_llm(f, inner, answers, app),
         SetupStep::AgentIdentity => draw_identity(f, inner, answers, app),
-        SetupStep::Skills => draw_hint(f, inner, "Skills can be added later under ~/.clawz/workspace/skills/\n\nEnter — continue"),
+        SetupStep::Skills => draw_hint(
+            f,
+            inner,
+            "Skills can be added later under ~/.clawz/workspace/skills/\n\nEnter — continue",
+        ),
         SetupStep::AgentTopology => draw_hint(
             f,
             inner,
@@ -405,17 +429,23 @@ fn draw_ui(f: &mut Frame, sm: &SetupStateMachine, app: &mut WizardApp, answers: 
     }
 
     let help = if app.phase != InputPhase::None {
-        format!("{}: {}", app.input_label, if app.input_secret { mask(&app.input_buf) } else { app.input_buf.clone() })
+        format!(
+            "{}: {}",
+            app.input_label,
+            if app.input_secret {
+                mask(&app.input_buf)
+            } else {
+                app.input_buf.clone()
+            }
+        )
     } else if !app.status.is_empty() {
         app.status.clone()
     } else {
         footer_for_step(step)
     };
-    let footer = Paragraph::new(help).wrap(Wrap { trim: true }).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Keys"),
-    );
+    let footer = Paragraph::new(help)
+        .wrap(Wrap { trim: true })
+        .block(Block::default().borders(Borders::ALL).title("Keys"));
     f.render_widget(footer, outer[2]);
 }
 
@@ -440,7 +470,10 @@ fn draw_welcome(f: &mut Frame, area: Rect, app: &WizardApp) {
     }
     if !app.host_warnings.is_empty() {
         lines.push(Line::from(""));
-        lines.push(Line::styled("Warnings:", Style::default().fg(Color::Yellow)));
+        lines.push(Line::styled(
+            "Warnings:",
+            Style::default().fg(Color::Yellow),
+        ));
         for w in &app.host_warnings {
             lines.push(Line::from(format!("  • {w}")));
         }
@@ -511,21 +544,35 @@ fn draw_identity(f: &mut Frame, area: Rect, answers: &WizardAnswers, _app: &Wiza
 fn draw_verify(f: &mut Frame, area: Rect, app: &WizardApp) {
     let mut lines = vec![Line::from("Verification:"), Line::from("")];
     if app.host_warnings.is_empty() {
-        lines.push(Line::styled("All host checks passed.", Style::default().fg(Color::Green)));
+        lines.push(Line::styled(
+            "All host checks passed.",
+            Style::default().fg(Color::Green),
+        ));
     } else {
-        lines.push(Line::styled("Warnings:", Style::default().fg(Color::Yellow)));
+        lines.push(Line::styled(
+            "Warnings:",
+            Style::default().fg(Color::Yellow),
+        ));
         for w in &app.host_warnings {
             lines.push(Line::from(format!("  • {w}")));
         }
     }
     lines.push(Line::from(""));
-    lines.push(Line::styled("Enter — finish setup", Style::default().fg(Color::Cyan)));
+    lines.push(Line::styled(
+        "Enter — finish setup",
+        Style::default().fg(Color::Cyan),
+    ));
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), area);
 }
 
 fn draw_complete(f: &mut Frame, area: Rect) {
     let text = Text::from(vec![
-        Line::styled("Setup complete!", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+        Line::styled(
+            "Setup complete!",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
         Line::from(""),
         Line::from("Export lines will be printed after you exit the wizard."),
         Line::from(""),

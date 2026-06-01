@@ -26,9 +26,8 @@ impl TranscriptFtsIndex {
     pub async fn open(path: impl AsRef<Path>) -> Result<Self> {
         let db_path = path.as_ref().to_path_buf();
         if let Some(parent) = db_path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| {
-                ClawzError::Database(format!("create transcript fts dir: {e}"))
-            })?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| ClawzError::Database(format!("create transcript fts dir: {e}")))?;
         }
         let path_clone = db_path.clone();
         task::spawn_blocking(move || Self::migrate(&path_clone))
@@ -38,12 +37,14 @@ impl TranscriptFtsIndex {
     }
 
     pub fn default_db_path() -> PathBuf {
-        let home = std::env::var("CLAWZ_HOME").map(PathBuf::from).unwrap_or_else(|_| {
-            std::env::var("HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| PathBuf::from("/tmp/clawz"))
-                .join(".clawz")
-        });
+        let home = std::env::var("CLAWZ_HOME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::env::var("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| PathBuf::from("/tmp/clawz"))
+                    .join(".clawz")
+            });
         home.join("transcript_fts.db")
     }
 
@@ -54,6 +55,8 @@ impl TranscriptFtsIndex {
     fn migrate(path: &Path) -> Result<()> {
         let conn = Connection::open(path)
             .map_err(|e| ClawzError::Database(format!("transcript fts open: {e}")))?;
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
         conn.execute_batch(
             r#"
             PRAGMA journal_mode = WAL;
@@ -93,6 +96,8 @@ impl TranscriptFtsIndex {
         task::spawn_blocking(move || {
             let conn = Connection::open(&db_path)
                 .map_err(|e| ClawzError::Database(format!("transcript fts open: {e}")))?;
+            conn.busy_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
             conn.execute(
                 "DELETE FROM transcript_fts WHERE session_id = ?1",
                 params![session_id],
@@ -119,10 +124,12 @@ impl TranscriptFtsIndex {
             return Ok(vec![]);
         }
         let db_path = self.db_path.clone();
-        let limit = limit.max(1).min(50) as i64;
+        let limit = limit.clamp(1, 50) as i64;
         task::spawn_blocking(move || {
             let conn = Connection::open(&db_path)
                 .map_err(|e| ClawzError::Database(format!("transcript fts open: {e}")))?;
+            conn.busy_timeout(std::time::Duration::from_secs(5))
+                .map_err(|e| ClawzError::Database(format!("busy_timeout: {e}")))?;
             let mut stmt = conn
                 .prepare(
                     r#"

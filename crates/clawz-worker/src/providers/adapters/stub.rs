@@ -36,8 +36,7 @@ impl StubAdapter {
     fn test_tool_loop_triggered(request: &ChatRequest) -> bool {
         request.messages.iter().any(|m| {
             m.role == Role::User
-                && m
-                    .content
+                && m.content
                     .as_text()
                     .is_some_and(|t| t.contains("CLAWZ_TEST_TOOL_LOOP"))
         })
@@ -62,11 +61,7 @@ impl StubAdapter {
                 return Self::assistant_text_response(request, reply);
             }
 
-            let call = ToolCall::new(
-                "stub-calc-1",
-                "calculator",
-                json!({ "expression": "2+2" }),
-            );
+            let call = ToolCall::new("stub-calc-1", "calculator", json!({ "expression": "2+2" }));
             return Self::assistant_tool_calls_response(request, vec![call]);
         }
 

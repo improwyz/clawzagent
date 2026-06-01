@@ -30,14 +30,16 @@ impl FileSessionStore {
     }
 
     fn transcript_path(&self, session_id: &str) -> PathBuf {
-        self.root.join(sanitize_session_id(session_id)).join("transcript.jsonl")
+        self.root
+            .join(sanitize_session_id(session_id))
+            .join("transcript.jsonl")
     }
 
     async fn ensure_parent(&self, path: &Path) -> Result<()> {
         if let Some(parent) = path.parent() {
-            tokio::fs::create_dir_all(parent).await.map_err(|e| {
-                ClawzError::Internal(format!("create session dir: {e}"))
-            })?;
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| ClawzError::Internal(format!("create session dir: {e}")))?;
         }
         Ok(())
     }
@@ -79,9 +81,8 @@ impl SessionStore for FileSessionStore {
             if line.is_empty() {
                 continue;
             }
-            let msg: Message = serde_json::from_str(line).map_err(|e| {
-                ClawzError::Serialization(format!("transcript line: {e}"))
-            })?;
+            let msg: Message = serde_json::from_str(line)
+                .map_err(|e| ClawzError::Serialization(format!("transcript line: {e}")))?;
             messages.push(msg);
         }
         Ok(messages)
@@ -92,8 +93,8 @@ impl SessionStore for FileSessionStore {
         self.ensure_parent(&path).await?;
         let mut body = String::new();
         for msg in messages {
-            let line = serde_json::to_string(msg)
-                .map_err(|e| ClawzError::Serialization(e.to_string()))?;
+            let line =
+                serde_json::to_string(msg).map_err(|e| ClawzError::Serialization(e.to_string()))?;
             body.push_str(&line);
             body.push('\n');
         }
@@ -103,6 +104,9 @@ impl SessionStore for FileSessionStore {
         file.write_all(body.as_bytes())
             .await
             .map_err(|e| ClawzError::Internal(format!("write transcript: {e}")))?;
+        file.flush()
+            .await
+            .map_err(|e| ClawzError::Internal(format!("flush transcript: {e}")))?;
         Ok(())
     }
 
@@ -182,22 +186,22 @@ mod tests {
         let id = "test-session";
 
         store
-            .append_message(&id, &Message::user("hello"))
+            .append_message(id, &Message::user("hello"))
             .await
             .unwrap();
         store
-            .append_message(&id, &Message::assistant("hi"))
+            .append_message(id, &Message::assistant("hi"))
             .await
             .unwrap();
 
-        let loaded = store.load_transcript(&id).await.unwrap();
+        let loaded = store.load_transcript(id).await.unwrap();
         assert_eq!(loaded.len(), 2);
 
-        let removed = store.compact(&id, 1).await.unwrap();
+        let removed = store.compact(id, 1).await.unwrap();
         assert_eq!(removed, 1);
-        assert_eq!(store.load_transcript(&id).await.unwrap().len(), 1);
+        assert_eq!(store.load_transcript(id).await.unwrap().len(), 1);
 
-        store.reset(&id).await.unwrap();
-        assert!(store.load_transcript(&id).await.unwrap().is_empty());
+        store.reset(id).await.unwrap();
+        assert!(store.load_transcript(id).await.unwrap().is_empty());
     }
 }

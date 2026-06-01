@@ -1,6 +1,127 @@
 # ClawZ Installation Guide
 
-This guide covers one-click installs, Docker Compose, source builds, the optional web dashboard, production hardening, and common troubleshooting. For platform overview and feature docs, see [README.md](README.md).
+This guide covers the interactive TUI installer, shell bootstrap, Docker Compose, source builds, licensing, production hardening, and troubleshooting. For platform overview, see [README.md](README.md).
+
+---
+
+## Recommended: Interactive TUI Installer
+
+The `clawz` binary is a unified installer and operator CLI. Run it with no arguments to launch the interactive TUI:
+
+```bash
+./clawz
+```
+
+The TUI installer has three screens:
+
+1. **Splash** — branded logo, auto-detects your system (OS, RAM, Docker, ports)
+2. **LLM Provider Setup** — select a provider and enter your API key (validated inline)
+3. **AI-Guided Chat** — a local setup assistant walks you through the entire deployment conversationally
+
+The setup assistant will:
+- Detect your system and recommend Docker (prebuilt) or source build
+- Auto-generate all secrets (JWT, worker token, encryption key)
+- Execute `docker compose up` or `cargo build` with live progress in the chat
+- Configure your agent identity
+- Run health checks and show your dashboard URL
+- Transition to the live ClawZ agent once the gateway is healthy
+
+### Getting the `clawz` Binary
+
+**Option A — Download prebuilt binary (fastest, no Rust required):**
+
+```bash
+# Linux amd64
+curl -fsSL https://github.com/improwyz/clawzagent/releases/latest/download/clawz-linux-amd64 -o clawz
+chmod +x clawz && ./clawz
+```
+
+**Option B — Shell bootstrap (installs Docker/Rust if needed):**
+
+```bash
+curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh | bash
+```
+
+**Option C — Build from source:**
+
+```bash
+git clone https://github.com/improwyz/clawzagent.git && cd clawzagent
+cargo build -p clawz-cli --release
+./target/release/clawz
+```
+
+### Headless / CI Mode
+
+For non-interactive environments, use `--headless`:
+
+```bash
+./clawz --headless
+```
+
+This runs the same setup flow in plain text mode.
+
+---
+
+## Supported LLM Providers
+
+The TUI installer supports 12+ providers out of the box. You need at least one API key to power the setup assistant:
+
+| Provider | Env Variable | Default Endpoint |
+|----------|-------------|-----------------|
+| Anthropic (Claude) | `ANTHROPIC_API_KEY` | `https://api.anthropic.com/v1` |
+| OpenAI | `OPENAI_API_KEY` | `https://api.openai.com/v1` |
+| OpenRouter | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` |
+| Groq | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` |
+| Grok / xAI | `XAI_API_KEY` | `https://api.x.ai/v1` |
+| DeepSeek | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` |
+| Ollama (local) | — | `http://localhost:11434` |
+| Together AI | `TOGETHER_API_KEY` | `https://api.together.xyz/v1` |
+| Fireworks AI | `FIREWORKS_API_KEY` | `https://api.fireworks.ai/inference/v1` |
+| Google Gemini | `GEMINI_API_KEY` | `https://generativelanguage.googleapis.com/v1beta` |
+| AWS Bedrock | `AWS_ACCESS_KEY_ID` | Regional endpoint |
+| Custom | `CLAWZ_CUSTOM_LLM_KEY` + `CLAWZ_CUSTOM_LLM_BASE` | Any OpenAI-compatible URL |
+
+All providers with a `_API_BASE` variant (e.g. `OPENAI_API_BASE`) support custom endpoints for proxies and self-hosted models.
+
+---
+
+## HTTPS (Caddy Reverse Proxy)
+
+ClawZ includes **Caddy** in its Docker Compose stack for automatic HTTPS on port 443:
+
+- Set `CLAWZ_DOMAIN` in `.env` to your hostname, public IP, or domain
+- **localhost** → Caddy uses a self-signed certificate (zero config)
+- **Public domain** → Caddy auto-provisions a Let's Encrypt certificate
+- The gateway does not expose port 3000 externally — Caddy is the only entry point
+
+The TUI installer auto-detects your public IP/hostname and sets `CLAWZ_DOMAIN` for you.
+
+---
+
+## Licensing
+
+### 30-Day Free Trial
+
+ClawZ starts with a **30-day free trial** — full functionality, no license key required. The trial is per-machine and begins on first run.
+
+### Activation
+
+Purchase a license key at **[clawz.net](https://clawz.net)**. Keys are available for 1-year terms.
+
+Enter your key during the TUI installer, or later in the web dashboard (Settings → License). Keys are hardware-bound (tied to your machine's fingerprint) and support up to 2 machines per key.
+
+### License Behavior
+
+| State | What happens |
+|-------|-------------|
+| Trial (days 1–30) | Full access, no restrictions |
+| Trial expired | Gateway refuses to start. Run `clawz` to enter a license key. |
+| Paid license active | Full access. Re-validated against clawz.net every 7 days. |
+| Paid license expired | 7-day grace period with dashboard warnings, then hard stop. |
+| Offline > 30 days | Must reconnect to clawz.net to validate, then resumes. |
+| Clock manipulation | Detected and blocked (uses monotonic day counter). |
+
+License state is stored at `~/.clawz/license.json`.
 
 ---
 
@@ -8,61 +129,29 @@ This guide covers one-click installs, Docker Compose, source builds, the optiona
 
 | Component | Docker install | Source install |
 |-----------|----------------|----------------|
-| **Git** | Required (remote one-liner clones the repo) | Required |
-| **Docker + Compose v2** | Required (`docker compose`) | Optional |
+| **Docker + Compose v2** | Required | Not required |
 | **Rust 1.87+** | Not required | Required ([rustup.rs](https://rustup.rs)) |
-| **Node.js 20+** | Only with `--with-web` | Only with `--with-web` |
-| **curl** | Used for health checks | Used for health checks |
+| **curl** | Required (healthchecks, Caddy) | Required |
+| **Git** | Required if cloning | Required |
 
-Windows users need **PowerShell 5.1+** for the install script.
-
----
-
-## Repository layout (install scripts)
-
-Public repo: **[github.com/improwyz/clawz](https://github.com/improwyz/clawz)** — default branch **`main`**.
-
-The installer uses **real paths in the cloned tree** (not `curl` to `.../raw/main/...`, which is only a GitHub download URL prefix and is not a folder in the repo):
-
-```text
-improwyz/clawz/
-├── install.sh                 # wrapper → scripts/install.sh
-├── install.ps1                # wrapper → scripts/install.ps1
-├── docker-compose.yml
-├── Cargo.toml
-├── crates/
-└── scripts/
-    ├── install.sh             # main Linux/macOS installer
-    ├── install-common.sh
-    ├── install-deps.sh
-    ├── setup-host-exec.sh     # allowlisted host ops (wizard / clawz setup)
-    ├── migrate-db.sh
-    └── install.ps1
-```
+The TUI installer checks prerequisites automatically and offers to install missing ones.
 
 ---
 
-## Install procedures (overview)
+## Operator CLI
 
-| Goal | Linux / macOS | Windows | CLI (any host) |
-|------|---------------|---------|----------------|
-| **Full stack (recommended)** | `./scripts/install.sh` | `.\scripts\install.ps1 -Docker -Prebuilt` | `clawz setup stack` |
-| **Install + guided wizard** | `./scripts/install.sh --wizard` | `.\scripts\install.ps1 -Docker -Prebuilt -Wizard` | `clawz onboard --install-daemon` |
-| **Host deps only** | `./scripts/install.sh --bootstrap-only` | `.\scripts\install.ps1 -BootstrapOnly` | `clawz setup deps` |
-| **Local image build** | `./scripts/install.sh --build` | `.\scripts\install.ps1 -Docker -Build` | `clawz setup stack --build` |
-| **No Docker (cargo)** | `./scripts/install.sh --source` | `.\scripts\install.ps1 -Source` | — |
-| **Web onboarding only** | Open `http://localhost:3000/setup` | Same (or remote gateway URL) | `clawz onboard` (TUI) |
+The same `clawz` binary serves as both the installer and operator CLI:
 
-**What the Docker path does (all platforms):**
-
-1. Ensure **Git** (and **Docker** + Compose v2, or install them).
-2. Create `.env` from `.env.example` (random dev secrets when possible).
-3. **Prebuilt (default):** `docker login ghcr.io` → pull `gateway` + `worker` images.
-4. **Or `--build`:** compile images via `docker-compose.build.yml`.
-5. `docker compose up -d db` → run **`scripts/migrate-db.sh`** → `up -d worker gateway`.
-6. Wait for `GET /health`.
-
-The same sequence is implemented in `scripts/setup-host-exec.sh` and exposed to the wizard via `POST /api/v1/setup/stack` when host execution is allowed.
+| Command | Purpose |
+|---------|---------|
+| `clawz` | Launch TUI installer (first run) or setup assistant |
+| `clawz --headless` | Plain text setup for CI/non-TTY |
+| `clawz doctor` | Health check gateway, worker, env, Docker |
+| `clawz gateway start/stop/status` | Docker Compose control |
+| `clawz agent --message "..."` | Send a message to an agent |
+| `clawz cron list/add/run/remove` | Scheduled agent jobs |
+| `clawz setup deps` | Install host prerequisites |
+| `clawz setup stack [--build]` | Docker Compose up (prebuilt or local build) |
 
 ---
 
@@ -75,6 +164,8 @@ The installer clones (or uses) the repo, creates `.env` from [.env.example](.env
 ```bash
 export GITHUB_TOKEN=ghp_xxxxxxxx
 export GITHUB_USER=your_github_username
+export DOCKERHUB_USERNAME=your_namespace
+export DOCKERHUB_TOKEN=dckr_pat_xxxxxxxx
 ```
 
 **Maintainers only** (slow local compile): `./install.sh --build`
@@ -501,23 +592,37 @@ Key variables:
 | Variable | Purpose |
 |----------|---------|
 | `CLAWZ_MODE` | `standalone`, `micro`, or `elastic` (Compose defaults to `micro`) |
+| `CLAWZ_DOMAIN` | Hostname/IP for Caddy HTTPS (auto-detected by TUI installer) |
+| `CLAWZ_PUBLIC_URL` | Public HTTPS base for webhooks — derived from `CLAWZ_DOMAIN` |
 | `CLAWZ_REGISTRY` / `CLAWZ_IMAGE_TAG` | Prebuilt image coordinates (`ghcr.io/improwyz`, `latest`) |
 | `CLAWZ_AGENT_IMAGE` | Image for spawned agent containers |
 | `CLAWZ_DOCKER_NETWORK` | Docker network for fleet agents (`clawz-net`) |
 | `CLAWZ_MAX_AGENTS` | Max concurrent agent containers per worker |
-| `CLAWZ_DISABLE_AUTH` | Dev only — set to `0` or unset in production |
+| `CLAWZ_DISABLE_AUTH` | Dev only — must be `0` in release builds |
 | `CLAWZ_STUB_PROVIDER` | Dev stub LLM — disable when using real providers |
 | `VALID_API_KEYS` | Comma-separated API keys (required when auth enabled) |
-| `CLAWZ_JWT_SECRET` | JWT signing secret |
-| `CLAWZ_WORKER_TOKEN` | Shared secret for gateway ↔ worker |
+| `CLAWZ_JWT_SECRET` | JWT signing secret (auto-generated by installer) |
+| `CLAWZ_WORKER_TOKEN` | Shared secret for gateway ↔ worker (auto-generated) |
+| `CLAWZ_SECRETS_KEY` | Encryption key for secrets at rest (auto-generated) |
+| `POSTGRES_PASSWORD` | Database password (used by Compose `db` service) |
 | `WORKER_URL` | Worker address (`http://worker:50051` in Compose) |
 | `DATABASE_URL` | Postgres connection string |
-| `CLAWZ_PUBLIC_URL` | Public HTTPS base for webhooks (telephony, channels) |
+
+**LLM provider keys** (set at least one):
+
+| Variable | Provider |
+|----------|---------|
+| `ANTHROPIC_API_KEY` | Anthropic (Claude) |
+| `OPENAI_API_KEY` / `OPENAI_API_BASE` | OpenAI (or compatible proxy) |
+| `OPENROUTER_API_KEY` | OpenRouter |
+| `GROQ_API_KEY` | Groq |
+| `XAI_API_KEY` | Grok / xAI |
+| `DEEPSEEK_API_KEY` | DeepSeek |
+| `TOGETHER_API_KEY` | Together AI |
+| `FIREWORKS_API_KEY` | Fireworks AI |
+| `CLAWZ_CUSTOM_LLM_KEY` + `CLAWZ_CUSTOM_LLM_BASE` | Any OpenAI-compatible |
 
 See [README.md — Configuration](README.md#configuration) for TOML config and `CLAWZ__SECTION__KEY` overrides.
-
-**Private registry:** [docs/private-registry.md](docs/private-registry.md)  
-**Dependency audit CSV:** [docs/install-dependencies.csv](docs/install-dependencies.csv) (regenerate with `./scripts/export-install-dependencies.sh`)
 
 ---
 
@@ -525,13 +630,15 @@ See [README.md — Configuration](README.md#configuration) for TOML config and `
 
 Before exposing ClawZ to the internet:
 
-- [ ] Copy `.env.example` → `.env` and **replace all placeholder secrets**
-- [ ] Set strong `CLAWZ_JWT_SECRET` and `CLAWZ_WORKER_TOKEN` (installer generates these for local dev only)
-- [ ] **Disable** `CLAWZ_DISABLE_AUTH` and configure real `VALID_API_KEYS`
-- [ ] **Disable** `CLAWZ_STUB_PROVIDER`; set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or your provider keys
-- [ ] Run `./scripts/migrate-db.sh` after upgrading (or rely on installer / compose-smoke)
+- [ ] Run the TUI installer (`./clawz`) — it generates all secrets automatically
+- [ ] Set `CLAWZ_DOMAIN` to your public hostname or IP (Caddy handles TLS)
+- [ ] Verify `CLAWZ_DISABLE_AUTH=0` in `.env` (release builds enforce this)
+- [ ] Set at least one LLM provider key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.)
+- [ ] Disable `CLAWZ_STUB_PROVIDER` in production
+- [ ] Configure real `VALID_API_KEYS` for API access
+- [ ] Run `./scripts/migrate-db.sh` after upgrading
 - [ ] Use managed Postgres with pgvector; do not expose the Compose `db` port publicly
-- [ ] Put TLS termination in front of the gateway (reverse proxy or load balancer)
+- [ ] Activate a license key at [clawz.net](https://clawz.net) before the 30-day trial expires
 - [ ] Set `CLAWZ_PUBLIC_URL` to your public HTTPS origin (required for [telephony](TELEPHONY.md))
 - [ ] Set `CLAWZ_MODE=micro` or `elastic` for multi-container / mesh deployments
 - [ ] Configure backups for Postgres and audit logs

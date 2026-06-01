@@ -9,8 +9,8 @@ use axum::{
     response::Response,
 };
 use serde_json::Value;
-use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt as TokioStreamExt;
+use tokio_stream::wrappers::BroadcastStream;
 
 use crate::{AppState, GatewayError};
 
@@ -32,7 +32,10 @@ pub async fn run_events_sse(
         let run_id_filter = run_id_filter.clone();
         let raw = msg.ok()?;
         let envelope: Value = serde_json::from_str(&raw).ok()?;
-        let data = envelope.get("data").cloned().unwrap_or_else(|| envelope.clone());
+        let data = envelope
+            .get("data")
+            .cloned()
+            .unwrap_or_else(|| envelope.clone());
         let event_run_id = data
             .get("run_id")
             .and_then(|v| v.as_str())

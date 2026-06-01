@@ -30,6 +30,7 @@ pub mod error;
 pub mod licensing;
 pub mod metrics;
 pub mod prism;
+pub mod retry;
 pub mod runtime_backend;
 pub mod session;
 pub mod traits;

@@ -1,7 +1,7 @@
 # ClawZ
 
 <p align="center">
-  <img src="web/public/branding/clawz-logo-dark.png" alt="ClawZ" width="320" />
+  <img src="web/public/branding/clawz-logo-dark.png" alt="ClawZ" width="420" />
 </p>
 
 > A governed swarm of containerized AI agents — the reference implementation of the PRISM-G framework, in Rust.
@@ -138,106 +138,74 @@ The Cargo workspace under `crates/` layers shared libraries beneath the gateway 
 
 ## Quick Start
 
-Repository: **[github.com/improwyz/clawz](https://github.com/improwyz/clawz)** (branch `main`).
+### Interactive TUI Installer (Recommended)
 
-### One-click install
+Run the `clawz` binary with no arguments to launch the interactive TUI installer. The installer walks you through the entire setup conversationally — an AI-powered setup assistant detects your system, recommends a deployment strategy, deploys the stack, and transitions into a live chat with your ClawZ agent.
 
-The installer clones the repo (or uses your existing tree), bootstraps missing dependencies (**Git**, **Docker** or **Rust**), writes `.env`, starts **gateway + worker + Postgres (pgvector)**, and waits for health checks.
+**Option 1 — Standalone binary (no Rust required):**
 
-**Repo layout (install scripts)**
-
-```text
-improwyz/clawz/
-├── install.sh                 # wrapper → scripts/install.sh
-├── install.ps1                # wrapper → scripts/install.ps1
-└── scripts/
-    ├── install.sh             # main Linux/macOS installer
-    ├── install-common.sh      # shared Compose helpers (clawz_compose_up)
-    ├── install-deps.sh        # host deps: curl, git, Docker, Rust, Node
-    ├── setup-host-exec.sh     # allowlisted entry for clawz-setup / wizard API
-    ├── migrate-db.sh          # SQL migrations (Compose db service)
-    └── install.ps1            # Windows installer (prebuilt pull + migrate)
+```bash
+# Linux (amd64)
+curl -fsSL https://github.com/improwyz/clawzagent/releases/latest/download/clawz-linux-amd64 -o clawz
+chmod +x clawz && ./clawz
 ```
 
-| Platform | Command |
-|----------|---------|
-| **Linux / macOS (curl)** | `curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh \| bash` |
-| **Linux / macOS (git + GHCR)** | `export GITHUB_TOKEN=ghp_xxx GITHUB_USER=you && git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz && ~/clawz/install.sh` |
-| **Linux / macOS (install + wizard)** | `./scripts/install.sh --wizard` |
-| **Windows (PowerShell)** | `git clone --depth 1 https://github.com/improwyz/clawz.git $env:USERPROFILE\clawz; & "$env:USERPROFILE\clawz\scripts\install.ps1 -Docker -Prebuilt"` |
-| **Windows (install + wizard)** | `.\scripts\install.ps1 -Docker -Prebuilt -Wizard` |
-| **Already cloned** | `./install.sh` or `./scripts/install.sh` |
+**Option 2 — Shell bootstrap (installs all prerequisites):**
 
-**Curl URL vs repo path:** the file lives at `install.sh` in the repo root.  
-`https://github.com/improwyz/clawz/raw/main/install.sh` means branch `main`, file `install.sh` — `raw/main` is not a directory in git.  
-That bootstrap script only needs **git** on your machine; it clones the full repo, then runs `scripts/install.sh` (which can install Docker/Rust if missing).  
-Curl requires the repo to be **public** (or use the git one-liner with your credentials). A 404 from curl usually means the repo is private.
+```bash
+curl -fsSL https://github.com/improwyz/clawz/raw/main/install.sh | bash
+```
 
-**Installer options**
+**Option 3 — From source (if you have Rust + Docker):**
 
-| Linux / macOS | Windows (PowerShell) | Description |
-|---------------|----------------------|-------------|
-| *(default)* | *(auto)* | Docker Compose micro/fleet: **prebuilt GHCR pull** → `db` → migrate → `worker` + `gateway` |
-| `--docker` | `-Docker` | Force Docker Compose (installs Docker if missing on Linux/macOS) |
-| `--build` | `-Build` | Build images locally (`docker-compose.build.yml`) instead of GHCR pull |
-| `--bootstrap-only` | `-BootstrapOnly` | Host deps only (curl, git, Docker); **no** Compose stack |
-| `--wizard` | `-Wizard` | After install, run `clawz onboard --install-daemon` (or open web `/setup`) |
-| `--registry R` / `--tag T` | `-Registry` / `-Tag` | Override `CLAWZ_REGISTRY` / `CLAWZ_IMAGE_TAG` |
-| `--source` | `-Source` | `cargo` release build (installs Rust if missing; no Docker) |
-| `--with-web` | `-WithWeb` | Build React dashboard in `web/` (installs Node 20+ if missing) |
-| `--dir PATH` | `-InstallDir PATH` | Clone/install location (`~/clawz` or `%USERPROFILE%\clawz`) |
-| — | `-InstallDocker` | Attempt Docker Desktop install via **winget** (Windows) |
-| — | `-Prebuilt` | Explicit prebuilt pull (default when not using `-Build`) |
+```bash
+git clone https://github.com/improwyz/clawzagent.git && cd clawzagent
+cargo build -p clawz-cli --release
+./target/release/clawz
+```
 
-Set `GITHUB_TOKEN` (PAT with `read:packages`) and `GITHUB_USER` before the default prebuilt install. See [docs/private-registry.md](docs/private-registry.md).
+### TUI Installer Flow
 
-**Operator CLI** (from repo: `cargo build -p clawz-cli --release`):
+The installer has three screens:
+
+1. **Splash** — ClawZ branded logo, system detection summary
+2. **LLM Provider Setup** — Select from 12+ providers (Anthropic, OpenAI, OpenRouter, Groq, Grok/xAI, DeepSeek, Ollama, Together, Fireworks, Gemini, Bedrock, or any OpenAI-compatible endpoint). Enter your API key — validated inline.
+3. **AI-Guided Chat** — A local setup assistant (powered by your chosen LLM) guides you conversationally through deployment mode selection, secrets generation, Docker deployment, health checks, and agent identity configuration. Once the gateway is healthy, the chat seamlessly transitions to the live ClawZ agent.
+
+For headless/CI environments: `clawz --headless` runs the same flow in plain text mode.
+
+### Operator CLI
+
+The same `clawz` binary also serves as the operator CLI when invoked with subcommands:
 
 | Command | Purpose |
 |---------|---------|
-| `clawz setup deps` | Install host prerequisites via `install-deps.sh` |
-| `clawz setup stack` | Prebuilt pull + Compose up (same sequence as `install.sh`) |
-| `clawz setup stack --build` | Local image build overlay |
-| `clawz onboard` | Interactive first-run wizard (Linux TUI) |
-| `clawz onboard --install-daemon` | Wizard then `clawz setup stack` |
-| `clawz doctor` | Gateway, worker, env, and Docker checks |
+| `clawz` | Launch TUI installer / setup assistant |
+| `clawz doctor` | Gateway, worker, env, and Docker health checks |
+| `clawz gateway start/stop/status` | Docker Compose control |
+| `clawz agent --message “...”` | Send a message to an agent |
+| `clawz cron list/add/run/remove` | Scheduled agent jobs |
+| `clawz setup deps` | Install host prerequisites |
+| `clawz setup stack` | Prebuilt pull + Compose up |
+| `clawz --headless` | Plain text setup (CI/non-TTY) |
 
-**First-run web wizard:** after the gateway is up, open **http://localhost:3000/setup**. The Stack step uses `POST /api/v1/setup/stack` when the gateway runs **on the host**; inside a container it shows a copy-paste `install.sh` / `install.ps1` command. Details: [INSTALL.md](INSTALL.md) and [docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md](docs/superpowers/specs/2026-05-30-docker-bootstrap-compose-deploy-plan.md).
+### HTTPS & Dashboard
 
-After install, open **http://localhost:3000** and run:
+ClawZ uses **Caddy** as a reverse proxy (included in Docker Compose) for automatic HTTPS:
 
-```bash
-curl http://localhost:3000/api/v1/system/health
-```
+- **localhost** → self-signed cert (zero config)
+- **Public IP or domain** → Let's Encrypt auto-TLS
 
-For **routine VPS updates** after the first install, use **`./scripts/deploy.sh`** (pull prebuilt images or rebuild only what changed). Avoid `docker compose ... --build` on every `git pull`. Run **`./scripts/deploy.sh --doctor`** for a quick health check. See [INSTALL.md](INSTALL.md) (“First run”) and [docs/deployment-build-strategy.md](docs/deployment-build-strategy.md).
+After install, open **https://your-host** in a browser. The dashboard is also installable as a **PWA** on mobile and desktop.
 
-**Stop / logs**
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml down
-docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml logs -f gateway worker
-```
-
-**Fleet verification** (Docker socket on worker; spawns tenant agent containers):
+### Stop / Logs
 
 ```bash
-./scripts/fleet-smoke.sh
+docker compose down
+docker compose logs -f gateway worker caddy
 ```
 
-Copy `.env.example` to `.env` before production and set real secrets (`CLAWZ_JWT_SECRET`, `CLAWZ_WORKER_TOKEN`, disable `CLAWZ_DISABLE_AUTH`).  
-Prebuilt images: `docker login ghcr.io` then install — see [docs/private-registry.md](docs/private-registry.md).
-
-Full install guide: **[INSTALL.md](INSTALL.md)** (all platforms, production checklist, troubleshooting).
-
-**Documentation:**
-
-| Document | Audience |
-|----------|----------|
-| [docs/user-manual.md](docs/user-manual.md) | Day-to-day operators and AI engineers |
-| [docs/administration-manual.md](docs/administration-manual.md) | Platform admins, SRE, security, compliance |
-| [docs/api-reference.md](docs/api-reference.md) | REST/WebSocket integration developers |
-| [docs/clawz-product-brochure.md](docs/clawz-product-brochure.md) | USP, differentiators, brochure-ready copy |
+Full install guide: **[INSTALL.md](INSTALL.md)**
 
 ---
 
@@ -254,7 +222,7 @@ cp .env.example .env
 #### 2. Docker Compose (recommended)
 
 ```bash
-docker login ghcr.io
+docker login
 docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d
 curl http://localhost:3000/api/v1/system/health
 ```
@@ -709,11 +677,26 @@ Colors, typography, and UI tokens: **[crates/clawz-tauri/design/design-system.md
 
 ---
 
-## License
+## License & Activation
 
-This project is licensed under the **Elastic License 2.0 (ELv2)**.
+ClawZ is licensed under the **Elastic License 2.0 (ELv2)** — see [LICENSE](LICENSE).
 
-See [LICENSE](LICENSE) for the full license text.
+### Free Trial
+
+ClawZ includes a **30-day free trial** with full functionality. No license key required — just install and start using it. The trial is per-machine and begins on first run.
+
+### License Key
+
+After the trial, purchase a license key at **[clawz.net](https://clawz.net)** to continue using ClawZ. License keys are available for 1-year terms and support up to 2 machines per key.
+
+Activate during setup (the TUI installer prompts for a key) or later via the web dashboard settings page. Keys are hardware-bound and verified against the ClawZ license server.
+
+| Scenario | Behavior |
+|----------|----------|
+| No key (first 30 days) | Full access — trial mode |
+| Trial expired | Gateway stops — enter a license key to continue |
+| Paid license expires | 7-day grace period with dashboard warnings, then stops |
+| Offline > 30 days | Must reconnect to validate — then resumes normally |
 
 ---
 

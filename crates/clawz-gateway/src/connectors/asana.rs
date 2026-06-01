@@ -94,7 +94,7 @@ impl SaaSConnector for AsanaConnector {
             "workspaces" => "/workspaces".to_string(),
             "teams" => "/teams".to_string(),
             "users" => "/users".to_string(),
-            _ => format!("/{}", obj),
+            _ => format!("/{obj}"),
         };
         let resp = client
             .get(&path)
@@ -131,10 +131,10 @@ impl SaaSConnector for AsanaConnector {
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let path = match obj {
-            "tasks" => format!("/tasks/{}", id),
-            "projects" => format!("/projects/{}", id),
-            "sections" => format!("/sections/{}", id),
-            _ => format!("/{}/{}", obj, id),
+            "tasks" => format!("/tasks/{id}"),
+            "projects" => format!("/projects/{id}"),
+            "sections" => format!("/sections/{id}"),
+            _ => format!("/{obj}/{id}"),
         };
         let body = serde_json::json!({ "data": data });
         let resp = client
@@ -150,9 +150,9 @@ impl SaaSConnector for AsanaConnector {
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let client = self.client()?;
         let path = match obj {
-            "tasks" => format!("/tasks/{}", id),
-            "projects" => format!("/projects/{}", id),
-            _ => format!("/{}/{}", obj, id),
+            "tasks" => format!("/tasks/{id}"),
+            "projects" => format!("/projects/{id}"),
+            _ => format!("/{obj}/{id}"),
         };
         let resp = client
             .delete(&path)
@@ -174,14 +174,14 @@ impl SaaSConnector for AsanaConnector {
         let path = match action {
             "add_task_to_project" => {
                 let task_id = params["task_id"].as_str().unwrap_or("");
-                format!("/tasks/{}/addProject", task_id)
+                format!("/tasks/{task_id}/addProject")
             }
             "set_dependencies" => {
                 let task_id = params["task_id"].as_str().unwrap_or("");
-                format!("/tasks/{}/addDependencies", task_id)
+                format!("/tasks/{task_id}/addDependencies")
             }
             "search_tasks" => "/workspaces/search".into(),
-            _ => format!("/{}", action),
+            _ => format!("/{action}"),
         };
         // Asana action endpoints also expect a `data` wrapper.
         let body = serde_json::json!({ "data": params });

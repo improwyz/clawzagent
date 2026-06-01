@@ -42,6 +42,9 @@ fn configure_api_key_auth(api_keys: &str) {
     }
 }
 
+// The env guard is intentionally held across the await: it serializes tests
+// that mutate process-wide env vars while the server boots.
+#[allow(clippy::await_holding_lock)]
 async fn make_server() -> TestServer {
     let guard = test_env_lock();
     configure_dev_auth();
@@ -51,6 +54,7 @@ async fn make_server() -> TestServer {
     }
 }
 
+#[allow(clippy::await_holding_lock)]
 async fn make_server_with_api_key_auth(api_keys: &str) -> TestServer {
     let guard = test_env_lock();
     configure_api_key_auth(api_keys);
@@ -337,7 +341,7 @@ async fn autonomous_endpoint_starts_multi_turn_session() {
         .oneshot(
             Request::builder()
                 .method("POST")
-                .uri(format!("/api/v1/agents/{}/autonomous", agent_id))
+                .uri(format!("/api/v1/agents/{agent_id}/autonomous"))
                 .header("content-type", "application/json")
                 .body(Body::from(r#"{ "maxTurns": 10, "costBudgetUsd": 0.50 }"#))
                 .unwrap(),

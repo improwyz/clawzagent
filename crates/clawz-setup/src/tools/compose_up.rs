@@ -21,17 +21,18 @@ impl SetupTool for ComposeUpTool {
     }
 
     fn execute(&self, ctx: &ToolContext, input: &ToolInput) -> crate::error::Result<ToolResult> {
-        let dry_run = input.args.get("dry_run").and_then(Value::as_bool).unwrap_or(false);
+        let dry_run = input
+            .args
+            .get("dry_run")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let with_web = input
             .args
             .get("with_web")
             .and_then(Value::as_bool)
             .unwrap_or(false);
         let strategy = parse_strategy(&input.args).unwrap_or(InstallStrategy::Prebuilt);
-        let deployment = ctx
-            .session
-            .deployment
-            .unwrap_or(DeploymentChoice::Micro);
+        let deployment = ctx.session.deployment.unwrap_or(DeploymentChoice::Micro);
 
         let spec = HostSpecChecker::collect();
         let plan = StackRunner::plan(deployment, strategy, &spec, None)?;
@@ -44,10 +45,7 @@ impl SetupTool for ComposeUpTool {
             message: if dry_run {
                 format!("{}\n{}", out.command, StackRunner::compose_argv_hint(&plan))
             } else {
-                format!(
-                    "Stack started ({})",
-                    StackRunner::compose_argv_hint(&plan)
-                )
+                format!("Stack started ({})", StackRunner::compose_argv_hint(&plan))
             },
             artifacts: vec![],
         })

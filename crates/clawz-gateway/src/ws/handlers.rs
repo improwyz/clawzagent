@@ -91,8 +91,7 @@ async fn handle_agent_stream(mut socket: WebSocket) {
 
         // Build a canned response and stream it word by word.
         let response = format!(
-            "I received your message: \"{}\". Here is a streamed response from ClawZ.",
-            prompt
+            "I received your message: \"{prompt}\". Here is a streamed response from ClawZ."
         );
         let words: Vec<&str> = response.split_whitespace().collect();
         let total = words.len();
@@ -481,11 +480,7 @@ async fn send_event(socket: &mut WebSocket, event: &WsEvent) -> bool {
 /// small delay between events so dashboards can wire up against a real
 /// `WsEvent` stream today. The actual event source will be wired in a
 /// follow-up commit once `run_multi_turn` exposes an event channel.
-async fn handle_autonomous_stream(
-    mut socket: WebSocket,
-    agent_id: String,
-    state: crate::AppState,
-) {
+async fn handle_autonomous_stream(mut socket: WebSocket, agent_id: String, state: crate::AppState) {
     // Greet the client so it knows the upgrade succeeded and which agent this
     // session is bound to. This is a plain JSON envelope, not a WsEvent, so
     // it never clashes with the typed event stream.

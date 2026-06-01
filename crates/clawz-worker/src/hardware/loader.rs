@@ -508,7 +508,7 @@ fn read_gguf_metadata(path: &Path) -> Result<GgufMetadata> {
     let version = read_u32_le(&mut file)?;
     if !(1..=3).contains(&version) {
         // Accept versions 1-3; warn but continue
-        log::warn!("GGUF version {} may not be fully supported", version);
+        log::warn!("GGUF version {version} may not be fully supported");
     }
 
     let tensor_count = read_u64_le(&mut file)?;
@@ -598,7 +598,7 @@ fn read_gguf_kv(file: &mut std::fs::File) -> Result<(String, String)> {
             let count = read_u64_le(file)?;
             // Skip all elements; just note the count
             skip_gguf_array(file, elem_type, count)?;
-            format!("[array:{}]", count)
+            format!("[array:{count}]")
         }
         _ => {
             return Err(ClawzError::Hardware(format!(
@@ -861,8 +861,6 @@ fn is_model_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
 
     /// Helper: write a minimal GGUF v3 file with STRING KV pairs for testing.
     fn write_gguf_v3(path: &Path, kv_pairs: &[(&str, &str)]) {

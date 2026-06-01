@@ -91,7 +91,7 @@ impl OAuth2Flow {
     /// On success, converts the provider's JSON response into our internal [`Credentials`]
     /// representation, computing the `expires_at` timestamp from `expires_in`.
     pub async fn exchange(&self, code: &str) -> Result<Credentials> {
-        let client = Client::new();
+        let client = crate::ssrf::guarded_client();
         let mut params = HashMap::new();
         params.insert("grant_type", "authorization_code");
         params.insert("code", code);
@@ -143,7 +143,7 @@ impl OAuth2Flow {
     /// return a new refresh token, the original one is preserved so the caller can
     /// continue refreshing in the future.
     pub async fn refresh(&self, refresh_token: &str) -> Result<Credentials> {
-        let client = Client::new();
+        let client = crate::ssrf::guarded_client();
         let mut params = HashMap::new();
         params.insert("grant_type", "refresh_token");
         params.insert("refresh_token", refresh_token);
@@ -229,7 +229,7 @@ impl ApiClient {
     /// Create a new API client.
     pub fn new(base_url: impl Into<String>, credentials: Credentials) -> Self {
         Self {
-            client: Client::new(),
+            client: crate::ssrf::guarded_client(),
             base_url: base_url.into(),
             credentials,
         }

@@ -6,8 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   # Desktop shell needs WebKit/GTK; server CI builds the agent platform only.
   CARGO_WORKSPACE_EXCLUDE: --exclude clawz-tauri
 

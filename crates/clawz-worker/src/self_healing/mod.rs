@@ -71,7 +71,7 @@ pub async fn run_with_supervisor<S: CircuitBreakerScheduler>(
                 scheduler.record_failure();
 
                 if scheduler.should_open_circuit() {
-                    eprintln!("circuit breaker opened for {:?}", e);
+                    eprintln!("circuit breaker opened for {e:?}");
 
                     if restart_attempts < config.max_restart_attempts {
                         restart_attempts += 1;

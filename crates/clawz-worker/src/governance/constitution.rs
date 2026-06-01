@@ -334,8 +334,8 @@ impl ConstitutionalConvention {
             let pairs = parse_rule_pairs(&amendment.rule_text)?;
             for (key, value) in pairs {
                 let rule = clawz_core::types::governance::PolicyRule::allow(
-                    format!("{{\"key\":\"{}\",\"value\":\"{}\"}}", key, value),
-                    format!("{}={}", key, value),
+                    format!("{{\"key\":\"{key}\",\"value\":\"{value}\"}}"),
+                    format!("{key}={value}"),
                 );
                 policy.rules.push(rule);
             }

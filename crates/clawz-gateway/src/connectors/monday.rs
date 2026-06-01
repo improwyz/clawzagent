@@ -58,8 +58,7 @@ impl MondayConnector {
         let json: Value = crate::connectors::common::parse_json(resp).await?;
         if let Some(errors) = json.get("errors") {
             return Err(ClawzError::Provider(format!(
-                "Monday.com GraphQL errors: {}",
-                errors
+                "Monday.com GraphQL errors: {errors}"
             )));
         }
         Ok(json["data"].clone())

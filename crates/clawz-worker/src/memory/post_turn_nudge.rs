@@ -57,7 +57,8 @@ fn resolve_embedding_provider() -> Option<Arc<dyn EmbeddingProvider>> {
         .unwrap_or(false)
     {
         let base = std::env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://127.0.0.1:11434".into());
-        let model = std::env::var("CLAWZ_EMBED_MODEL").unwrap_or_else(|_| "nomic-embed-text".into());
+        let model =
+            std::env::var("CLAWZ_EMBED_MODEL").unwrap_or_else(|_| "nomic-embed-text".into());
         return Some(Arc::new(
             LocalEmbedding::new(model, 768).with_base_url(base),
         ));

@@ -23,7 +23,8 @@ pub async fn maybe_init_database() -> anyhow::Result<Option<sqlx::PgPool>> {
 }
 
 /// Build platform + shared approval workflow for gateway handlers.
-pub async fn build_platform_with_approval() -> anyhow::Result<(Arc<Platform>, Arc<ApprovalWorkflow>)> {
+pub async fn build_platform_with_approval() -> anyhow::Result<(Arc<Platform>, Arc<ApprovalWorkflow>)>
+{
     let approval_workflow = Arc::new(ApprovalWorkflow::new());
 
     let execution: Arc<dyn ExecutionClient> = if let Ok(url) = std::env::var("WORKER_URL") {

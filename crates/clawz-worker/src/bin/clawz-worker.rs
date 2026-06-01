@@ -42,18 +42,16 @@ async fn main() -> anyhow::Result<()> {
     let mode = DeploymentMode::from_env();
     let agent_scheduler = match mode {
         DeploymentMode::Standalone => None,
-        DeploymentMode::Micro | DeploymentMode::Elastic => {
-            match create_scheduler(mode) {
-                Ok(s) => {
-                    tracing::info!("worker fleet scheduler ready ({mode:?})");
-                    Some(s)
-                }
-                Err(e) => {
-                    tracing::warn!("worker fleet scheduler unavailable: {e}");
-                    None
-                }
+        DeploymentMode::Micro | DeploymentMode::Elastic => match create_scheduler(mode) {
+            Ok(s) => {
+                tracing::info!("worker fleet scheduler ready ({mode:?})");
+                Some(s)
             }
-        }
+            Err(e) => {
+                tracing::warn!("worker fleet scheduler unavailable: {e}");
+                None
+            }
+        },
     };
     let app = control_api::routes(ControlState {
         service,

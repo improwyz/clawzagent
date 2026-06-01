@@ -422,9 +422,10 @@ mod tests {
     use super::*;
 
     fn cfg_with_bootstrap(peers: Vec<&str>) -> MeshConfig {
-        let mut c = MeshConfig::default();
-        c.bootstrap_peers = peers.into_iter().map(|s| s.to_string()).collect();
-        c
+        MeshConfig {
+            bootstrap_peers: peers.into_iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
     }
 
     #[tokio::test]

@@ -10,17 +10,38 @@ use sha2::{Digest, Sha256};
 const PLAIN_PREFIX: &str = "plain:";
 const ENC_PREFIX: &str = "enc:";
 
-fn derive_key() -> [u8; 32] {
-    let secret = std::env::var("CLAWZ_SECRETS_KEY").unwrap_or_else(|_| "dev-insecure-key".into());
+/// Resolve the configured secrets key, if any. Release builds must set it
+/// (also enforced at gateway startup); debug builds may run without one.
+fn secrets_key() -> Option<String> {
+    std::env::var("CLAWZ_SECRETS_KEY").ok()
+}
+
+/// Derive a 256-bit AES key from the secret key material.
+///
+/// Note: this hashes already-high-entropy key material; if a low-entropy
+/// passphrase is used, prefer rotating to a random 32-byte key. A stretched
+/// KDF (HKDF/argon2) with versioned payloads is a planned follow-up.
+fn derive_key(secret: &str) -> [u8; 32] {
     Sha256::digest(secret.as_bytes()).into()
 }
 
 /// Seal a secret for database storage. Without `CLAWZ_SECRETS_KEY`, stores `plain:` prefix (dev only).
 pub fn seal_secret(plaintext: &str) -> String {
-    if std::env::var("CLAWZ_SECRETS_KEY").is_err() {
+    let Some(key) = secrets_key() else {
+        // Dev convenience: store unencrypted. Release builds require a key and
+        // never store plaintext (fail closed rather than silently downgrade).
+        #[cfg(debug_assertions)]
         return format!("{PLAIN_PREFIX}{plaintext}");
-    }
-    let cipher = Aes256Gcm::new_from_slice(&derive_key()).expect("valid key length");
+        #[cfg(not(debug_assertions))]
+        {
+            tracing::error!(
+                "CLAWZ_SECRETS_KEY must be set in release builds to seal secrets. \
+                 Generate one with: openssl rand -hex 32"
+            );
+            std::process::exit(1);
+        }
+    };
+    let cipher = Aes256Gcm::new_from_slice(&derive_key(&key)).expect("valid key length");
     let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
     let ciphertext = cipher
         .encrypt(&nonce, plaintext.as_bytes())
@@ -109,7 +130,8 @@ pub fn open_secret(stored: &str) -> Option<String> {
     }
     let (nonce_bytes, ciphertext) = payload.split_at(12);
     let nonce = Nonce::from_slice(nonce_bytes);
-    let cipher = Aes256Gcm::new_from_slice(&derive_key()).ok()?;
+    let key = secrets_key()?;
+    let cipher = Aes256Gcm::new_from_slice(&derive_key(&key)).ok()?;
     let plain = cipher.decrypt(nonce, ciphertext).ok()?;
     String::from_utf8(plain).ok()
 }

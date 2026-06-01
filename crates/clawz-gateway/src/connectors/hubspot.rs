@@ -116,7 +116,7 @@ impl SaaSConnector for HubSpotConnector {
         let client = self.client()?;
         let limit = filters.limit.unwrap_or(100);
         let resp = client
-            .get(&format!("/crm/v3/objects/{}", obj))
+            .get(&format!("/crm/v3/objects/{obj}"))
             .query(&[("limit", limit.to_string())])
             .send()
             .await
@@ -133,7 +133,7 @@ impl SaaSConnector for HubSpotConnector {
     async fn create_object(&self, obj: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let resp = client
-            .post(&format!("/crm/v3/objects/{}", obj))
+            .post(&format!("/crm/v3/objects/{obj}"))
             .json(&data)
             .send()
             .await
@@ -144,7 +144,7 @@ impl SaaSConnector for HubSpotConnector {
     async fn update_object(&self, obj: &str, id: &str, data: Value) -> Result<Value> {
         let client = self.client()?;
         let resp = client
-            .patch(&format!("/crm/v3/objects/{}/{}", obj, id))
+            .patch(&format!("/crm/v3/objects/{obj}/{id}"))
             .json(&data)
             .send()
             .await
@@ -155,7 +155,7 @@ impl SaaSConnector for HubSpotConnector {
     async fn delete_object(&self, obj: &str, id: &str) -> Result<()> {
         let client = self.client()?;
         let resp = client
-            .delete(&format!("/crm/v3/objects/{}/{}", obj, id))
+            .delete(&format!("/crm/v3/objects/{obj}/{id}"))
             .send()
             .await
             .map_err(|e| ClawzError::Provider(format!("HubSpot delete failed: {e}")))?;
@@ -180,7 +180,7 @@ impl SaaSConnector for HubSpotConnector {
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
             ),
-            _ => format!("/crm/v3/objects/{}", action),
+            _ => format!("/crm/v3/objects/{action}"),
         };
         let resp = client
             .post(&path)

@@ -1,104 +1,183 @@
 # Private container registry for ClawZ
 
-Platform images are published to **GitHub Container Registry (GHCR)** at `ghcr.io/improwyz`.  
-**Default install pulls prebuilt images** — no local Rust compile unless you pass `./install.sh --build`.
+ClawZ publishes the same platform images to **two private registries**:
 
-## One-command install (prebuilt)
+| Priority | Registry | Image path |
+|----------|----------|------------|
+| **Primary** | GitHub Container Registry (GHCR) | `ghcr.io/improwyz/clawz-{gateway,worker,agent,dashboard}:<tag>` |
+| **Fallback** | Docker Hub (private repos) | `docker.io/<namespace>/clawz-{gateway,worker,agent,dashboard}:<tag>` **or** one repo: `docker.io/<namespace>/clawz:gateway-<tag>`, … |
+
+**Default install** pulls from **GHCR** first. If that fails (auth, outage, or missing manifest), the installer automatically retries **Docker Hub** when fallback credentials are configured.
+
+Postgres remains the public image `pgvector/pgvector:pg15`.
+
+---
+
+## One-command install
 
 ```bash
-export GITHUB_TOKEN=ghp_xxxxxxxx   # PAT with read:packages — NOT your GitHub password
+# Primary — required for default path
+export GITHUB_TOKEN=ghp_xxxxxxxx   # PAT with read:packages
 export GITHUB_USER=your_github_username
+
+# Fallback — optional; used only when GHCR pull fails
+export DOCKERHUB_USERNAME=your_dockerhub_namespace
+export DOCKERHUB_TOKEN=dckr_pat_xxxxxxxx
+
 git clone --depth 1 https://github.com/improwyz/clawz.git ~/clawz
 cd ~/clawz
 ./install.sh
 ```
 
-The installer logs in to `ghcr.io` from `GITHUB_TOKEN` / `CLAWZ_REGISTRY_TOKEN`, then pulls gateway + worker, starts Postgres, runs migrations, and brings up worker + gateway.
+The installer logs in to GHCR (and Docker Hub if `DOCKERHUB_*` is set), pulls gateway + worker, runs migrations, and starts the stack.
 
-**Related install docs:** [INSTALL.md](../INSTALL.md) (full procedures), [README.md](../README.md) (quick start), `clawz setup stack` / web `/setup` for post-install onboarding.
+---
 
 ## Images
 
 | Image | Purpose |
 |-------|---------|
 | `ghcr.io/improwyz/clawz-gateway:<tag>` | HTTP API / gateway |
-| `ghcr.io/improwyz/clawz-worker:<tag>` | Worker control plane + fleet orchestration |
-| `ghcr.io/improwyz/clawz-agent:<tag>` | Per-tenant agent runtime (spawned by worker) |
-| `pgvector/pgvector:pg15` | Postgres (public upstream) |
+| `ghcr.io/improwyz/clawz-worker:<tag>` | Worker + fleet orchestration |
+| `ghcr.io/improwyz/clawz-agent:<tag>` | Per-tenant agent containers |
+| `ghcr.io/improwyz/clawz-dashboard:<tag>` | Web UI (`--with-web`) |
 
-Default tag: `latest` (set `CLAWZ_IMAGE_TAG=v1.0.0` to pin a release).
+Docker Hub mirrors use the same repository names under your namespace, e.g. `docker.io/yourorg/clawz-gateway:<tag>`.
+
+**Tags:** `latest` on release; `main` and `sha-<short>` on every push to `main`.
+
+---
 
 ## Authenticate
 
-GitHub **does not** accept your account password for `docker login`.
+### GHCR (primary)
 
-**PAT (recommended):**
-
-1. GitHub → **Settings** → **Developer settings** → **Personal access tokens**
-2. Classic token: scope **`read:packages`**  
-   Fine-grained: **Packages → Read** on `improwyz` packages
-3. Login:
+GitHub does **not** accept your account password for `docker login`.
 
 ```bash
 echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_USER" --password-stdin
 ```
 
-**GitHub CLI:**
+PAT scopes: classic **`read:packages`** or fine-grained **Packages → Read** on `improwyz` packages.
+
+Package access: **Packages** → `clawz-gateway` / `clawz-worker` / etc. → **Manage access**.
+
+### Docker Hub (fallback)
+
+Use an **access token**, not your account password:
 
 ```bash
-gh auth login -s read:packages
-gh auth token | docker login ghcr.io -u "$(gh api user -q .login)" --password-stdin
+echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
 ```
 
-## Package access
+**Warning:** If you `docker push` to a repository that does not exist yet, Docker Hub creates it as **public** by default. Always create private repos first (UI or `./scripts/publish-dockerhub.sh`), and use a token with **Read + Write + Delete** so the publish script can enforce `is_private: true` via the Hub API. Read-only tokens can log in and push but will leak images publicly.
 
-Private packages require **Read** permission for your user or team:
+Create **private** repositories on hub.docker.com (or let `publish-dockerhub.sh` create them):
 
-**Packages** → `clawz-gateway` / `clawz-worker` / `clawz-agent` → **Package settings** → **Manage access**
+- **Four repos:** `clawz-gateway`, `clawz-worker`, `clawz-agent`, `clawz-dashboard`
+- **One repo (monorepo):** `clawz` with component tags `gateway-latest`, `worker-latest`, `agent-latest`, `dashboard-latest`
 
-## Images must be published
-
-Pull fails with `manifest unknown` / `not found` when CI has not pushed images yet.
-
-**Maintainers:** push a version tag or run **Actions → Release → Run workflow**:
+Monorepo install/publish:
 
 ```bash
-git tag v1.0.0 && git push origin v1.0.0
+export CLAWZ_HUB_MONOREPO=clawz
+export CLAWZ_REGISTRY_FALLBACK=docker.io/your_namespace
+CLAWZ_HUB_MONOREPO=clawz ./scripts/publish-dockerhub.sh
 ```
 
-Workflow: [`.github/workflows/release.yml`](../.github/workflows/release.yml) builds amd64 + arm64 and tags `latest` + `v*`.
-
-## Manual compose (prebuilt)
+Verify privacy before sharing credentials:
 
 ```bash
-docker login ghcr.io   # or use GITHUB_TOKEN as above
-cp .env.example .env
-docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml pull
-docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d
+export DOCKERHUB_USERNAME=your_namespace DOCKERHUB_TOKEN=dckr_pat_xxxx
+SKIP_BUILD=1 ./scripts/publish-dockerhub.sh   # creates/patches repos only; exits if not private
 ```
 
-## Local build (maintainers only)
+---
 
-Avoids registry; compiles Rust on the host (10–20 minutes):
+## Maintainer CI setup
+
+Workflows push to **both** registries on each build when secrets are present:
+
+- [`.github/workflows/docker-publish-main.yml`](../.github/workflows/docker-publish-main.yml) — `main` branch
+- [`.github/workflows/release.yml`](../.github/workflows/release.yml) — `v*` tags
+
+| Secret | Purpose |
+|--------|---------|
+| `GITHUB_TOKEN` | Provided by Actions for GHCR push |
+| `DOCKERHUB_USERNAME` | Docker Hub namespace (optional but enables fallback mirror) |
+| `DOCKERHUB_TOKEN` | Hub token with Read/Write for CI push |
+
+Release:
 
 ```bash
-./install.sh --build
+git tag v1.0.2 && git push clawz v1.0.2
 ```
+
+### Manual publish to Docker Hub (private)
+
+From a maintainer machine with a valid Hub access token:
+
+```bash
+export DOCKERHUB_USERNAME=sajav
+export DOCKERHUB_TOKEN=dckr_pat_xxxx
+./scripts/publish-dockerhub.sh
+```
+
+The script **refuses to push** until all four repositories exist and Hub API reports `is_private: true`. It creates private repos when the token has write scope, patches public repos to private, then builds and pushes with tags `main` and `latest` (override with `CLAWZ_IMAGE_TAG`).
+
+---
 
 ## Environment variables
 
 | Variable | Purpose |
 |----------|---------|
-| `GITHUB_TOKEN` / `CLAWZ_REGISTRY_TOKEN` | PAT for `docker login` (install reads automatically) |
-| `GITHUB_USER` / `CLAWZ_REGISTRY_USER` | GitHub username for login |
-| `CLAWZ_REGISTRY` | Default `ghcr.io/improwyz` |
-| `CLAWZ_IMAGE_TAG` | Default `latest` |
-| `CLAWZ_AGENT_IMAGE` | Agent container image for fleet spawn |
+| `GITHUB_TOKEN` / `GHCR_TOKEN` | PAT for GHCR login (`read:packages`) |
+| `GITHUB_USER` / `CLAWZ_REGISTRY_USER` | GitHub username for `docker login ghcr.io` |
+| `DOCKERHUB_USERNAME` | Hub namespace for fallback |
+| `DOCKERHUB_TOKEN` | Hub access token for fallback |
+| `CLAWZ_REGISTRY` | Primary registry path (default `ghcr.io/improwyz`) |
+| `CLAWZ_REGISTRY_FALLBACK` | Explicit fallback (default `docker.io/$DOCKERHUB_USERNAME` when set). Use `docker.io/$USER/clawz` to auto-enable monorepo |
+| `CLAWZ_HUB_MONOREPO` | Hub repo name for single-repo layout (e.g. `clawz` → `clawz:gateway-latest`) |
+| `CLAWZ_IMAGE_TAG` | `latest`, `main`, `v1.0.2`, or `sha-…` |
+| `CLAWZ_AGENT_IMAGE` | Set automatically after successful pull |
 
-## Digest pinning
+Force fallback only (skip GHCR attempt):
 
 ```bash
-export CLAWZ_IMAGE_TAG=v1.0.0
-# or
-export CLAWZ_IMAGE_TAG=sha256:...
+export CLAWZ_REGISTRY=docker.io/your_namespace
+./install.sh
 ```
+
+---
+
+## Manual compose
+
+```bash
+export CLAWZ_REGISTRY=ghcr.io/improwyz
+export CLAWZ_IMAGE_TAG=latest
+docker login ghcr.io
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml pull
+docker compose -f docker-compose.yml -f docker-compose.prebuilt.yml up -d
+```
+
+---
+
+## Local build (no registry)
+
+```bash
+./install.sh --build
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Action |
+|---------|--------|
+| GHCR `denied` / `401` | Fix `GITHUB_TOKEN` scopes; grant package Read |
+| GHCR `manifest unknown` | Wait for CI or tag a release; or rely on Hub fallback |
+| Fallback not attempted | Set `DOCKERHUB_USERNAME` + `DOCKERHUB_TOKEN` |
+| Images appeared on public Hub repos | Token lacked repo write scope; `docker push` auto-created **public** repos. Delete them, create **private** repos (UI or new token + `SKIP_BUILD=1 ./scripts/publish-dockerhub.sh`), then publish again |
+| Hub `pull access denied` | `docker login`; private repo + collaborator access |
+| Both fail | `./install.sh --build` |

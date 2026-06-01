@@ -69,13 +69,11 @@ impl AwsConnector {
 
         // Build the canonical request components.
         let canonical_headers = format!(
-            "host:{}\nx-amz-content-sha256:{}\nx-amz-date:{}\n",
-            host, payload_hash, datetime_stamp
+            "host:{host}\nx-amz-content-sha256:{payload_hash}\nx-amz-date:{datetime_stamp}\n"
         );
         let signed_headers = "host;x-amz-content-sha256;x-amz-date";
         let canonical_request = format!(
-            "{}\n{}\n{}\n{}\n{}\n{}",
-            method, path, query, canonical_headers, signed_headers, payload_hash
+            "{method}\n{path}\n{query}\n{canonical_headers}\n{signed_headers}\n{payload_hash}"
         );
 
         // Build the credential scope and string to sign.
@@ -83,13 +81,12 @@ impl AwsConnector {
         let mut hasher = Sha256::new();
         hasher.update(canonical_request.as_bytes());
         let canonical_request_hash = hasher.finalize().iter().fold(String::new(), |mut s, b| {
-            write!(s, "{:02x}", b).ok();
+            write!(s, "{b:02x}").ok();
             s
         });
 
         let string_to_sign = format!(
-            "AWS4-HMAC-SHA256\n{}\n{}\n{}",
-            datetime_stamp, credential_scope, canonical_request_hash
+            "AWS4-HMAC-SHA256\n{datetime_stamp}\n{credential_scope}\n{canonical_request_hash}"
         );
 
         // HMAC-SHA256 helper. We implement it manually to avoid adding an hmac crate
@@ -128,7 +125,7 @@ impl AwsConnector {
         let signature = hmac_sha256(&signing_key, string_to_sign.as_bytes())
             .iter()
             .fold(String::new(), |mut s, b| {
-                write!(s, "{:02x}", b).ok();
+                write!(s, "{b:02x}").ok();
                 s
             });
 
@@ -174,7 +171,7 @@ impl SaaSConnector for AwsConnector {
                 // SHA256 hash of an empty body; required for GET requests with no payload.
                 let empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
                 let headers = self.sign_request("GET", "s3", host, "/", "", empty_hash);
-                let mut req = self.client.get(format!("https://{}/", host));
+                let mut req = self.client.get(format!("https://{host}/"));
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
@@ -193,7 +190,7 @@ impl SaaSConnector for AwsConnector {
                 let empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
                 let query = "Action=ListTopics&Version=2010-03-31";
                 let headers = self.sign_request("GET", "sns", &host, "/", query, empty_hash);
-                let mut req = self.client.get(format!("https://{}/?{}", host, query));
+                let mut req = self.client.get(format!("https://{host}/?{query}"));
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
@@ -222,10 +219,10 @@ impl SaaSConnector for AwsConnector {
                 hasher.update(body_str.as_bytes());
                 let payload_hash = format!("{:x}", hasher.finalize());
                 let headers =
-                    self.sign_request("PUT", "s3", &host, &format!("/{}", key), "", &payload_hash);
+                    self.sign_request("PUT", "s3", &host, &format!("/{key}"), "", &payload_hash);
                 let mut req = self
                     .client
-                    .put(format!("https://{}/{}", host, key))
+                    .put(format!("https://{host}/{key}"))
                     .body(body_str.to_string());
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
@@ -246,10 +243,10 @@ impl SaaSConnector for AwsConnector {
             "sns_topic" => {
                 let name = data["name"].as_str().unwrap_or("NewTopic");
                 let host = format!("sns.{}.amazonaws.com", self.region);
-                let query = format!("Action=CreateTopic&Name={}&Version=2010-03-31", name);
+                let query = format!("Action=CreateTopic&Name={name}&Version=2010-03-31");
                 let empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
                 let headers = self.sign_request("GET", "sns", &host, "/", &query, empty_hash);
-                let mut req = self.client.get(format!("https://{}/?{}", host, query));
+                let mut req = self.client.get(format!("https://{host}/?{query}"));
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
@@ -286,8 +283,8 @@ impl SaaSConnector for AwsConnector {
                 let host = format!("{}.s3.{}.amazonaws.com", bucket, self.region);
                 let empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
                 let headers =
-                    self.sign_request("DELETE", "s3", &host, &format!("/{}", key), "", empty_hash);
-                let mut req = self.client.delete(format!("https://{}/{}", host, key));
+                    self.sign_request("DELETE", "s3", &host, &format!("/{key}"), "", empty_hash);
+                let mut req = self.client.delete(format!("https://{host}/{key}"));
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
@@ -325,7 +322,7 @@ impl SaaSConnector for AwsConnector {
                 );
                 let empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
                 let headers = self.sign_request("GET", "ses", &host, "/", &query, empty_hash);
-                let mut req = self.client.get(format!("https://{}/?{}", host, query));
+                let mut req = self.client.get(format!("https://{host}/?{query}"));
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }
@@ -350,7 +347,7 @@ impl SaaSConnector for AwsConnector {
                 );
                 let empty_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
                 let headers = self.sign_request("GET", "sns", &host, "/", &query, empty_hash);
-                let mut req = self.client.get(format!("https://{}/?{}", host, query));
+                let mut req = self.client.get(format!("https://{host}/?{query}"));
                 for (k, v) in &headers {
                     req = req.header(k.as_str(), v.as_str());
                 }

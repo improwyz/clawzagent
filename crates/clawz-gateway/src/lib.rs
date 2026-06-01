@@ -25,23 +25,26 @@ pub mod auth;
 pub mod bootstrap;
 pub mod channel_pairing;
 pub mod channel_supervisor;
-pub mod connector_scheduler;
 pub mod cloudflare;
+pub mod connector_scheduler;
 pub mod connectors;
 pub mod db_bootstrap;
 pub mod deploy;
+pub mod idempotency;
 pub mod mcp;
 pub mod password;
 pub mod postgres_platform_store;
 pub mod postgres_store;
 pub mod prism_check;
+pub mod ratelimit;
 pub mod routes;
-pub mod tool_catalog;
 pub mod scheduling;
 pub mod secrets;
 pub mod server;
 pub mod shutdown;
+pub mod ssrf;
 pub mod telephony;
+pub mod tool_catalog;
 pub mod turn_event_bridge;
 /// Interactive setup wizards (shared with `clawz-cli`).
 pub use clawz_tui as tui;
@@ -362,6 +365,14 @@ pub struct DeploymentRecord {
 ///
 /// Audit entries capture who did what, to which resource, and when.
 /// They are immutable and append-only.
+///
+/// Layering note: this is the **resource-centric API** audit row (actor,
+/// action, resource_type/id). It is intentionally distinct from
+/// `clawz_worker::governance::audit::AuditEntry`, which is an **agent-centric,
+/// SHA-256 hash-chained** governance record (`prev_hash`/`current_hash`,
+/// `AuditResult`). Merging them is unsafe: the worker entry's shape feeds its
+/// tamper-evidence hash. Different types that share a name, not duplicates.
+/// See ADR 0002.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditEntry {
     /// Unique identifier for this audit entry.
@@ -846,11 +857,17 @@ impl IntoResponse for GatewayError {
                 (StatusCode::UNAUTHORIZED, "unauthorized", msg.clone())
             }
             GatewayError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone()),
-            GatewayError::Internal(msg) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "internal_error",
-                msg.clone(),
-            ),
+            GatewayError::Internal(detail) => {
+                // Avoid leaking internals to clients: log the detail with a
+                // correlation id and return only that reference to the caller.
+                let correlation_id = Uuid::new_v4();
+                tracing::error!(%correlation_id, error = %detail, "internal error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal_error",
+                    format!("internal error (ref: {correlation_id})"),
+                )
+            }
             GatewayError::NotImplemented => (
                 StatusCode::NOT_IMPLEMENTED,
                 "not_implemented",

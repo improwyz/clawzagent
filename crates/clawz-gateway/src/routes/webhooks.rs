@@ -47,5 +47,8 @@ async fn generic_webhook(
         send_reply(&state, &record, &to, &content).await?;
     }
 
-    Ok((StatusCode::OK, axum::Json(json!({ "ok": true, "replies": count }))))
+    Ok((
+        StatusCode::OK,
+        axum::Json(json!({ "ok": true, "replies": count })),
+    ))
 }

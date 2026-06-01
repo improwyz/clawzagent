@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::terminal::{create_terminal_backend, default_workdir, LocalBackend, TerminalBackend};
+use crate::terminal::{LocalBackend, TerminalBackend, create_terminal_backend, default_workdir};
 use crate::tools::tool_trait::{Tool, ToolContext};
 use async_trait::async_trait;
 use clawz_core::error::ClawzError;
@@ -12,18 +12,100 @@ use serde_json::Value;
 
 /// Default allowed commands. Operators can override via env var CLAWZ_SHELL_ALLOW.
 const DEFAULT_ALLOWED: &[&str] = &[
-    "echo", "cat", "ls", "pwd", "date", "env", "printenv", "grep", "find", "wc", "sort", "uniq",
-    "head", "tail", "sed", "awk", "cut", "tr", "jq", "curl", "wget", "python3", "python", "node",
-    "ruby", "go", "cargo", "npm", "yarn", "pip", "pip3", "make", "cmake", "gcc", "g++", "rustc",
-    "git", "diff", "patch", "tar", "zip", "unzip", "gzip", "gunzip", "mkdir", "cp", "mv", "rm",
-    "touch", "chmod", "chown", "ps", "top", "kill", "sleep", "openssl", "ssh", "scp", "rsync",
-    "docker", "kubectl", "helm", "psql", "mysql", "redis-cli", "mongo",
+    "echo",
+    "cat",
+    "ls",
+    "pwd",
+    "date",
+    "env",
+    "printenv",
+    "grep",
+    "find",
+    "wc",
+    "sort",
+    "uniq",
+    "head",
+    "tail",
+    "sed",
+    "awk",
+    "cut",
+    "tr",
+    "jq",
+    "curl",
+    "wget",
+    "python3",
+    "python",
+    "node",
+    "ruby",
+    "go",
+    "cargo",
+    "npm",
+    "yarn",
+    "pip",
+    "pip3",
+    "make",
+    "cmake",
+    "gcc",
+    "g++",
+    "rustc",
+    "git",
+    "diff",
+    "patch",
+    "tar",
+    "zip",
+    "unzip",
+    "gzip",
+    "gunzip",
+    "mkdir",
+    "cp",
+    "mv",
+    "rm",
+    "touch",
+    "chmod",
+    "chown",
+    "ps",
+    "top",
+    "kill",
+    "sleep",
+    "openssl",
+    "ssh",
+    "scp",
+    "rsync",
+    "docker",
+    "kubectl",
+    "helm",
+    "psql",
+    "mysql",
+    "redis-cli",
+    "mongo",
 ];
 
 const BLOCKED_COMMANDS: &[&str] = &[
-    "sudo", "su", "passwd", "useradd", "userdel", "groupadd", "visudo", "chroot", "mount",
-    "umount", "fdisk", "mkfs", "dd", "format", "shutdown", "reboot", "halt", "poweroff",
-    "iptables", "ufw", "firewall-cmd", "nc", "netcat", "ncat", "crontab",
+    "sudo",
+    "su",
+    "passwd",
+    "useradd",
+    "userdel",
+    "groupadd",
+    "visudo",
+    "chroot",
+    "mount",
+    "umount",
+    "fdisk",
+    "mkfs",
+    "dd",
+    "format",
+    "shutdown",
+    "reboot",
+    "halt",
+    "poweroff",
+    "iptables",
+    "ufw",
+    "firewall-cmd",
+    "nc",
+    "netcat",
+    "ncat",
+    "crontab",
 ];
 
 const DEFAULT_TIMEOUT_SECS: u64 = 30;
@@ -194,18 +276,8 @@ impl Tool for ShellTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tools::ToolConfig;
     #[allow(unused_imports)]
     use serde_json::Value;
-
-    fn make_ctx() -> ToolContext {
-        ToolContext {
-            agent_id: "a".into(),
-            conversation_id: "c".into(),
-            user_id: None,
-            config: ToolConfig::default(),
-        }
-    }
 
     #[test]
     fn test_shell_name() {

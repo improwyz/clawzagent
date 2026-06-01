@@ -98,8 +98,8 @@ impl R2Client {
             self.account_id, self.bucket_name
         );
         match prefix {
-            Some(p) if !p.is_empty() => format!("{}?list-type=2&prefix={}", base, p),
-            _ => format!("{}?list-type=2", base),
+            Some(p) if !p.is_empty() => format!("{base}?list-type=2&prefix={p}"),
+            _ => format!("{base}?list-type=2"),
         }
     }
 
@@ -307,10 +307,12 @@ mod tests {
 
     #[test]
     fn test_r2_client_from_enabled_config() {
-        let mut cfg = CloudflareConfig::default();
-        cfg.enabled = true;
-        cfg.account_id = "acc123".into();
-        cfg.api_token = "tok456".into();
+        let mut cfg = CloudflareConfig {
+            enabled: true,
+            account_id: "acc123".into(),
+            api_token: "tok456".into(),
+            ..Default::default()
+        };
         cfg.r2.enabled = true;
         cfg.r2.bucket_name = Some("my-bucket".into());
         let client = R2Client::from_config(&cfg).unwrap();
